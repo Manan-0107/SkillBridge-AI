@@ -13,7 +13,7 @@ interface AppState {
   user: User | null;
   ready: boolean;
   signIn: (email: string, name?: string) => void;
-  signInWithGoogle: (name: string, email: string) => void;
+  signInWithGoogle: (name: string, email: string, picture?: string) => void;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
 }
@@ -52,11 +52,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // Stub for Google OAuth. Wire to @react-oauth/google or NextAuth's Google
-  // provider using NEXT_PUBLIC_GOOGLE_CLIENT_ID, then call this with the
-  // decoded profile.
-  const signInWithGoogle = (name: string, email: string) => {
-    persist({ name, email, authProvider: "google", targetRole: user?.targetRole ?? null });
+  // Called after Google OAuth (or the local consent fallback) with the
+  // profile Google shared: name, email, and optional photo.
+  const signInWithGoogle = (name: string, email: string, picture?: string) => {
+    persist({
+      name,
+      email,
+      picture,
+      authProvider: "google",
+      targetRole: user?.targetRole ?? null,
+    });
   };
 
   const signOut = () => persist(null);

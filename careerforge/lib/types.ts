@@ -15,6 +15,7 @@ export interface RoleOption {
 export interface User {
   name: string;
   email: string;
+  picture?: string;
   authProvider: "email" | "google";
   targetRole: RoleId | null;
 }

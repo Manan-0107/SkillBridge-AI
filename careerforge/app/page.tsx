@@ -1,52 +1,47 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
 import { AuthGate } from "@/components/auth/AuthGate";
-import { RoleOnboarding } from "@/components/onboarding/RoleOnboarding";
 import { TopNav } from "@/components/nav/TopNav";
-import { ResumeSuite } from "@/components/resume/ResumeSuite";
-import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
-import { CourseCards } from "@/components/courses/CourseCards";
-import { PracticeHub } from "@/components/practice/PracticeHub";
-import { LocalOpportunities } from "@/components/local/LocalOpportunities";
+import { AssistantHome } from "@/components/assistant/AssistantHome";
+import { Workspace } from "@/components/workspace/Workspace";
+import { FeatureId, ResumeTab } from "@/lib/intent";
+
+type View =
+  | { kind: "assistant" }
+  | { kind: "feature"; feature: FeatureId; resumeTab?: ResumeTab };
 
 export default function Home() {
   const { user, ready } = useApp();
+  const [view, setView] = useState<View>({ kind: "assistant" });
+
+  useEffect(() => {
+    if (!user) setView({ kind: "assistant" });
+  }, [user]);
 
   if (!ready) return null;
   if (!user) return <AuthGate />;
-  if (!user.targetRole) return <RoleOnboarding />;
+
+  const current = view.kind === "assistant" ? "assistant" : view.feature;
 
   return (
     <main className="min-h-screen bg-paper">
-      <TopNav />
+      <TopNav
+        view={current}
+        onAssistant={() => setView({ kind: "assistant" })}
+        onFeature={(feature) => setView({ kind: "feature", feature })}
+      />
 
-      <div className="border-b border-line py-14 md:py-20">
-        <div className="mx-auto max-w-content px-6">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-graphite">
-            Workspace
-          </p>
-          <h1 className="mt-3 max-w-2xl font-display text-3xl italic text-ink md:text-5xl">
-            Everything for your next role, in one quiet place.
-          </h1>
-        </div>
-      </div>
-
-      <ResumeSuite role={user.targetRole} />
-      <div className="border-t border-line" />
-      <CareerRoadmap role={user.targetRole} />
-      <div className="border-t border-line" />
-      <CourseCards role={user.targetRole} />
-      <div className="border-t border-line" />
-      <PracticeHub />
-      <div className="border-t border-line" />
-      <LocalOpportunities />
-
-      <footer className="border-t border-line py-10">
-        <div className="mx-auto max-w-content px-6 text-xs text-graphite">
-          CareerForge — built for the next role, not the last one.
-        </div>
-      </footer>
+      {view.kind === "assistant" ? (
+        <AssistantHome
+          onRedirect={(feature, resumeTab) =>
+            setView({ kind: "feature", feature, resumeTab })
+          }
+        />
+      ) : (
+        <Workspace feature={view.feature} resumeTab={view.resumeTab} />
+      )}
     </main>
   );
 }
