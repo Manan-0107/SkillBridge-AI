@@ -58,6 +58,7 @@ export function AssistantHome({
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const userDisplayName = user?.name
     ? user.name.split(" ")[0]
@@ -257,7 +258,7 @@ export function AssistantHome({
     let chatTitle = activeConversation.title;
     if (chatTitle === "New Career Chat" || chatTitle === "New Conversation") {
       const displayTitle = userMsgText || `Review: ${docInfo?.name || "Document"}`;
-      chatTitle = displayTitle.slice(0, 36) + (displayTitle.length > 36 ? "…" : "");
+      chatTitle = displayTitle.slice(0, 32) + (displayTitle.length > 32 ? "…" : "");
     }
 
     const nextMessages: Msg[] = [
@@ -435,7 +436,7 @@ export function AssistantHome({
                 : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
             }`}
           >
-            <ChatBubbleIcon className="w-4 h-4 text-neutral-500" />
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
             <span className="flex-1 text-left">All Recent Chats</span>
             <span className="text-[11px] text-neutral-400 font-mono">
               {conversations.filter((c) => !c.archived).length}
@@ -451,7 +452,7 @@ export function AssistantHome({
                 : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
             }`}
           >
-            <PinIcon filled className="w-4 h-4 text-amber-600" />
+            <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span className="flex-1 text-left">Pinned &amp; Starred</span>
             <span className="text-[11px] text-neutral-400 font-mono">
               {conversations.filter((c) => c.pinned && !c.archived).length}
@@ -467,7 +468,7 @@ export function AssistantHome({
                 : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
             }`}
           >
-            <ArchiveIcon className="w-4 h-4 text-neutral-500" />
+            <ArchiveIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
             <span className="flex-1 text-left">Archived Chats</span>
             <span className="text-[11px] text-neutral-400 font-mono">
               {conversations.filter((c) => c.archived).length}
@@ -503,40 +504,40 @@ export function AssistantHome({
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-600 shrink-0" />}
                     <span className="truncate">{conv.title}</span>
                   </div>
 
                   {/* Actions on Hover */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Accurate Pin SVG Icon */}
+                    {/* Pin Action */}
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-amber-600"
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-amber-600 transition-colors"
                     >
-                      <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
+                      <PinIcon filled={conv.pinned} className="w-3 h-3" />
                     </button>
 
-                    {/* Archive SVG Icon */}
+                    {/* Archive Action */}
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-800"
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-800 transition-colors"
                     >
-                      <ArchiveIcon className="w-3.5 h-3.5" />
+                      <ArchiveIcon className="w-3 h-3" />
                     </button>
 
-                    {/* Delete SVG Icon */}
+                    {/* Delete Action */}
                     <button
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-red-600"
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-red-600 transition-colors"
                     >
-                      <TrashIcon className="w-3.5 h-3.5" />
+                      <TrashIcon className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -558,7 +559,7 @@ export function AssistantHome({
               className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs"
               title="Toggle Sidebar"
             >
-              <SidebarToggleIcon className="w-4 h-4" />
+              <SidebarToggleIcon className="w-3.5 h-3.5" />
               <span>{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
@@ -694,7 +695,7 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── Floating AI Prompt Composer with Document Upload ─────────────── */}
+        {/* ─── MODERN AI PROMPT COMPOSER (ChatGPT / Claude Style) ─────────────── */}
         <div className="border-t border-neutral-200/80 bg-white/95 px-4 pb-6 pt-3.5 backdrop-blur-md">
           <div className="mx-auto max-w-3xl space-y-2.5">
             
@@ -708,69 +709,85 @@ export function AssistantHome({
               id="ai-doc-upload"
             />
 
-            {/* Attached Document Preview Badge */}
-            {attachedFile && (
-              <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-800 animate-in fade-in">
-                <div className="flex items-center gap-2 truncate">
-                  <PaperclipIcon className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span className="font-semibold truncate">{attachedFile.name}</span>
-                  <span className="text-[11px] text-neutral-400 font-mono">(Ready for AI audit)</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFile(null)}
-                  className="rounded p-1 text-neutral-400 hover:text-red-600"
-                  title="Remove attachment"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {/* AI Composer Box */}
+            {/* AI Rounded-3xl Card Box */}
             <form
               onSubmit={onSubmit}
-              className="flex items-center gap-2 rounded-2xl border border-neutral-300 bg-neutral-50/80 p-2 shadow-sm focus-within:border-neutral-900 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all"
+              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-neutral-300 bg-neutral-50/70 p-3 shadow-sm focus-within:border-neutral-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/5 transition-all"
             >
-              {/* Document Upload Button (Replaces Mic) */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={parsingDoc}
-                title="Upload document (PDF, DOCX, TXT)"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors disabled:opacity-50"
-              >
-                {parsingDoc ? (
-                  <span className="h-4 w-4 rounded-full border-2 border-neutral-500 border-t-transparent animate-spin" />
-                ) : (
-                  <PaperclipIcon className="h-4.5 w-4.5" />
-                )}
-              </button>
+              {/* Attached Document Preview Badge */}
+              {attachedFile && (
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-800 animate-in fade-in shadow-2xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <PaperclipIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="font-semibold truncate">{attachedFile.name}</span>
+                    <span className="text-[10px] text-neutral-400 font-mono">(Ready for AI audit)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="rounded p-1 text-neutral-400 hover:text-red-600"
+                    title="Remove attachment"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
-              <input
-                type="text"
+              {/* Textarea Input */}
+              <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSubmit(e);
+                  }
+                }}
+                rows={1}
                 placeholder={
                   attachedFile
                     ? `Ask anything about ${attachedFile.name}...`
-                    : "Ask CareerForge AI or attach a document..."
+                    : "Message CareerForge AI or attach a document..."
                 }
-                className="min-h-[40px] flex-1 bg-transparent px-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
               />
 
-              <button
-                type="submit"
-                disabled={busy || (!input.trim() && !attachedFile)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white transition-all hover:bg-black disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
-                title="Send message"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </button>
+              {/* Bottom Control Bar inside Composer */}
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-200/50 mt-1">
+                {/* Left: Document Upload Action */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={parsingDoc}
+                  title="Attach document (PDF, DOCX, TXT)"
+                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900 transition-colors disabled:opacity-50"
+                >
+                  {parsingDoc ? (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-neutral-500 border-t-transparent animate-spin" />
+                  ) : (
+                    <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                  )}
+                  <span className="hidden sm:inline">Attach document</span>
+                </button>
+
+                {/* Right: Circular Send Button (ChatGPT style ↑) */}
+                <button
+                  type="submit"
+                  disabled={busy || (!input.trim() && !attachedFile)}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+                    input.trim() || attachedFile
+                      ? "bg-neutral-900 text-white hover:bg-black scale-100 cursor-pointer"
+                      : "bg-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
+                  }`}
+                  title="Send prompt"
+                >
+                  <ArrowUpIcon className="w-4 h-4" />
+                </button>
+              </div>
             </form>
 
+            {/* Quick Suggested Prompt Pills */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               {quickPills.map((pill) => (
                 <button
@@ -792,7 +809,7 @@ export function AssistantHome({
 
 // ─── SVG Vector Icons ─────────────────────────────────────────────────────────
 
-function PaperclipIcon({ className = "w-4 h-4" }: { className?: string }) {
+function PaperclipIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -800,11 +817,24 @@ function PaperclipIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function PinIcon({ filled = false, className = "w-3.5 h-3.5" }: { filled?: boolean; className?: string }) {
+function PinIcon({
+  filled = false,
+  className = "w-3 h-3",
+}: {
+  filled?: boolean;
+  className?: string;
+}) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="17" x2="12" y2="22" />
-      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9.828 1.172a2 2 0 0 1 2.828 0l2.172 2.172a2 2 0 0 1 0 2.828l-1.414 1.414-2.828-2.828 1.414-1.414zM4.172 6.828l2.828 2.828-4.242 4.242a.5.5 0 0 1-.708 0l-1.414-1.414a.5.5 0 0 1 0-.708l4.242-4.242zM7 4l5 5-2 2-5-5 2-2z" />
     </svg>
   );
 }
@@ -828,7 +858,7 @@ function TrashIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
-function ChatBubbleIcon({ className = "w-4 h-4" }: { className?: string }) {
+function ChatBubbleIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -836,11 +866,19 @@ function ChatBubbleIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function SidebarToggleIcon({ className = "w-4 h-4" }: { className?: string }) {
+function SidebarToggleIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
       <line x1="9" y1="3" x2="9" y2="21" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 19V5M5 12l7-7 7 7" />
     </svg>
   );
 }
