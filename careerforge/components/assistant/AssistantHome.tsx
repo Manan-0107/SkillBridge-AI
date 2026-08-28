@@ -79,18 +79,28 @@ export function AssistantHome({
   const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const greetingName = user?.name || "there";
-
-  // Initial greeting
+  // Dynamic time-of-day & personalized name greeting
   useEffect(() => {
+    const hour = new Date().getHours();
+    const timeOfDay =
+      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+    let displayName = "there";
+    if (user?.name && user.name.trim()) {
+      displayName = user.name.trim().split(" ")[0];
+    } else if (user?.email) {
+      const raw = user.email.split("@")[0];
+      displayName = raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+
     setMessages([
       {
         id: "intro-1",
         role: "assistant",
-        text: `Hello ${greetingName}! I'm your CareerForge AI Copilot. Tell me what you'd like to achieve today — whether it's checking your career roadmap, finding courses, preparing for interviews, exploring local jobs, or building an ATS-ready resume.`,
+        text: `${timeOfDay}, ${displayName}! 👋 I'm your CareerForge AI Copilot. Tell me what you'd like to work on today — whether it's exploring your roadmap, checking curated courses, practicing interviews, or building an ATS-ready resume.`,
       },
     ]);
-  }, [greetingName]);
+  }, [user?.name, user?.email]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -197,7 +207,11 @@ export function AssistantHome({
                 CareerForge AI Copilot &bull; Ready
               </div>
               <h1 className="mt-4 font-display text-3xl italic text-ink md:text-5xl">
-                What are you looking to work on?
+                {user?.name
+                  ? `What are you looking to work on, ${user.name.split(" ")[0]}?`
+                  : user?.email
+                  ? `What are you looking to work on, ${user.email.split("@")[0]}?`
+                  : "What are you looking to work on?"}
               </h1>
               <p className="mx-auto mt-3 max-w-lg text-sm text-graphite leading-relaxed">
                 Ask in natural language. I’ll provide personalized guidance and take you straight to the right workspace tools.

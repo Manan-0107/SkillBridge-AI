@@ -24,6 +24,16 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null);
 const STORAGE_KEY = "careerforge.user";
 
+function extractDisplayName(email: string, name?: string): string {
+  if (name && name.trim()) return name.trim();
+  const username = email.split("@")[0] || "User";
+  return username
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -46,9 +56,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
   const signIn = async (email: string, name?: string) => {
+    const displayName = extractDisplayName(email, name);
     // Immediately sign in locally so the UI responds instantly
     const localUser: User = {
-      name: name || email.split("@")[0],
+      name: displayName,
       email,
       authProvider: "email",
       targetRole: user?.targetRole ?? null,
