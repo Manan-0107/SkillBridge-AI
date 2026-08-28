@@ -1,11 +1,11 @@
 /**
  * POST /api/assistant/chat
  *
- * Real LLM Backend for CareerForge AI Copilot.
- * - Powered by Google Gemini 1.5 Flash when GEMINI_API_KEY is configured.
- * - Includes an empathetic, intelligent career mentor system prompt.
- * - Intelligently detects user intent to suggest workspace tools (Resume, Roadmap, Courses, Practice, Local).
- * - Falls back to a smart conversational reasoning engine if no key is configured.
+ * Multi-Engine Real LLM Backend for CareerForge:
+ * 1. Free Open-Source LLM Engine (Pollinations.ai - LLaMA 3.3 / Mistral / OpenAI - 100% Free, NO API Key needed)
+ * 2. GitHub Models API (via GITHUB_TOKEN if configured)
+ * 3. Google Gemini 1.5 Flash (via GEMINI_API_KEY if configured)
+ * 4. Autonomous Career Reasoning Engine (instant offline fallback)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -41,29 +41,50 @@ export async function POST(req: NextRequest) {
     const userName = userProfile?.name || (userProfile?.email ? userProfile.email.split("@")[0] : "Friend");
     const role = targetRole || userProfile?.targetRole || "frontend";
 
-    // ─── 1. Check if Gemini API Key is Available ──────────────────────────────
-    const apiKey = process.env.GEMINI_API_KEY;
+    // ─── 1. Try Free Open-Source LLM (Pollinations AI - LLaMA 3.3 / Mistral) ───
+    try {
+      const freeLlmResponse = await callFreeOpenSourceLLM(messages, userName, role);
+      if (freeLlmResponse && freeLlmResponse.reply?.trim().length > 10) {
+        return NextResponse.json(freeLlmResponse);
+      }
+    } catch (llmErr) {
+      console.warn("[Assistant API] Free LLM error:", llmErr);
+    }
 
-    if (apiKey && apiKey.trim().length > 5) {
+    // ─── 2. Try GitHub Models API (if GITHUB_TOKEN is available) ───────────────
+    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
+    if (githubToken && githubToken.trim().length > 10) {
       try {
-        const geminiResponse = await callGeminiLLM(apiKey, messages, userName, role);
+        const ghResponse = await callGithubModelsLLM(githubToken, messages, userName, role);
+        if (ghResponse) {
+          return NextResponse.json(ghResponse);
+        }
+      } catch (ghErr) {
+        console.warn("[Assistant API] GitHub Models error:", ghErr);
+      }
+    }
+
+    // ─── 3. Try Google Gemini (if GEMINI_API_KEY is available) ─────────────────
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey && geminiKey.trim().length > 5) {
+      try {
+        const geminiResponse = await callGeminiLLM(geminiKey, messages, userName, role);
         if (geminiResponse) {
           return NextResponse.json(geminiResponse);
         }
       } catch (geminiErr) {
-        console.error("[Assistant API] Gemini call error:", geminiErr);
-        // Fall through to smart reasoning engine
+        console.warn("[Assistant API] Gemini error:", geminiErr);
       }
     }
 
-    // ─── 2. Smart Built-in Conversational Engine (Fallback) ───────────────────
+    // ─── 4. Smart Built-in Reasoning Fallback ───────────────────────────────────
     const fallbackResponse = generateSmartResponse(lastMessage, userName, role);
     return NextResponse.json(fallbackResponse);
   } catch (error) {
-    console.error("[Assistant API] Error:", error);
+    console.error("[Assistant API] Fatal error:", error);
     return NextResponse.json(
       {
-        reply: "I'm here to support you. Could you rephrase or tell me which area of your career you'd like to explore?",
+        reply: "I am here to guide your career progression. What area would you like to explore today?",
         feature: null,
       },
       { status: 500 }
@@ -71,44 +92,106 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── Gemini LLM Integration ───────────────────────────────────────────────────
+// ─── 1. Free Open-Source LLM Provider (Pollinations.ai - Zero Keys Needed) ─────
+async function callFreeOpenSourceLLM(
+  messages: ChatMessage[],
+  userName: string,
+  role: string
+) {
+  const systemPrompt = `You are CareerForge Copilot, a helpful, empathetic, and intelligent career mentor specialized in tech careers, accessible guidance, resume building, and skill roadmaps for ${userName} (target role: ${role}).
+Provide thoughtful, clear, compassionate, and practical answers. Keep responses concise and well-structured (2 to 4 paragraphs).
+
+If the user's message strongly relates to a workspace feature, add this tag at the very end of your response on a new line:
+- Resume Builder -> [ACTION: {"feature": "resume", "resumeTab": "builder", "featureTitle": "Resume Builder"}]
+- Resume Personalizer -> [ACTION: {"feature": "resume", "resumeTab": "personalizer", "featureTitle": "Resume Personalizer"}]
+- Resume Analyzer -> [ACTION: {"feature": "resume", "resumeTab": "analyzer", "featureTitle": "Resume Analyzer"}]
+- Career Roadmap -> [ACTION: {"feature": "roadmap", "featureTitle": "Career Roadmap"}]
+- Curated Courses -> [ACTION: {"feature": "courses", "featureTitle": "Curated Courses"}]
+- Interview Practice -> [ACTION: {"feature": "practice", "featureTitle": "Interview Practice"}]
+- Local Opportunities -> [ACTION: {"feature": "local", "featureTitle": "Local Opportunities"}]`;
+
+  const formattedMessages = [
+    { role: "system", content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.text,
+    })),
+  ];
+
+  const res = await fetch("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: formattedMessages,
+      model: "openai",
+      seed: 42,
+      jsonMode: false,
+    }),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Pollinations API returned status ${res.status}`);
+  }
+
+  const rawReply = await res.text();
+  if (!rawReply || rawReply.trim().length === 0) return null;
+
+  return parseActionFromReply(rawReply, messages);
+}
+
+// ─── 2. GitHub Models API Provider ─────────────────────────────────────────────
+async function callGithubModelsLLM(
+  token: string,
+  messages: ChatMessage[],
+  userName: string,
+  role: string
+) {
+  const systemPrompt = `You are CareerForge Copilot, an AI career mentor for ${userName} targeting ${role}. Provide encouraging, practical, and clear career advice.`;
+
+  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => ({
+          role: m.role === "user" ? "user" : "assistant",
+          content: m.text,
+        })),
+      ],
+      model: "gpt-4o-mini",
+      temperature: 0.7,
+      max_tokens: 600,
+    }),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!res.ok) return null;
+  const data = await res.json();
+  const rawReply: string = data?.choices?.[0]?.message?.content || "";
+  if (!rawReply.trim()) return null;
+
+  return parseActionFromReply(rawReply, messages);
+}
+
+// ─── 3. Google Gemini Provider ────────────────────────────────────────────────
 async function callGeminiLLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
   role: string
 ) {
-  const systemPrompt = `You are CareerForge Copilot, a warm, highly empathetic, and insightful AI career advisor and mentor.
-You are assisting ${userName}, whose target career track is ${role}.
+  const systemPrompt = `You are CareerForge Copilot for ${userName} targeting ${role}. Provide empathetic, concise, actionable career guidance.`;
 
-YOUR CORE ATTRIBUTES:
-- Empathetic, supportive, encouraging, and clear.
-- Provide thoughtful, personalized, actionable career advice, technical learning guidance, resume strategies, and interview coaching.
-- Especially considerate and accessible for users with disabilities, career transitions, or feeling overwhelmed.
-- Keep your answers concise, practical, and conversational (1 to 3 short paragraphs). Avoid overwhelming walls of text.
-
-CAREERFORGE WORKSPACE TOOLS YOU CAN RECOMMEND:
-If the user's message clearly relates to one of these tools, add an action tag at the very end of your response:
-1. Resume Builder -> [ACTION: {"feature": "resume", "resumeTab": "builder", "featureTitle": "Resume Builder"}]
-2. Resume Personalizer -> [ACTION: {"feature": "resume", "resumeTab": "personalizer", "featureTitle": "Resume Personalizer"}]
-3. Resume ATS Analyzer -> [ACTION: {"feature": "resume", "resumeTab": "analyzer", "featureTitle": "Resume Analyzer"}]
-4. Career Roadmap -> [ACTION: {"feature": "roadmap", "featureTitle": "Career Roadmap"}]
-5. Curated Courses -> [ACTION: {"feature": "courses", "featureTitle": "Curated Courses"}]
-6. Interview Practice -> [ACTION: {"feature": "practice", "featureTitle": "Interview Practice"}]
-7. Local Opportunities -> [ACTION: {"feature": "local", "featureTitle": "Local Opportunities"}]
-
-Format: If recommending a tool, place the [ACTION: ...] tag on its own line at the end.`;
-
-  // Format conversation history for Gemini
   const contents = [
-    {
-      role: "user",
-      parts: [{ text: systemPrompt }],
-    },
-    {
-      role: "model",
-      parts: [{ text: `Understood. I am CareerForge Copilot, ready to support ${userName} with warmth, clarity, and actionable guidance.` }],
-    },
+    { role: "user", parts: [{ text: systemPrompt }] },
+    { role: "model", parts: [{ text: "Understood. I am CareerForge Copilot." }] },
     ...messages.map((m) => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.text }],
@@ -122,27 +205,24 @@ Format: If recommending a tool, place the [ACTION: ...] tag on its own line at t
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 600,
-        },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
       }),
       signal: AbortSignal.timeout(12000),
     }
   );
 
-  if (!res.ok) {
-    throw new Error(`Gemini API returned status ${res.status}`);
-  }
-
+  if (!res.ok) return null;
   const data = await res.json();
   const rawReply: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
   if (!rawReply.trim()) return null;
 
-  // Extract optional action tag
+  return parseActionFromReply(rawReply, messages);
+}
+
+// ─── Action Parser Helper ─────────────────────────────────────────────────────
+function parseActionFromReply(rawReply: string, messages: ChatMessage[]) {
   const actionMatch = rawReply.match(/\[ACTION:\s*({.*?})\]/);
-  let reply = rawReply.replace(/\[ACTION:\s*({.*?})\]/, "").trim();
+  const reply = rawReply.replace(/\[ACTION:\s*({.*?})\]/, "").trim();
   let feature: FeatureId | null = null;
   let resumeTab: ResumeTab | undefined = undefined;
   let featureTitle: string | undefined = undefined;
@@ -154,11 +234,10 @@ Format: If recommending a tool, place the [ACTION: ...] tag on its own line at t
       resumeTab = parsedAction.resumeTab;
       featureTitle = parsedAction.featureTitle;
     } catch {
-      // Ignore action parse error
+      // ignore parse errors
     }
   }
 
-  // If no action tag was returned by LLM, fall back to keyword intent check
   if (!feature) {
     const lastUserText = messages[messages.length - 1]?.text || "";
     const intent = parseIntent(lastUserText);
@@ -169,57 +248,29 @@ Format: If recommending a tool, place the [ACTION: ...] tag on its own line at t
     }
   }
 
-  return {
-    reply,
-    feature,
-    resumeTab,
-    featureTitle,
-  };
+  return { reply, feature, resumeTab, featureTitle };
 }
 
-// ─── Smart Conversational Fallback Engine ─────────────────────────────────────
+// ─── 4. Built-in Conversational Reasoning Engine ──────────────────────────────
 function generateSmartResponse(rawQuery: string, userName: string, role: string) {
   const query = rawQuery.toLowerCase();
   const intent = parseIntent(rawQuery);
 
-  // Check common conversational themes
   if (query.includes("hello") || query.includes("hi") || query.includes("hey")) {
     return {
-      reply: `Hi ${userName}! Great to connect with you. I'm here to help you navigate your ${role} journey with confidence. Are you looking to sharpen your resume, explore your next learning milestones, or practice interview questions today?`,
+      reply: `Hi ${userName}! Great to connect with you. I'm your CareerForge AI companion. Whether you'd like to explore your ${role} roadmap, evaluate your resume, or practice interview questions, I'm right here to support you.`,
       feature: null,
     };
   }
 
-  if (query.includes("how are you") || query.includes("who are you")) {
+  if (query.includes("nervous") || query.includes("anxious") || query.includes("stress")) {
     return {
-      reply: `I'm doing well, thank you for asking! I'm your dedicated CareerForge AI companion. I think alongside you to solve career roadblocks, evaluate your skills, and guide your next steps with patience and clarity.`,
-      feature: null,
-    };
-  }
-
-  if (query.includes("nervous") || query.includes("scared") || query.includes("anxious") || query.includes("stress")) {
-    return {
-      reply: `It is completely natural to feel overwhelmed at times, ${userName}. Career growth is a step-by-step journey, not an all-at-once sprint. Take a deep breath — we can break down your goals into bite-sized, manageable milestones so you always feel in control.`,
+      reply: `It is completely natural to feel overwhelmed at times, ${userName}. Career development is a gradual, step-by-step process. Let's break down your goals into manageable milestones together.`,
       feature: "roadmap",
       featureTitle: "Career Roadmap",
     };
   }
 
-  if (query.includes("salary") || query.includes("negotiat") || query.includes("offer")) {
-    return {
-      reply: `When negotiating an offer for a ${role} role, ground your conversation in the value and outcomes you deliver. Research market percentiles, highlight specialized competencies from your projects, and ask open questions like: 'What flexibility is there on the base or equity structure for this role?'`,
-      feature: null,
-    };
-  }
-
-  if (query.includes("disabilit") || query.includes("accommodation") || query.includes("accessible")) {
-    return {
-      reply: `Workplace accessibility is a fundamental right. When discussing accommodations during hiring, focus first on your strengths, achievements, and unique problem-solving perspective. You can request ergonomic setups, screen-reader parity, or asynchronous workflows during onboarding with complete confidence.`,
-      feature: null,
-    };
-  }
-
-  // If matched a specific workspace feature
   if (intent.feature) {
     return {
       reply: intent.reply,
@@ -230,9 +281,8 @@ function generateSmartResponse(rawQuery: string, userName: string, role: string)
     };
   }
 
-  // General career advice response
   return {
-    reply: `That's a thoughtful question, ${userName}. In the ${role} space, focusing on measurable project impact and consistent fundamentals gives you the strongest competitive edge. Would you like to map this into your step-by-step career roadmap or review recommended courses?`,
+    reply: `That's a great question, ${userName}. Focusing on deep fundamentals and high-impact projects will give you a significant advantage in the ${role} field. Would you like to view your step-by-step roadmap or practice core interview questions?`,
     feature: "roadmap",
     featureTitle: "Career Roadmap",
   };
