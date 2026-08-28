@@ -32,7 +32,7 @@ export function Workspace({
   return (
     <div className="min-h-[calc(100vh-4.25rem)]">
       <div className="border-b border-line py-10">
-        <div className="mx-auto flex max-w-content flex-col gap-4 px-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-graphite">
               {heading.eyebrow}

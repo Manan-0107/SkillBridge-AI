@@ -31,6 +31,32 @@ body {
   border-color: #DEDEDA;
 }
 
+/* =========================================================
+   APPLICATION SHELL WIDTH
+   Single source of truth for how wide the app canvas is and
+   how large the outer gutters are. Every top-level container
+   (header, workspace header, feature sections, assistant
+   chat + composer) uses .app-shell, so the whole application
+   lines up on one vertical edge.
+
+   Replaces the old fixed `max-w-content` column, which left
+   large monitors with huge unused margins. Now the gutter is
+   viewport-relative (~3vw per side => ~94vw of usable canvas)
+   with a sanity cap so ultrawide displays don't stretch
+   content to unreadable line lengths.
+
+   `max()` keeps phones/tablets on the original 24px gutter,
+   so small-screen layout is unchanged.
+   ========================================================= */
+@layer components {
+  .app-shell {
+    width: 100%;
+    max-width: 2400px;
+    margin-inline: auto;
+    padding-inline: max(1.5rem, 3vw);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;

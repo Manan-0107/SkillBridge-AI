@@ -24,7 +24,7 @@ export function TopNav({
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur">
-      <div className="mx-auto flex max-w-content items-center justify-between px-6 py-4">
+      <div className="app-shell flex items-center justify-between py-4">
         <button
           type="button"
           onClick={onAssistant}

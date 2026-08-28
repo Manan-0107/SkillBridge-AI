@@ -16,9 +16,6 @@ const config: Config = {
         display: ["var(--font-display)", "serif"],
         body: ["var(--font-body)", "sans-serif"],
       },
-      maxWidth: {
-        content: "1440px",
-      },
     },
   },
   plugins: [],

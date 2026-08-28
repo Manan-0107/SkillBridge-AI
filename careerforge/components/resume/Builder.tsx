@@ -499,8 +499,8 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
       {/* Main Layout Grid */}
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* Left Side: Form & Layout Customizer (7 cols) */}
-        <div className="space-y-5 lg:col-span-7">
+        {/* Left Side: Form & Layout Customizer (6 cols) */}
+        <div className="space-y-5 lg:col-span-6">
           {/* Section Navigation Tabs */}
           <div className="flex overflow-x-auto rounded-lg border border-line bg-white/70 p-1 text-xs gap-1">
             {[
@@ -1210,8 +1210,8 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           )}
         </div>
 
-        {/* Right Side: Rendered ATS Live Preview (5 cols) */}
-        <div className="space-y-3 lg:col-span-5">
+        {/* Right Side: Rendered ATS Live Preview (6 cols) */}
+        <div className="space-y-3 lg:col-span-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
