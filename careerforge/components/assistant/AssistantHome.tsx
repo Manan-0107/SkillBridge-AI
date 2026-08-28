@@ -583,11 +583,6 @@ export function AssistantHome({
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
               <div className="mb-8 text-center space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold text-neutral-700 shadow-xs">
-                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>AI Career Assistant &bull; Ready</span>
-                </div>
-
                 <h1 className="font-display text-3xl italic text-ink md:text-4xl tracking-tight">
                   {userDisplayName ? `Hello, ${userDisplayName}` : "How can I help you today?"}
                 </h1>
