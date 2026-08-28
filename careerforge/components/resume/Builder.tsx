@@ -41,41 +41,64 @@ interface CertificationItem {
   linkOrId: string;
 }
 
-const initialExperience: ExperienceItem = {
-  id: "exp-1",
-  role: "Senior Frontend Engineer",
-  company: "TechForge Labs",
-  location: "San Francisco, CA (Remote)",
-  startDate: "2022",
-  endDate: "Present",
-  current: true,
-  bullets: "• Architected high-performance Next.js application, improving Core Web Vitals by 35%.\n• Spearheaded reusable TypeScript UI component library adopted across 5 product squads.\n• Mentored 4 junior engineers and implemented CI/CD test automation in GitHub Actions.",
-};
-
-const initialEducation: EducationItem = {
-  id: "edu-1",
-  degree: "B.S. in Computer Science",
-  institution: "California State University",
-  location: "Long Beach, CA",
-  graduationYear: "2020",
-  gpaOrHonors: "Magna Cum Laude • GPA 3.8/4.0",
-};
-
-const initialProject: ProjectItem = {
-  id: "proj-1",
-  title: "CloudFlow AI Dashboard",
-  techStack: "React, Next.js, Tailwind CSS, OpenAI API, PostgreSQL",
-  liveUrl: "https://cloudflow-demo.io",
-  repoUrl: "https://github.com/alexrivera/cloudflow",
-  description: "• Built real-time generative workflow builder processing 25K+ prompt requests daily.\n• Implemented optimistic UI updates and server-side streaming responses.",
-};
-
-const initialCertification: CertificationItem = {
-  id: "cert-1",
-  name: "AWS Certified Solutions Architect – Associate",
-  issuer: "Amazon Web Services",
-  date: "2023",
-  linkOrId: "AWS-PSA-94821",
+// ─── Demo data shown in preview when user hasn't filled anything in ────────────
+const DEMO = {
+  fullName: "Alex Rivera",
+  headline: "Senior Frontend Engineer | React & TypeScript",
+  email: "alex.rivera@example.com",
+  phone: "+1 (555) 019-2834",
+  location: "San Francisco, CA",
+  linkedIn: "linkedin.com/in/alexrivera",
+  portfolio: "alexrivera.dev",
+  github: "github.com/alexrivera",
+  summary:
+    "Results-driven Frontend Engineer with 4+ years of expertise building scalable, accessible, and high-performance web applications using React, TypeScript, Next.js, and modern cloud architectures. Proven track record in optimising page speed and accelerating development velocity.",
+  skills:
+    "React, Next.js, TypeScript, JavaScript, HTML5/CSS3, Tailwind CSS, Redux Toolkit, REST APIs, GraphQL, Jest, Cypress, Git, Docker, CI/CD",
+  tools: "VS Code, Figma, Postman, Jira, GitHub Actions, AWS S3/CloudFront",
+  experiences: [
+    {
+      id: "d-exp-1",
+      role: "Senior Frontend Engineer",
+      company: "TechForge Labs",
+      location: "San Francisco, CA (Remote)",
+      startDate: "2022",
+      endDate: "Present",
+      current: true,
+      bullets:
+        "• Architected high-performance Next.js application, improving Core Web Vitals by 35%.\n• Spearheaded reusable TypeScript UI component library adopted across 5 product squads.\n• Mentored 4 junior engineers and implemented CI/CD test automation in GitHub Actions.",
+    },
+  ] as ExperienceItem[],
+  educations: [
+    {
+      id: "d-edu-1",
+      degree: "B.S. in Computer Science",
+      institution: "California State University",
+      location: "Long Beach, CA",
+      graduationYear: "2020",
+      gpaOrHonors: "Magna Cum Laude • GPA 3.8/4.0",
+    },
+  ] as EducationItem[],
+  projects: [
+    {
+      id: "d-proj-1",
+      title: "CloudFlow AI Dashboard",
+      techStack: "React, Next.js, Tailwind CSS, OpenAI API, PostgreSQL",
+      liveUrl: "https://cloudflow-demo.io",
+      repoUrl: "https://github.com/alexrivera/cloudflow",
+      description:
+        "• Built real-time generative workflow builder processing 25K+ prompt requests daily.\n• Implemented optimistic UI updates and server-side streaming responses.",
+    },
+  ] as ProjectItem[],
+  certifications: [
+    {
+      id: "d-cert-1",
+      name: "AWS Certified Solutions Architect – Associate",
+      issuer: "Amazon Web Services",
+      date: "2023",
+      linkOrId: "AWS-PSA-94821",
+    },
+  ] as CertificationItem[],
 };
 
 const popularSkills = [
@@ -106,28 +129,46 @@ export function Builder() {
   const [density, setDensity] = useState<"compact" | "normal" | "spacious">("compact");
   const [fitToOnePage, setFitToOnePage] = useState(true);
 
-  // Personal Info
-  const [fullName, setFullName] = useState("Alex Rivera");
-  const [headline, setHeadline] = useState("Senior Frontend Engineer | React & TypeScript");
-  const [email, setEmail] = useState("alex.rivera@example.com");
-  const [phone, setPhone] = useState("+1 (555) 019-2834");
-  const [location, setLocation] = useState("San Francisco, CA");
-  const [linkedIn, setLinkedIn] = useState("linkedin.com/in/alexrivera");
-  const [portfolio, setPortfolio] = useState("alexrivera.dev");
-  const [github, setGithub] = useState("github.com/alexrivera");
+  // Personal Info — start empty so users fill in their own details
+  const [fullName, setFullName] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [location, setLocation] = useState("");
+  const [linkedIn, setLinkedIn] = useState("");
+  const [portfolio, setPortfolio] = useState("");
+  const [github, setGithub] = useState("");
 
   // Summary
-  const [summary, setSummary] = useState(
-    "Results-driven Frontend Engineer with 4+ years of expertise in building scalable, accessible, and high-performance web applications using React, TypeScript, Next.js, and modern cloud architectures. Proven track record in optimizing page speed and accelerating development velocity."
-  );
+  const [summary, setSummary] = useState("");
 
-  // Experience, Education, Skills, Projects, Certs
-  const [experiences, setExperiences] = useState<ExperienceItem[]>([initialExperience]);
-  const [educations, setEducations] = useState<EducationItem[]>([initialEducation]);
-  const [skills, setSkills] = useState("React, Next.js, TypeScript, JavaScript, HTML5/CSS3, Tailwind CSS, Redux Toolkit, REST APIs, GraphQL, Jest, Cypress, Git, Docker, CI/CD");
-  const [tools, setTools] = useState("VS Code, Figma, Postman, Jira, GitHub Actions, AWS S3/CloudFront");
-  const [projects, setProjects] = useState<ProjectItem[]>([initialProject]);
-  const [certifications, setCertifications] = useState<CertificationItem[]>([initialCertification]);
+  // Experience, Education, Skills, Projects, Certs — all empty
+  const [experiences, setExperiences] = useState<ExperienceItem[]>([]);
+  const [educations, setEducations] = useState<EducationItem[]>([]);
+  const [skills, setSkills] = useState("");
+  const [tools, setTools] = useState("");
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+
+  // True when the user hasn't entered any personal info yet → show demo in preview
+  const isDemo = !fullName.trim() && !email.trim() && !summary.trim() && experiences.length === 0;
+
+  // Resolved values used in the live preview — fall back to DEMO when user hasn't typed anything
+  const pName        = fullName   || DEMO.fullName;
+  const pHeadline    = headline   || DEMO.headline;
+  const pEmail       = email      || DEMO.email;
+  const pPhone       = phone      || DEMO.phone;
+  const pLocation    = location   || DEMO.location;
+  const pLinkedIn    = linkedIn   || DEMO.linkedIn;
+  const pPortfolio   = portfolio  || DEMO.portfolio;
+  const pGithub      = github     || DEMO.github;
+  const pSummary     = summary    || DEMO.summary;
+  const pSkills      = skills     || DEMO.skills;
+  const pTools       = tools      || DEMO.tools;
+  const pExperiences = experiences.length > 0 ? experiences : DEMO.experiences;
+  const pEducations  = educations.length  > 0 ? educations  : DEMO.educations;
+  const pProjects    = projects.length    > 0 ? projects    : DEMO.projects;
+  const pCerts       = certifications.length > 0 ? certifications : DEMO.certifications;
   
   const [copied, setCopied] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
@@ -267,22 +308,31 @@ export function Builder() {
     }
   };
 
-  const loadPresetData = () => {
-    setFullName("Alex Rivera");
-    setHeadline("Senior Frontend Engineer | React & TypeScript");
-    setEmail("alex.rivera@example.com");
-    setPhone("+1 (555) 019-2834");
-    setLocation("San Francisco, CA");
-    setLinkedIn("linkedin.com/in/alexrivera");
-    setPortfolio("alexrivera.dev");
-    setGithub("github.com/alexrivera");
-    setSummary("Results-driven Frontend Engineer with 4+ years of expertise in building scalable, accessible, and high-performance web applications using React, TypeScript, Next.js, and modern cloud architectures.");
-    setExperiences([initialExperience]);
-    setEducations([initialEducation]);
-    setSkills("React, Next.js, TypeScript, JavaScript, HTML5/CSS3, Tailwind CSS, Redux Toolkit, REST APIs, GraphQL, Jest, Cypress, Git, Docker, CI/CD");
-    setTools("VS Code, Figma, Postman, Jira, GitHub Actions, AWS S3/CloudFront");
-    setProjects([initialProject]);
-    setCertifications([initialCertification]);
+  // Fill the form with the DEMO data (useful for exploration)
+  const loadDemo = () => {
+    setFullName(DEMO.fullName);
+    setHeadline(DEMO.headline);
+    setEmail(DEMO.email);
+    setPhone(DEMO.phone);
+    setLocation(DEMO.location);
+    setLinkedIn(DEMO.linkedIn);
+    setPortfolio(DEMO.portfolio);
+    setGithub(DEMO.github);
+    setSummary(DEMO.summary);
+    setExperiences(DEMO.experiences);
+    setEducations(DEMO.educations);
+    setSkills(DEMO.skills);
+    setTools(DEMO.tools);
+    setProjects(DEMO.projects);
+    setCertifications(DEMO.certifications);
+  };
+
+  // Clear everything back to blank
+  const clearAll = () => {
+    setFullName(""); setHeadline(""); setEmail(""); setPhone("");
+    setLocation(""); setLinkedIn(""); setPortfolio(""); setGithub("");
+    setSummary(""); setSkills(""); setTools("");
+    setExperiences([]); setEducations([]); setProjects([]); setCertifications([]);
   };
 
   // JSONResume API Export
@@ -1222,6 +1272,11 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               </span>
             </div>
             <div className="flex items-center gap-2">
+              {isDemo && (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">
+                  👁 Demo Preview
+                </span>
+              )}
               {fitToOnePage && (
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
                   📄 1-Page Locked
@@ -1229,10 +1284,17 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               )}
               <button
                 type="button"
-                onClick={loadPresetData}
+                onClick={loadDemo}
                 className="text-xs font-medium text-blue-600 hover:underline"
               >
-                Reset
+                Load Demo
+              </button>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-xs font-medium text-neutral-400 hover:text-red-500 hover:underline"
+              >
+                Clear
               </button>
             </div>
           </div>
@@ -1255,34 +1317,34 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               <div className="space-y-2.5">
                 <div className="border-b-2 border-neutral-900 pb-1.5 text-center">
                   <h1 className="text-lg font-bold tracking-tight text-neutral-900 uppercase">
-                    {fullName || "Your Full Name"}
+                    {pName}
                   </h1>
-                  {headline && (
+                  {pHeadline && (
                     <p className="text-[11px] font-semibold text-neutral-700 mt-0.5">
-                      {headline}
+                      {pHeadline}
                     </p>
                   )}
                   <p className="mt-0.5 text-[10.5px] text-neutral-600">
-                    {[location, phone, email, linkedIn, github, portfolio].filter(Boolean).join(" | ")}
+                    {[pLocation, pPhone, pEmail, pLinkedIn, pGithub, pPortfolio].filter(Boolean).join(" | ")}
                   </p>
                 </div>
 
-                {summary && (
+                {pSummary && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Professional Summary
                     </h2>
-                    <p className="text-[11px] leading-relaxed text-neutral-800">{summary}</p>
+                    <p className="text-[11px] leading-relaxed text-neutral-800">{pSummary}</p>
                   </div>
                 )}
 
-                {experiences.length > 0 && (
+                {pExperiences.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Experience
                     </h2>
                     <div className="space-y-2">
-                      {experiences.map((exp) => (
+                      {pExperiences.map((exp) => (
                         <div key={exp.id}>
                           <div className="flex items-baseline justify-between font-bold text-neutral-900 text-[11px]">
                             <span>
@@ -1306,13 +1368,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {educations.length > 0 && (
+                {pEducations.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Education
                     </h2>
                     <div className="space-y-1">
-                      {educations.map((edu) => (
+                      {pEducations.map((edu) => (
                         <div key={edu.id} className="flex items-baseline justify-between text-[11px]">
                           <div>
                             <span className="font-bold text-neutral-900">{edu.institution}</span>
@@ -1326,31 +1388,31 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {(skills || tools) && (
+                {(pSkills || pTools) && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Technical Skills &amp; Competencies
                     </h2>
-                    {skills && (
+                    {pSkills && (
                       <p className="text-[10.5px] text-neutral-800 leading-relaxed">
-                        <strong>Technical Skills:</strong> {skills}
+                        <strong>Technical Skills:</strong> {pSkills}
                       </p>
                     )}
-                    {tools && (
+                    {pTools && (
                       <p className="text-[10.5px] text-neutral-800 leading-relaxed mt-0.5">
-                        <strong>Tools &amp; Platforms:</strong> {tools}
+                        <strong>Tools &amp; Platforms:</strong> {pTools}
                       </p>
                     )}
                   </div>
                 )}
 
-                {projects.length > 0 && (
+                {pProjects.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Key Projects
                     </h2>
                     <div className="space-y-1.5">
-                      {projects.map((proj) => (
+                      {pProjects.map((proj) => (
                         <div key={proj.id}>
                           <div className="flex items-baseline justify-between font-bold text-neutral-900 text-[11px]">
                             <span>{proj.title} {proj.techStack && <span className="font-normal text-neutral-600 text-[10px]">({proj.techStack})</span>}</span>
@@ -1363,13 +1425,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {certifications.length > 0 && (
+                {pCerts.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1">
                       Certifications
                     </h2>
                     <div className="space-y-0.5">
-                      {certifications.map((c) => (
+                      {pCerts.map((c) => (
                         <div key={c.id} className="flex items-baseline justify-between text-[10.5px] text-neutral-800">
                           <span><strong>{c.name}</strong> — {c.issuer}</span>
                           <span className="text-[10px] text-neutral-500">{c.date}</span>
@@ -1387,32 +1449,32 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <div className="flex items-start justify-between border-b pb-2" style={{ borderColor: selectedColor.hex }}>
                   <div>
                     <h1 className="text-lg font-bold tracking-tight" style={{ color: selectedColor.hex }}>
-                      {fullName || "Your Full Name"}
+                      {pName}
                     </h1>
-                    <p className="text-[11px] font-semibold text-neutral-700 mt-0.5">{headline}</p>
+                    <p className="text-[11px] font-semibold text-neutral-700 mt-0.5">{pHeadline}</p>
                   </div>
                   <div className="text-right text-[10px] text-neutral-500 space-y-0.5">
-                    <p>{email}</p>
-                    <p>{phone} • {location}</p>
+                    <p>{pEmail}</p>
+                    <p>{pPhone} • {pLocation}</p>
                   </div>
                 </div>
 
-                {summary && (
+                {pSummary && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider pl-2 border-l-2 mb-1" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
                       Professional Summary
                     </h2>
-                    <p className="text-[10.5px] leading-relaxed text-neutral-700">{summary}</p>
+                    <p className="text-[10.5px] leading-relaxed text-neutral-700">{pSummary}</p>
                   </div>
                 )}
 
-                {skills && (
+                {pSkills && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
                       Technical Skills
                     </h2>
                     <div className="flex flex-wrap gap-1">
-                      {skills.split(",").map((s, idx) => (
+                      {pSkills.split(",").map((s, idx) => (
                         <span key={idx} className="rounded px-1.5 py-0.5 text-[10px] font-medium border" style={{ backgroundColor: selectedColor.bgLight, color: selectedColor.text, borderColor: selectedColor.hex + "30" }}>
                           {s.trim()}
                         </span>
@@ -1421,13 +1483,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {experiences.length > 0 && (
+                {pExperiences.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
                       Work Experience
                     </h2>
                     <div className="space-y-2">
-                      {experiences.map((exp) => (
+                      {pExperiences.map((exp) => (
                         <div key={exp.id}>
                           <div className="flex items-baseline justify-between font-bold text-neutral-900 text-[11px]">
                             <span>{exp.role} <span className="font-normal text-neutral-500">@ {exp.company}</span></span>
@@ -1440,13 +1502,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {projects.length > 0 && (
+                {pProjects.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
                       Featured Projects
                     </h2>
                     <div className="space-y-1.5">
-                      {projects.map((p) => (
+                      {pProjects.map((p) => (
                         <div key={p.id}>
                           <div className="flex items-baseline justify-between font-semibold text-neutral-900 text-[11px]">
                             <span>{p.title} {p.techStack && <span className="text-[9.5px] text-neutral-500 font-mono">[{p.techStack}]</span>}</span>
@@ -1459,12 +1521,12 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {educations.length > 0 && (
+                {pEducations.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider pl-2 border-l-2 mb-1" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
                       Education &amp; Credentials
                     </h2>
-                    {educations.map((ed) => (
+                    {pEducations.map((ed) => (
                       <div key={ed.id} className="flex justify-between text-[10.5px]">
                         <span><strong>{ed.degree}</strong>, {ed.institution}</span>
                         <span className="text-[10px] text-neutral-500">{ed.graduationYear}</span>
@@ -1482,25 +1544,25 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <div className="col-span-4 space-y-2.5 border-r border-neutral-200 pr-2.5">
                   <div>
                     <h1 className="text-sm font-bold leading-tight" style={{ color: selectedColor.hex }}>
-                      {fullName || "Your Name"}
+                      {pName}
                     </h1>
-                    <p className="text-[9.5px] text-neutral-600 font-medium mt-0.5">{headline}</p>
+                    <p className="text-[9.5px] text-neutral-600 font-medium mt-0.5">{pHeadline}</p>
                   </div>
 
                   <div className="text-[9.5px] space-y-0.5 text-neutral-600">
                     <p className="font-bold text-neutral-900 uppercase text-[9px]">Contact</p>
-                    <p className="truncate">{email}</p>
-                    <p>{phone}</p>
-                    <p>{location}</p>
-                    {linkedIn && <p className="truncate text-blue-600">{linkedIn}</p>}
-                    {github && <p className="truncate text-blue-600">{github}</p>}
+                    <p className="truncate">{pEmail}</p>
+                    <p>{pPhone}</p>
+                    <p>{pLocation}</p>
+                    {pLinkedIn && <p className="truncate text-blue-600">{pLinkedIn}</p>}
+                    {pGithub && <p className="truncate text-blue-600">{pGithub}</p>}
                   </div>
 
-                  {skills && (
+                  {pSkills && (
                     <div className="space-y-1">
                       <p className="font-bold text-neutral-900 uppercase text-[9px]">Skills</p>
                       <div className="flex flex-wrap gap-1">
-                        {skills.split(",").map((s, i) => (
+                        {pSkills.split(",").map((s, i) => (
                           <span key={i} className="rounded bg-neutral-100 px-1 py-0.5 text-[9px] text-neutral-700">
                             {s.trim()}
                           </span>
@@ -1509,10 +1571,10 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                     </div>
                   )}
 
-                  {educations.length > 0 && (
+                  {pEducations.length > 0 && (
                     <div className="space-y-1">
                       <p className="font-bold text-neutral-900 uppercase text-[9px]">Education</p>
-                      {educations.map((ed) => (
+                      {pEducations.map((ed) => (
                         <div key={ed.id} className="text-[9.5px]">
                           <p className="font-bold text-neutral-800">{ed.degree}</p>
                           <p className="text-neutral-500">{ed.institution} ({ed.graduationYear})</p>
@@ -1521,10 +1583,10 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                     </div>
                   )}
 
-                  {certifications.length > 0 && (
+                  {pCerts.length > 0 && (
                     <div className="space-y-0.5">
                       <p className="font-bold text-neutral-900 uppercase text-[9px]">Certifications</p>
-                      {certifications.map((c) => (
+                      {pCerts.map((c) => (
                         <div key={c.id} className="text-[9.5px]">
                           <p className="font-semibold text-neutral-800">{c.name}</p>
                           <p className="text-neutral-500">{c.issuer}</p>
@@ -1536,22 +1598,22 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
                 {/* Right Column (8 cols): Summary, Experience, Projects */}
                 <div className="col-span-8 space-y-2.5 pl-1">
-                  {summary && (
+                  {pSummary && (
                     <div>
                       <h2 className="text-[10px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1" style={{ borderColor: selectedColor.hex }}>
                         Professional Summary
                       </h2>
-                      <p className="text-[10.5px] leading-relaxed text-neutral-700">{summary}</p>
+                      <p className="text-[10.5px] leading-relaxed text-neutral-700">{pSummary}</p>
                     </div>
                   )}
 
-                  {experiences.length > 0 && (
+                  {pExperiences.length > 0 && (
                     <div>
                       <h2 className="text-[10px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1.5" style={{ borderColor: selectedColor.hex }}>
                         Work Experience
                       </h2>
                       <div className="space-y-2">
-                        {experiences.map((exp) => (
+                        {pExperiences.map((exp) => (
                           <div key={exp.id}>
                             <div className="flex justify-between font-bold text-[10.5px] text-neutral-900">
                               <span>{exp.role} <span className="font-normal text-neutral-500">| {exp.company}</span></span>
@@ -1564,13 +1626,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                     </div>
                   )}
 
-                  {projects.length > 0 && (
+                  {pProjects.length > 0 && (
                     <div>
                       <h2 className="text-[10px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1" style={{ borderColor: selectedColor.hex }}>
                         Featured Projects
                       </h2>
                       <div className="space-y-1.5">
-                        {projects.map((p) => (
+                        {pProjects.map((p) => (
                           <div key={p.id}>
                             <p className="font-semibold text-[10.5px] text-neutral-900">
                               {p.title} {p.techStack && <span className="text-[9px] text-neutral-500 font-mono">({p.techStack})</span>}
@@ -1590,31 +1652,31 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               <div className="space-y-2.5">
                 <div className="border-b-2 pb-2" style={{ borderColor: selectedColor.hex }}>
                   <h1 className="text-lg font-bold tracking-tight" style={{ color: selectedColor.hex }}>
-                    {fullName || "Your Name"}
+                    {pName}
                   </h1>
                   <p className="text-[11px] font-semibold text-neutral-700 mt-0.5 uppercase tracking-wide">
-                    {headline}
+                    {pHeadline}
                   </p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">
-                    {[email, phone, location, linkedIn].filter(Boolean).join(" • ")}
+                    {[pEmail, pPhone, pLocation, pLinkedIn].filter(Boolean).join(" • ")}
                   </p>
                 </div>
 
-                {summary && (
+                {pSummary && (
                   <div className="p-2.5 rounded-lg border-l-4" style={{ backgroundColor: selectedColor.bgLight, borderColor: selectedColor.hex }}>
                     <p className="text-[10.5px] font-medium leading-relaxed" style={{ color: selectedColor.text }}>
-                      {summary}
+                      {pSummary}
                     </p>
                   </div>
                 )}
 
-                {experiences.length > 0 && (
+                {pExperiences.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider mb-1.5 border-b pb-0.5 text-neutral-900">
                       Leadership &amp; Professional Experience
                     </h2>
                     <div className="space-y-2">
-                      {experiences.map((exp) => (
+                      {pExperiences.map((exp) => (
                         <div key={exp.id}>
                           <div className="flex justify-between font-bold text-neutral-900 text-[11px]">
                             <span>{exp.role} <span className="font-semibold text-neutral-600">— {exp.company}</span></span>
@@ -1627,12 +1689,12 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {educations.length > 0 && (
+                {pEducations.length > 0 && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider mb-1 border-b pb-0.5 text-neutral-900">
                       Education &amp; Credentials
                     </h2>
-                    {educations.map((ed) => (
+                    {pEducations.map((ed) => (
                       <div key={ed.id} className="flex justify-between text-[10.5px]">
                         <span><strong>{ed.degree}</strong>, {ed.institution}</span>
                         <span className="text-[10px] text-neutral-500">{ed.graduationYear}</span>
@@ -1641,12 +1703,12 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {skills && (
+                {pSkills && (
                   <div>
                     <h2 className="text-[11px] font-bold uppercase tracking-wider mb-1 border-b pb-0.5 text-neutral-900">
                       Core Competencies
                     </h2>
-                    <p className="text-[10.5px] text-neutral-700 leading-relaxed">{skills}</p>
+                    <p className="text-[10.5px] text-neutral-700 leading-relaxed">{pSkills}</p>
                   </div>
                 )}
               </div>
@@ -1658,30 +1720,30 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {/* Header */}
                 <div className="text-center border-b border-neutral-900 pb-2">
                   <h1 className="text-lg font-bold tracking-tight text-neutral-900 uppercase">
-                    {fullName || "Candidate Name"}
+                    {pName}
                   </h1>
-                  <p className="text-[10.5px] text-neutral-700 font-medium mt-0.5">{headline}</p>
+                  <p className="text-[10.5px] text-neutral-700 font-medium mt-0.5">{pHeadline}</p>
                   <p className="text-[9.5px] text-neutral-500 mt-0.5">
-                    {[email, phone, location, github, linkedIn].filter(Boolean).join("  •  ")}
+                    {[pEmail, pPhone, pLocation, pGithub, pLinkedIn].filter(Boolean).join("  •  ")}
                   </p>
                 </div>
 
-                {summary && (
+                {pSummary && (
                   <div>
                     <h2 className="font-bold text-neutral-900 uppercase text-[10.5px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider" style={{ color: selectedColor.hex }}>
                       Executive Summary
                     </h2>
-                    <p className="leading-relaxed text-neutral-700 font-sans text-[11px]">{summary}</p>
+                    <p className="leading-relaxed text-neutral-700 font-sans text-[11px]">{pSummary}</p>
                   </div>
                 )}
 
-                {experiences.length > 0 && (
+                {pExperiences.length > 0 && (
                   <div>
                     <h2 className="font-bold text-neutral-900 uppercase text-[10.5px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider" style={{ color: selectedColor.hex }}>
                       Professional Experience
                     </h2>
                     <div className="space-y-2">
-                      {experiences.map((exp) => (
+                      {pExperiences.map((exp) => (
                         <div key={exp.id}>
                           <div className="flex justify-between font-bold text-neutral-900 text-[10.5px]">
                             <span>{exp.role} <span className="font-normal text-neutral-600">| {exp.company}</span></span>
@@ -1694,22 +1756,22 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {skills && (
+                {pSkills && (
                   <div>
                     <h2 className="font-bold text-neutral-900 uppercase text-[10.5px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider" style={{ color: selectedColor.hex }}>
                       Technical Skills &amp; Tools
                     </h2>
-                    <p className="font-sans text-[10.5px] text-neutral-700 leading-relaxed">{skills}</p>
+                    <p className="font-sans text-[10.5px] text-neutral-700 leading-relaxed">{pSkills}</p>
                   </div>
                 )}
 
-                {projects.length > 0 && (
+                {pProjects.length > 0 && (
                   <div>
                     <h2 className="font-bold text-neutral-900 uppercase text-[10.5px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider" style={{ color: selectedColor.hex }}>
                       Featured Projects
                     </h2>
                     <div className="space-y-1.5">
-                      {projects.map((p) => (
+                      {pProjects.map((p) => (
                         <div key={p.id}>
                           <div className="flex justify-between font-bold text-neutral-900 text-[10.5px]">
                             <span>{p.title} {p.techStack && <span className="font-normal text-neutral-500">({p.techStack})</span>}</span>
@@ -1722,12 +1784,12 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
                 )}
 
-                {educations.length > 0 && (
+                {pEducations.length > 0 && (
                   <div>
                     <h2 className="font-bold text-neutral-900 uppercase text-[10.5px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider" style={{ color: selectedColor.hex }}>
                       Education
                     </h2>
-                    {educations.map((ed) => (
+                    {pEducations.map((ed) => (
                       <div key={ed.id} className="flex justify-between text-[10.5px]">
                         <span><strong>{ed.degree}</strong>, {ed.institution}</span>
                         <span className="text-[9.5px] text-neutral-500">{ed.graduationYear}</span>
