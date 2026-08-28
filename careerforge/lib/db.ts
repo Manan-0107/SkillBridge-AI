@@ -78,8 +78,9 @@ export interface DbResumeUpload {
 export async function upsertUser(params: {
   email: string;
   name?: string;
+  phone?: string;
   picture?: string;
-  authProvider: "email" | "google";
+  authProvider: "email" | "google" | "github" | "phone";
   targetRole?: string | null;
 }): Promise<DbUser | null> {
   if (!supabase) return null;

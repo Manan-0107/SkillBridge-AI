@@ -15,6 +15,8 @@ interface AppState {
   ready: boolean;
   signIn: (email: string, name?: string) => Promise<void>;
   signInWithGoogle: (name: string, email: string, picture?: string) => Promise<void>;
+  signInWithGithub: (name: string, email: string, picture?: string) => Promise<void>;
+  signInWithPhone: (phone: string, name?: string) => Promise<void>;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
 }
@@ -101,6 +103,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
+  const signInWithGithub = async (name: string, email: string, picture?: string) => {
+    const localUser: User = {
+      name: name || email.split("@")[0],
+      email,
+      picture,
+      authProvider: "github",
+      targetRole: user?.targetRole ?? null,
+      dbId: null,
+    };
+    persist(localUser);
+
+    try {
+      const dbRow = await upsertUser({
+        email,
+        name: localUser.name,
+        picture,
+        authProvider: "github",
+        targetRole: localUser.targetRole ?? undefined,
+      });
+      if (dbRow?.id) {
+        const updated = { ...localUser, dbId: dbRow.id };
+        persist(updated);
+      }
+    } catch (e) {
+      console.warn("[auth] DB upsert failed:", e);
+    }
+  };
+
+  /** Phone sign-in — upserts phone user to DB then persists locally. */
+  const signInWithPhone = async (phone: string, name?: string) => {
+    const cleanPhone = phone.trim();
+    const formattedEmail = `${cleanPhone.replace(/[^0-9]/g, "")}@phone.careerforge.io`;
+    const localUser: User = {
+      name: name || `User (${cleanPhone})`,
+      email: formattedEmail,
+      phone: cleanPhone,
+      authProvider: "phone",
+      targetRole: user?.targetRole ?? null,
+      dbId: null,
+    };
+    persist(localUser);
+
+    try {
+      const dbRow = await upsertUser({
+        email: formattedEmail,
+        name: localUser.name,
+        phone: cleanPhone,
+        authProvider: "phone",
+        targetRole: localUser.targetRole ?? undefined,
+      });
+      if (dbRow?.id) {
+        const updated = { ...localUser, dbId: dbRow.id };
+        persist(updated);
+      }
+    } catch (e) {
+      console.warn("[auth] DB upsert failed:", e);
+    }
+  };
+
   const signOut = () => persist(null);
 
   const setTargetRole = (role: RoleId) => {
@@ -117,7 +179,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ user, ready, signIn, signInWithGoogle, signOut, setTargetRole }}
+      value={{
+        user,
+        ready,
+        signIn,
+        signInWithGoogle,
+        signInWithGithub,
+        signInWithPhone,
+        signOut,
+        setTargetRole,
+      }}
     >
       {children}
     </AppContext.Provider>
