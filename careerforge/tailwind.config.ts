@@ -17,7 +17,7 @@ const config: Config = {
         body: ["var(--font-body)", "sans-serif"],
       },
       maxWidth: {
-        content: "1080px",
+        content: "1440px",
       },
     },
   },

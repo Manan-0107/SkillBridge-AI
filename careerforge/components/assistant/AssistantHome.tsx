@@ -173,7 +173,7 @@ export function AssistantHome({
     <div className="flex min-h-[calc(100vh-4.25rem)] flex-col bg-paper">
       {/* Scrollable Chat / AI Exploration Area */}
       <div ref={listRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
+        <div className="mx-auto flex max-w-5xl flex-col px-4 py-8 md:py-12">
           {emptyThread && (
             <div className="mb-8 text-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-line bg-white/80 px-3.5 py-1 text-xs font-medium text-graphite shadow-sm backdrop-blur">
@@ -314,7 +314,7 @@ export function AssistantHome({
 
       {/* AI Prompt Input Bar */}
       <div className="sticky bottom-0 border-t border-line bg-paper/95 pb-6 pt-3.5 backdrop-blur">
-        <div className="mx-auto max-w-3xl px-4">
+        <div className="mx-auto max-w-5xl px-4">
           <form
             onSubmit={onSubmit}
             className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm focus-within:border-ink focus-within:ring-1 focus-within:ring-ink transition-all"
