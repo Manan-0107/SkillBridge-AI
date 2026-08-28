@@ -10,6 +10,31 @@ import {
   inputClasses,
 } from "@/components/ui/Primitives";
 
+const COUNTRY_CODES = [
+  { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+971", country: "UAE", flag: "🇦🇪" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+86", country: "China", flag: "🇨🇳" },
+  { code: "+55", country: "Brazil", flag: "🇧🇷" },
+  { code: "+27", country: "South Africa", flag: "🇿🇦" },
+  { code: "+234", country: "Nigeria", flag: "🇳🇬" },
+  { code: "+92", country: "Pakistan", flag: "🇵🇰" },
+  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
+  { code: "+31", country: "Netherlands", flag: "🇳🇱" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+39", country: "Italy", flag: "🇮🇹" },
+  { code: "+34", country: "Spain", flag: "🇪🇸" },
+  { code: "+52", country: "Mexico", flag: "🇲🇽" },
+  { code: "+64", country: "New Zealand", flag: "🇳🇿" },
+  { code: "+82", country: "South Korea", flag: "🇰🇷" },
+];
+
 export function AuthGate() {
   const { signIn, signInWithGoogle, signInWithGithub, signInWithPhone } = useApp();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
@@ -31,6 +56,7 @@ export function AuthGate() {
 
   // Phone Modal State
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [countryCode, setCountryCode] = useState("+1");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneName, setPhoneName] = useState("");
   const [phoneStep, setPhoneStep] = useState<"input" | "otp">("input");
@@ -104,8 +130,8 @@ export function AuthGate() {
   // ─── Phone Auth Flow ────────────────────────────────────────────────────────
   const handleSendOtp = (e: FormEvent) => {
     e.preventDefault();
-    if (phoneNumber.replace(/\D/g, "").length < 8) {
-      setError("Please enter a valid phone number with country code.");
+    if (phoneNumber.replace(/\D/g, "").length < 6) {
+      setError("Please enter a valid phone number.");
       return;
     }
     setError("");
@@ -120,140 +146,163 @@ export function AuthGate() {
     }
     setError("");
     setPhoneModalOpen(false);
-    signInWithPhone(phoneNumber.trim(), phoneName.trim() || undefined);
+    const fullPhone = `${countryCode} ${phoneNumber.trim()}`;
+    signInWithPhone(fullPhone, phoneName.trim() || undefined);
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-6 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <p className="font-display text-3xl italic text-ink">CareerForge</p>
+      <div className="w-full max-w-xl space-y-8">
+        
+        {/* Top Header */}
+        <div className="text-center">
+          <p className="font-display text-4xl italic text-ink">CareerForge</p>
           <p className="mt-2 text-sm text-graphite">
-            AI-powered intelligence for your career progression.
+            AI-powered career intelligence, skill gap discovery, and roadmap engineering.
           </p>
         </div>
 
-        <div className="mb-6 flex rounded-md border border-line p-1 bg-white/40">
-          <button
-            onClick={() => setMode("signup")}
-            className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
-              mode === "signup" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
-            }`}
-          >
-            Create account
-          </button>
-          <button
-            onClick={() => setMode("signin")}
-            className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
-              mode === "signin" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
-            }`}
-          >
-            Sign in
-          </button>
+        {/* ─── Disability Inclusion & Hardship Quote Banner ─────────────────── */}
+        <div className="rounded-2xl border border-line bg-white/80 p-5 shadow-sm backdrop-blur-sm transition-all hover:border-graphite/40">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
+              ♿
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
+              Inclusion &amp; Accessibility Commitment
+            </span>
+          </div>
+          <blockquote className="font-display text-sm italic leading-relaxed text-ink pl-3 border-l-2 border-amber-500 my-2">
+            &ldquo;For most people, technology makes things easier. For persons with disabilities, technology makes things possible. The true hardship is not the limitation itself, but navigating a world designed without you in mind.&rdquo;
+          </blockquote>
+          <p className="text-[11.5px] text-graphite leading-relaxed">
+            Every candidate, regardless of physical or cognitive challenges, deserves frictionless tools, assistive compatibility, and an equal opportunity to build an exceptional career.
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "signup" && (
+        {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
+          <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
+            <button
+              onClick={() => setMode("signup")}
+              className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
+                mode === "signup" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
+              }`}
+            >
+              Create account
+            </button>
+            <button
+              onClick={() => setMode("signin")}
+              className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
+                mode === "signin" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
+              }`}
+            >
+              Sign in
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <div>
+                <FieldLabel>Full Name</FieldLabel>
+                <input
+                  className={inputClasses}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Alex Rivera"
+                  required
+                />
+              </div>
+            )}
             <div>
-              <FieldLabel>Full Name</FieldLabel>
+              <FieldLabel>Email Address</FieldLabel>
               <input
+                type="email"
                 className={inputClasses}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Alex Rivera"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="alex.rivera@example.com"
                 required
               />
             </div>
-          )}
-          <div>
-            <FieldLabel>Email Address</FieldLabel>
-            <input
-              type="email"
-              className={inputClasses}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex.rivera@example.com"
-              required
-            />
+            <div>
+              <FieldLabel>Password</FieldLabel>
+              <input
+                type="password"
+                className={inputClasses}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
+              <p className="text-sm text-red-700">{error}</p>
+            )}
+
+            <PrimaryButton type="submit" className="w-full">
+              {mode === "signup" ? "Create account" : "Sign in"}
+            </PrimaryButton>
+          </form>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-line" />
+            <span className="text-xs text-graphite uppercase tracking-wider">or continue with</span>
+            <div className="h-px flex-1 bg-line" />
           </div>
-          <div>
-            <FieldLabel>Password</FieldLabel>
-            <input
-              type="password"
-              className={inputClasses}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+
+          {/* Multi-Provider Auth Buttons */}
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            {/* Google Button */}
+            <GhostButton
+              type="button"
+              onClick={handleGoogleAuth}
+              disabled={googleBusy}
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+            >
+              <GoogleMark />
+              <span className="text-xs font-semibold">Google</span>
+            </GhostButton>
+
+            {/* GitHub Button */}
+            <GhostButton
+              type="button"
+              onClick={() => {
+                setError("");
+                setGithubModalOpen(true);
+              }}
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+            >
+              <GithubMark />
+              <span className="text-xs font-semibold">GitHub</span>
+            </GhostButton>
+
+            {/* Phone Button */}
+            <GhostButton
+              type="button"
+              onClick={() => {
+                setError("");
+                setPhoneStep("input");
+                setPhoneModalOpen(true);
+              }}
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+            >
+              <PhoneMark />
+              <span className="text-xs font-semibold">Phone</span>
+            </GhostButton>
           </div>
 
-          {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
-            <p className="text-sm text-red-700">{error}</p>
-          )}
-
-          <PrimaryButton type="submit" className="w-full">
-            {mode === "signup" ? "Create account" : "Sign in"}
-          </PrimaryButton>
-        </form>
-
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-line" />
-          <span className="text-xs text-graphite uppercase tracking-wider">or continue with</span>
-          <div className="h-px flex-1 bg-line" />
+          <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
+            By continuing, you agree to CareerForge’s Terms of Service and Accessibility Standards.
+          </p>
         </div>
-
-        {/* Multi-Provider Auth Buttons */}
-        <div className="space-y-2.5">
-          {/* Google Button */}
-          <GhostButton
-            type="button"
-            onClick={handleGoogleAuth}
-            disabled={googleBusy}
-            className="w-full gap-2.5 bg-white shadow-sm hover:bg-neutral-50 border-line"
-          >
-            <GoogleMark />
-            <span>{googleBusy ? "Waiting for Google…" : "Continue with Google"}</span>
-          </GhostButton>
-
-          {/* GitHub Button */}
-          <GhostButton
-            type="button"
-            onClick={() => {
-              setError("");
-              setGithubModalOpen(true);
-            }}
-            className="w-full gap-2.5 bg-white shadow-sm hover:bg-neutral-50 border-line"
-          >
-            <GithubMark />
-            <span>Continue with GitHub</span>
-          </GhostButton>
-
-          {/* Phone Number Button */}
-          <GhostButton
-            type="button"
-            onClick={() => {
-              setError("");
-              setPhoneStep("input");
-              setPhoneModalOpen(true);
-            }}
-            className="w-full gap-2.5 bg-white shadow-sm hover:bg-neutral-50 border-line"
-          >
-            <PhoneMark />
-            <span>Continue with Phone Number</span>
-          </GhostButton>
-        </div>
-
-        <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
-          By signing in, you agree to CareerForge’s Terms of Service and Privacy Policy.
-        </p>
       </div>
 
       {/* ─── Google OAuth Permission Screen Modal ─────────────────────────────── */}
       {googleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
             <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <GoogleMark />
@@ -262,7 +311,6 @@ export function AuthGate() {
               <span className="text-xs text-neutral-400 font-mono">accounts.google.com</span>
             </div>
 
-            {/* Main Content */}
             <div className="pt-4">
               <h2 className="text-base font-bold text-neutral-900 leading-snug">
                 CareerForge wants to access your Google Account
@@ -271,7 +319,6 @@ export function AuthGate() {
                 Grant permission to share your basic profile and email address with <strong>CareerForge</strong>.
               </p>
 
-              {/* Account Input Fields */}
               <form onSubmit={allowGooglePermission} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
@@ -300,7 +347,6 @@ export function AuthGate() {
 
                 {error && <p className="text-xs text-red-600">{error}</p>}
 
-                {/* Scopes */}
                 <div className="pt-2 border-t border-neutral-200 space-y-2">
                   <div className="flex items-center gap-2 text-[11px] text-neutral-600">
                     <span className="text-emerald-600 font-bold">✓</span>
@@ -312,7 +358,6 @@ export function AuthGate() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200">
                   <button
                     type="button"
@@ -421,7 +466,7 @@ export function AuthGate() {
         </div>
       )}
 
-      {/* ─── Phone Number Authentication Modal ────────────────────────────────── */}
+      {/* ─── Phone Number Authentication Modal (With Country Code Selector) ──── */}
       {phoneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -440,7 +485,7 @@ export function AuthGate() {
                     Enter your Mobile Number
                   </h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    We will send an instant SMS verification code to your device.
+                    Select your country code and enter your phone number to receive an instant verification code.
                   </p>
 
                   <form onSubmit={handleSendOtp} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
@@ -458,16 +503,38 @@ export function AuthGate() {
 
                     <div>
                       <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
-                        Phone Number <span className="text-red-500">*</span>
+                        Country Code &amp; Phone Number <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="tel"
-                        required
-                        className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-emerald-600 focus:outline-none"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="+1 (555) 019-2834 or +91 9876543210"
-                      />
+                      
+                      <div className="mt-1 flex gap-2">
+                        {/* Country Code Select */}
+                        <div className="relative w-36 shrink-0">
+                          <select
+                            value={countryCode}
+                            onChange={(e) => setCountryCode(e.target.value)}
+                            className="w-full appearance-none rounded-lg border border-neutral-300 bg-white px-2.5 py-2 text-xs font-medium text-neutral-900 focus:border-emerald-600 focus:outline-none"
+                          >
+                            {COUNTRY_CODES.map((c) => (
+                              <option key={c.code + c.country} value={c.code}>
+                                {c.flag} {c.code} ({c.country})
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-neutral-500 text-xs">
+                            ▼
+                          </div>
+                        </div>
+
+                        {/* Phone Number Input */}
+                        <input
+                          type="tel"
+                          required
+                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-emerald-600 focus:outline-none"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="9876543210"
+                        />
+                      </div>
                     </div>
 
                     {error && <p className="text-xs text-red-600">{error}</p>}
@@ -498,7 +565,7 @@ export function AuthGate() {
                     Enter Verification Code
                   </h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Enter the 6-digit SMS code sent to <strong>{phoneNumber}</strong>.
+                    Enter the 6-digit SMS code sent to <strong>{countryCode} {phoneNumber}</strong>.
                   </p>
 
                   <form onSubmit={handleVerifyOtp} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
