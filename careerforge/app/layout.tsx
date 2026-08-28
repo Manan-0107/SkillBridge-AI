@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Newsreader, Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
 
-const fontSans = Plus_Jakarta_Sans({
+const display = Newsreader({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-sans",
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-display",
+});
+
+const body = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
 });
 
 export const metadata: Metadata = {
@@ -21,8 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={fontSans.variable}>
-      <body className="font-sans antialiased text-ink bg-paper">
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
+      <body className="font-body antialiased">
         <AppProvider>{children}</AppProvider>
       </body>
     </html>

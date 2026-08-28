@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Newsreader', serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 * {
@@ -58,7 +59,7 @@ body {
     padding: 0 !important;
     width: 100% !important;
     height: auto !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   body * {
@@ -82,7 +83,7 @@ body {
     border: none !important;
     box-shadow: none !important;
     background: #FFFFFF !important;
-    color: #17171A !important;
+    color: #111827 !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
   }

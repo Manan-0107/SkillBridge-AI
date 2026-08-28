@@ -69,51 +69,67 @@ const explorationCards = [
 export function AssistantHome({
   onRedirect,
 }: {
-  onRedirect: (feature: FeatureId, resumeTab?: ResumeTab) => void;
+  onRedirect: (feature: FeatureId, tab?: ResumeTab) => void;
 }) {
   const { user, setTargetRole } = useApp();
-  const firstName = user?.name?.split(" ")[0] || "there";
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
-
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      text: `Hello ${firstName}! I'm your CareerForge AI Copilot. Tell me what you'd like to achieve — plan a learning roadmap, find courses, practice for interviews, explore local opportunities, or polish your resume — and I'll guide you directly there.`,
-    },
-  ]);
+  const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-    });
-  };
+  const greetingName = user?.name || "there";
 
+  // Initial greeting
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, redirectCountdown]);
+    setMessages([
+      {
+        id: "intro-1",
+        role: "assistant",
+        text: `Hello ${greetingName}! I'm your CareerForge AI Copilot. Tell me what you'd like to achieve today — whether it's checking your career roadmap, finding courses, preparing for interviews, exploring local jobs, or building an ATS-ready resume.`,
+      },
+    ]);
+  }, [greetingName]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown((prev) => (prev !== null ? prev - 1 : null));
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [redirectCountdown]);
+
+  const scrollToBottom = () => {
+    window.setTimeout(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
+    }, 50);
+  };
 
   const cancelRedirect = () => {
-    if (activeTimer) {
-      clearTimeout(activeTimer);
-      setActiveTimer(null);
-    }
-    setRedirectCountdown(null);
-    setBusy(false);
-    setMessages((prev) =>
-      prev.map((m) => (m.redirecting ? { ...m, redirecting: false } : m))
-    );
-  };
-
-  const executeRedirect = (feature: FeatureId, resumeTab?: ResumeTab) => {
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
-    onRedirect(feature, resumeTab);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `cancelled-${Date.now()}`,
+        role: "assistant",
+        text: "Auto-redirection cancelled. You can continue chatting or explore other topics.",
+      },
+    ]);
+  };
+
+  const executeRedirect = (feature: FeatureId, tab?: ResumeTab) => {
+    if (activeTimer) clearTimeout(activeTimer);
+    setRedirectCountdown(null);
+    setBusy(false);
+    onRedirect(feature, tab);
   };
 
   const runPrompt = (prompt: string) => {
@@ -314,55 +330,57 @@ export function AssistantHome({
 
       {/* AI Prompt Input Bar */}
       <div className="sticky bottom-0 border-t border-line bg-paper/95 pb-6 pt-3.5 backdrop-blur">
-        <div className="mx-auto max-w-5xl px-4">
-          <form
-            onSubmit={onSubmit}
-            className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm focus-within:border-ink focus-within:ring-1 focus-within:ring-ink transition-all"
-          >
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSubmit(e);
-                }
-              }}
-              rows={1}
-              placeholder="Ask anything (e.g., 'Show my roadmap', 'Find React courses', 'Practice interview questions', 'Jobs near me')..."
-              className="max-h-36 min-h-[44px] flex-1 resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={busy || !input.trim()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-paper transition-all hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              title="Send prompt"
+        <div className="mx-auto max-w-content px-6">
+          <div className="max-w-4xl mx-auto">
+            <form
+              onSubmit={onSubmit}
+              className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm focus-within:border-ink focus-within:ring-1 focus-within:ring-ink transition-all"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </button>
-          </form>
-
-          {/* Quick pills */}
-          <div className="mt-2.5 flex items-center justify-center gap-2 overflow-x-auto text-[11px] text-graphite py-0.5">
-            <span className="text-[11px] text-graphite/70 font-medium">Quick suggestions:</span>
-            {[
-              "Show my roadmap",
-              "Find courses",
-              "Interview prep",
-              "Local opportunities",
-              "Resume builder",
-            ].map((tag) => (
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSubmit(e);
+                  }
+                }}
+                rows={1}
+                placeholder="Ask anything (e.g., 'Show my roadmap', 'Find React courses', 'Practice interview questions', 'Jobs near me')..."
+                className="max-h-36 min-h-[44px] flex-1 resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:outline-none"
+              />
               <button
-                key={tag}
-                type="button"
-                onClick={() => runPrompt(tag)}
-                className="whitespace-nowrap rounded-md border border-line bg-white/60 px-2 py-0.5 text-graphite hover:border-ink hover:text-ink transition-colors"
+                type="submit"
+                disabled={busy || !input.trim()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-paper transition-all hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                title="Send prompt"
               >
-                {tag}
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
               </button>
-            ))}
+            </form>
+
+            {/* Quick pills */}
+            <div className="mt-2.5 flex items-center justify-center gap-2 overflow-x-auto text-[11px] text-graphite py-0.5">
+              <span className="text-[11px] text-graphite/70 font-medium">Quick suggestions:</span>
+              {[
+                "Show my roadmap",
+                "Find courses",
+                "Interview prep",
+                "Local opportunities",
+                "Resume builder",
+              ].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => runPrompt(tag)}
+                  className="whitespace-nowrap rounded-md border border-line bg-white/60 px-2 py-0.5 text-graphite hover:border-ink hover:text-ink transition-colors"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

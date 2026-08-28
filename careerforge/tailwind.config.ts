@@ -13,12 +13,11 @@ const config: Config = {
         accent: "#3A4A5C",
       },
       fontFamily: {
-        display: ["var(--font-sans)", "system-ui", "sans-serif"],
-        body: ["var(--font-sans)", "system-ui", "sans-serif"],
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "serif"],
+        body: ["var(--font-body)", "sans-serif"],
       },
       maxWidth: {
-        content: "1560px",
+        content: "1440px",
       },
     },
   },
