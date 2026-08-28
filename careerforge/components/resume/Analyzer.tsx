@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, ChangeEvent, DragEvent } from "react";
-import { analyzeResume } from "@/lib/resumeHeuristics";
-import { RoleId, ResumeAnalysis } from "@/lib/types";
-import { Card, PrimaryButton, GhostButton, Tag } from "@/components/ui/Primitives";
+import { useApp } from "@/lib/store";
+import { RoleId, EnhancedAnalysis } from "@/lib/types";
+import { Card, PrimaryButton, GhostButton } from "@/components/ui/Primitives";
 
 const sampleResumeTexts: Record<RoleId, string> = {
   frontend: `ALEX RIVERA
@@ -126,9 +126,11 @@ Core Skills: AWS, Docker, Kubernetes, Terraform, CI/CD, GitHub Actions, Linux/Ba
 };
 
 export function Analyzer({ role }: { role: RoleId }) {
+  const { user } = useApp();
   const [text, setText] = useState("");
-  const [result, setResult] = useState<ResumeAnalysis | null>(null);
+  const [result, setResult] = useState<EnhancedAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState("");
   const [inputMode, setInputMode] = useState<"upload" | "paste">("upload");
   const [uploadedFile, setUploadedFile] = useState<{
     name: string;
@@ -136,9 +138,10 @@ export function Analyzer({ role }: { role: RoleId }) {
     type: string;
   } | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [openRoadmapIdx, setOpenRoadmapIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setUploadedFile({
       name: file.name,
       size: file.size,
@@ -148,25 +151,28 @@ export function Analyzer({ role }: { role: RoleId }) {
     const isText =
       file.type.includes("text") ||
       file.name.endsWith(".txt") ||
-      file.name.endsWith(".md") ||
-      file.name.endsWith(".json");
+      file.name.endsWith(".md");
 
     if (isText) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = (e.target?.result as string) || "";
-        setText(content);
-      };
+      reader.onload = (e) => setText((e.target?.result as string) || "");
       reader.readAsText(file);
     } else {
-      // For PDF/DOCX files, read text or extract structure from sample tailored for the target role
-      const reader = new FileReader();
-      reader.onload = () => {
-        // If it's a PDF/DOCX binary, extract text or load role-based content with the file's name
-        const fallbackText = `Resume Document: ${file.name}\nParsed from candidate file for role: ${role.toUpperCase()}\n\n${sampleResumeTexts[role] || sampleResumeTexts.frontend}`;
-        setText(fallbackText);
-      };
-      reader.readAsArrayBuffer(file);
+      // PDF / DOCX → server-side extraction
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.text) {
+          setText(data.text);
+        } else {
+          // Fallback: load sample for the role so analysis can still run
+          setText(`Uploaded: ${file.name}\nRole: ${role}\n\n${sampleResumeTexts[role] ?? ""}`);
+        }
+      } catch {
+        setText(`Uploaded: ${file.name}\nRole: ${role}\n\n${sampleResumeTexts[role] ?? ""}`);
+      }
     }
   };
 
@@ -212,13 +218,55 @@ export function Analyzer({ role }: { role: RoleId }) {
     });
   };
 
-  const run = () => {
+  const run = async () => {
     if (!text.trim()) return;
     setLoading(true);
-    setTimeout(() => {
-      setResult(analyzeResume(text, role));
+    setResult(null);
+
+    try {
+      // Stage 1: Analyze
+      setLoadingStage("Running 3-engine analysis…");
+      const analyzeRes = await fetch("/api/resume/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeText: text, role }),
+      });
+
+      if (!analyzeRes.ok) throw new Error("Analysis failed");
+      const analysis: EnhancedAnalysis = await analyzeRes.json();
+
+      // Stage 2: Save to DB (if user is logged in)
+      if (user?.dbId) {
+        setLoadingStage("Saving to your account…");
+        try {
+          const saveRes = await fetch("/api/resume/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user.dbId,
+              filename: uploadedFile?.name ?? "pasted_resume",
+              resumeText: text,
+              targetRole: role,
+              analysisResult: analysis,
+            }),
+          });
+          const saveData = await saveRes.json();
+          if (saveData.uploadId) {
+            analysis.savedToDb = true;
+            analysis.uploadId = saveData.uploadId;
+          }
+        } catch {
+          // Save failure is non-fatal
+        }
+      }
+
+      setResult(analysis);
+    } catch (err) {
+      console.error("[Analyzer] run error:", err);
+    } finally {
       setLoading(false);
-    }, 550);
+      setLoadingStage("");
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -399,7 +447,7 @@ export function Analyzer({ role }: { role: RoleId }) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <span>Running ATS Skill Audit…</span>
+                  <span>{loadingStage || "Running Analysis…"}</span>
                 </>
               ) : (
                 <>
@@ -440,50 +488,102 @@ export function Analyzer({ role }: { role: RoleId }) {
               <p className="mt-1 max-w-xs text-xs text-graphite leading-relaxed">
                 Upload a resume file or click &ldquo;Load Sample Resume&rdquo; to benchmark your skills, keyword match, and ATS compatibility.
               </p>
+              {!user && (
+                <p className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  Sign in to save your analysis history
+                </p>
+              )}
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Score Header */}
+            <div className="space-y-5">
+
+              {/* ── Score Header ─────────────────────────────────────── */}
               <div className="flex items-center justify-between border-b border-line pb-4">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                    Target Role Alignment
+                    Overall ATS Score
                   </p>
                   <p className="text-sm font-medium text-ink capitalize">
-                    {role} Track Analysis
+                    {role} Track · {result.engines.ai.available ? "3 engines" : result.engines.github.available ? "2 engines" : "1 engine"}
                   </p>
                 </div>
-
                 <div className="text-right">
                   <div className="flex items-baseline gap-1">
                     <span className="font-display text-4xl italic text-ink font-bold">
-                      {result.score}
+                      {result.overallScore}
                     </span>
                     <span className="text-sm text-graphite">/100</span>
                   </div>
                   <span
                     className={`inline-block rounded px-2 py-0.5 text-[11px] font-semibold ${
-                      result.score >= 80
+                      result.overallScore >= 80
                         ? "bg-emerald-100 text-emerald-800"
-                        : result.score >= 60
+                        : result.overallScore >= 60
                         ? "bg-amber-100 text-amber-800"
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {result.score >= 80
+                    {result.overallScore >= 80
                       ? "Strong Match"
-                      : result.score >= 60
+                      : result.overallScore >= 60
                       ? "Moderate Match"
                       : "Needs Enhancement"}
                   </span>
                 </div>
               </div>
 
-              {/* Covered Skills */}
+              {/* ── Engine Badges ─────────────────────────────────────── */}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-graphite font-semibold mb-2">Analysis Engines</p>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { e: result.engines.heuristic, color: "blue" },
+                    { e: result.engines.github, color: "purple" },
+                    { e: result.engines.ai, color: "emerald" },
+                  ] as const).map(({ e, color }) => (
+                    <div
+                      key={e.name}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                        e.available
+                          ? color === "blue"
+                            ? "border-blue-200 bg-blue-50"
+                            : color === "purple"
+                            ? "border-purple-200 bg-purple-50"
+                            : "border-emerald-200 bg-emerald-50"
+                          : "border-neutral-200 bg-neutral-50 opacity-50"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          e.available
+                            ? color === "blue" ? "bg-blue-500" : color === "purple" ? "bg-purple-500" : "bg-emerald-500"
+                            : "bg-neutral-300"
+                        }`}
+                      />
+                      <span className="font-medium text-ink">{e.name}</span>
+                      {e.available ? (
+                        <span className="font-bold">{e.score}/100</span>
+                      ) : (
+                        <span className="text-graphite">N/A</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {result.savedToDb && (
+                  <p className="mt-2 text-[11px] text-emerald-700 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Analysis saved to your account
+                  </p>
+                )}
+              </div>
+
+              {/* ── Covered Skills ────────────────────────────────────── */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                    Detected Core Skills ({result.matchedSkills.length})
+                    Detected Skills ({result.matchedSkills.length})
                   </p>
                   <span className="text-[11px] text-emerald-700 font-medium">✓ ATS Verified</span>
                 </div>
@@ -503,36 +603,99 @@ export function Analyzer({ role }: { role: RoleId }) {
                 </div>
               </div>
 
-              {/* Missing Skills / Market Gaps */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                    High-Demand Market Gaps ({result.missingSkills.length})
-                  </p>
-                  <span className="text-[11px] text-amber-700 font-medium">Recommended to Add</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.missingSkills.length ? (
-                    result.missingSkills.map((s) => (
+              {/* ── Missing Skills ────────────────────────────────────── */}
+              {result.missingSkills.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
+                      High-Demand Gaps ({result.missingSkills.length})
+                    </p>
+                    <span className="text-[11px] text-amber-700 font-medium">Recommended to Add</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.missingSkills.map((s) => (
                       <span
                         key={s}
                         className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-800"
                       >
                         + {s}
                       </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-graphite">
-                      No gaps found — excellent keyword coverage!
-                    </span>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Actionable Suggestions */}
+              {/* ── Skill Gap Roadmap ─────────────────────────────────── */}
+              {result.skillGapRoadmap.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wide text-graphite font-semibold">
+                    Personalised Skill Gap Roadmap
+                  </p>
+                  <div className="space-y-2">
+                    {result.skillGapRoadmap.map((item, idx) => (
+                      <div
+                        key={item.skill}
+                        className="rounded-lg border border-line overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setOpenRoadmapIdx(openRoadmapIdx === idx ? null : idx)}
+                          className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-neutral-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`text-[10px] font-bold uppercase rounded px-1.5 py-0.5 ${
+                                item.priority === "high"
+                                  ? "bg-red-100 text-red-700"
+                                  : item.priority === "medium"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-neutral-100 text-neutral-600"
+                              }`}
+                            >
+                              {item.priority}
+                            </span>
+                            <span className="text-xs font-semibold text-ink">{item.skill}</span>
+                          </div>
+                          <svg
+                            className={`w-3.5 h-3.5 text-graphite transition-transform ${
+                              openRoadmapIdx === idx ? "rotate-180" : ""
+                            }`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {openRoadmapIdx === idx && (
+                          <div className="px-3 pb-3 pt-1 border-t border-line bg-neutral-50">
+                            <p className="text-xs text-ink leading-relaxed mb-2">{item.why}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {item.resources.map((r) => (
+                                <a
+                                  key={r.url}
+                                  href={r.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  {r.label}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Actionable Suggestions ────────────────────────────── */}
               <div>
                 <p className="mb-2 text-xs uppercase tracking-wide text-graphite font-semibold">
-                  Actionable Optimization Recommendations
+                  Optimization Recommendations
                 </p>
                 <div className="space-y-2">
                   {result.suggestions.map((s, i) => (
