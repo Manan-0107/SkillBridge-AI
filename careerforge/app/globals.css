@@ -44,3 +44,60 @@ body {
 .step-line {
   background: linear-gradient(to bottom, #DEDEDA, #DEDEDA);
 }
+
+/* =========================================================
+   ATS RESUME PRINT ONLY CSS
+   Ensures that only the resume sheet is downloaded/printed
+   ========================================================= */
+@media print {
+  /* Hide all app chrome, navigation, tabs, sidebars, and buttons */
+  html, body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make ONLY the printable resume sheet and its children visible */
+  #printable-resume,
+  #printable-resume * {
+    visibility: visible !important;
+  }
+
+  #printable-resume {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 18mm 20mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #FFFFFF !important;
+    color: #111827 !important;
+  }
+
+  /* Page setup for standard A4 / Letter */
+  @page {
+    size: letter portrait;
+    margin: 0;
+  }
+
+  /* Prevent awkward page break cuts */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .resume-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { useState, useRef, ChangeEvent } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
 import { atsTemplates, AtsTemplate } from "@/app/api/resume/templates/route";
 
@@ -132,6 +132,20 @@ export function Builder() {
   const [exportingJson, setExportingJson] = useState(false);
   const [activeTab, setActiveTab] = useState<"layout" | "personal" | "experience" | "education" | "skills" | "projects" | "certs">("layout");
   const jsonInputRef = useRef<HTMLInputElement>(null);
+
+  // Dedicated Print / Download PDF Handler
+  const handleDownloadPdf = () => {
+    const originalTitle = document.title;
+    const sanitizedName = (fullName || "Candidate").replace(/[^a-zA-Z0-9_-]/g, "_");
+    document.title = `${sanitizedName}_Resume`;
+
+    window.print();
+
+    // Restore title after print dialog closes
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
 
   // Experience Handlers
   const addExperience = () => {
@@ -424,7 +438,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
             </span>
           </div>
           <p className="text-xs text-graphite mt-0.5">
-            Choose from open-source GitHub ATS layouts, customize fonts/colors, and export to PDF or JSONResume.
+            Choose from open-source GitHub ATS layouts, customize fonts/colors, and download your clean ATS resume.
           </p>
         </div>
 
@@ -464,11 +478,11 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
             {copied ? "✓ Copied!" : "Copy Text"}
           </GhostButton>
 
-          <PrimaryButton type="button" onClick={() => window.print()} className="text-xs gap-1.5 shadow-sm">
+          <PrimaryButton type="button" onClick={handleDownloadPdf} className="text-xs gap-1.5 shadow-sm">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span>Print / Save PDF</span>
+            <span>Download Resume PDF</span>
           </PrimaryButton>
         </div>
       </div>
@@ -1188,7 +1202,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {experiences.length > 0 && (
                   <div>
                     <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
-                      Experience
+                      Work Experience
                     </h2>
                     <div className="space-y-2.5">
                       {experiences.map((exp) => (
@@ -1310,7 +1324,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {summary && (
                   <div>
                     <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
-                      About Me
+                      Professional Summary
                     </h2>
                     <p className="text-[11.5px] leading-relaxed text-neutral-700">{summary}</p>
                   </div>
@@ -1319,7 +1333,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {skills && (
                   <div>
                     <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
-                      Tech Stack
+                      Technical Skills
                     </h2>
                     <div className="flex flex-wrap gap-1.5">
                       {skills.split(",").map((s, idx) => (
@@ -1334,7 +1348,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {experiences.length > 0 && (
                   <div>
                     <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
-                      Experience
+                      Work Experience
                     </h2>
                     <div className="space-y-3">
                       {experiences.map((exp) => (
@@ -1353,7 +1367,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 {projects.length > 0 && (
                   <div>
                     <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
-                      Projects
+                      Featured Projects
                     </h2>
                     <div className="space-y-2.5">
                       {projects.map((p) => (
@@ -1398,7 +1412,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   </div>
 
                   <div className="text-[10.5px] space-y-1 text-neutral-600">
-                    <p className="font-bold text-neutral-900 uppercase text-[10px]">Contact</p>
+                    <p className="font-bold text-neutral-900 uppercase text-[10px]">Contact Info</p>
                     <p className="truncate">{email}</p>
                     <p>{phone}</p>
                     <p>{location}</p>
@@ -1450,7 +1464,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                   {summary && (
                     <div>
                       <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1" style={{ borderColor: selectedColor.hex }}>
-                        Summary
+                        Professional Summary
                       </h2>
                       <p className="text-[11px] leading-relaxed text-neutral-700">{summary}</p>
                     </div>
@@ -1563,23 +1577,24 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               </div>
             )}
 
-            {/* 5. LaTeX Modern CV ATS Layout */}
+            {/* 5. LaTeX Modern CV ATS Layout (Clean, Proper Headings without Raw Syntax) */}
             {selectedTemplate === "latex" && (
               <div className="space-y-3.5 font-mono text-[11px]">
-                <div className="text-center border-b pb-3">
-                  <h1 className="text-lg font-bold tracking-tight text-neutral-900">
-                    \textbf&#123;{fullName || "Candidate"}&#125;
+                {/* Header */}
+                <div className="text-center border-b border-neutral-900 pb-3">
+                  <h1 className="text-xl font-bold tracking-tight text-neutral-900 uppercase">
+                    {fullName || "Candidate Name"}
                   </h1>
-                  <p className="text-[11px] text-neutral-600 mt-0.5">{headline}</p>
+                  <p className="text-[11px] text-neutral-700 font-medium mt-0.5">{headline}</p>
                   <p className="text-[10px] text-neutral-500 mt-1">
-                    {[email, phone, location, github].filter(Boolean).join(" // ")}
+                    {[email, phone, location, github, linkedIn].filter(Boolean).join("  •  ")}
                   </p>
                 </div>
 
                 {summary && (
                   <div>
-                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
-                      \section&#123;Executive Summary&#125;
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider">
+                      Executive Summary
                     </h2>
                     <p className="leading-relaxed text-neutral-700 font-sans text-xs">{summary}</p>
                   </div>
@@ -1587,15 +1602,15 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
                 {experiences.length > 0 && (
                   <div>
-                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">
-                      \section&#123;Experience&#125;
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1.5 tracking-wider">
+                      Professional Experience
                     </h2>
                     <div className="space-y-2.5">
                       {experiences.map((exp) => (
                         <div key={exp.id}>
                           <div className="flex justify-between font-bold text-neutral-900">
-                            <span>{exp.role} | {exp.company}</span>
-                            <span className="text-[10px] font-normal">{exp.startDate} - {exp.current ? "Present" : exp.endDate}</span>
+                            <span>{exp.role} <span className="font-normal text-neutral-600">| {exp.company}</span></span>
+                            <span className="text-[10px] font-normal text-neutral-500">{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
                           </div>
                           {exp.bullets && <p className="font-sans text-[11px] text-neutral-700 whitespace-pre-line mt-0.5">{exp.bullets}</p>}
                         </div>
@@ -1606,23 +1621,27 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
                 {skills && (
                   <div>
-                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
-                      \section&#123;Skills&#125;
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider">
+                      Technical Skills &amp; Tools
                     </h2>
-                    <p className="font-sans text-[11px] text-neutral-700">{skills}</p>
+                    <p className="font-sans text-[11px] text-neutral-700 leading-relaxed">{skills}</p>
+                    {tools && <p className="font-sans text-[10.5px] text-neutral-500 mt-0.5"><strong>Platforms:</strong> {tools}</p>}
                   </div>
                 )}
 
                 {projects.length > 0 && (
                   <div>
-                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">
-                      \section&#123;Projects&#125;
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1.5 tracking-wider">
+                      Featured Projects
                     </h2>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {projects.map((p) => (
                         <div key={p.id}>
-                          <span className="font-bold text-neutral-900">{p.title}</span> ({p.techStack})
-                          {p.description && <p className="font-sans text-[10.5px] text-neutral-700">{p.description}</p>}
+                          <div className="flex justify-between font-bold text-neutral-900">
+                            <span>{p.title} {p.techStack && <span className="font-normal text-neutral-500">({p.techStack})</span>}</span>
+                            {p.liveUrl && <span className="text-[10px] text-blue-600 font-normal">{p.liveUrl}</span>}
+                          </div>
+                          {p.description && <p className="font-sans text-[10.5px] text-neutral-700 whitespace-pre-line mt-0.5">{p.description}</p>}
                         </div>
                       ))}
                     </div>
@@ -1631,13 +1650,27 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
                 {educations.length > 0 && (
                   <div>
-                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
-                      \section&#123;Education&#125;
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider">
+                      Education
                     </h2>
                     {educations.map((ed) => (
                       <div key={ed.id} className="flex justify-between">
-                        <span>{ed.degree}, {ed.institution}</span>
+                        <span><strong>{ed.degree}</strong>, {ed.institution}</span>
                         <span>{ed.graduationYear}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {certifications.length > 0 && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b border-neutral-400 pb-0.5 mb-1 tracking-wider">
+                      Certifications
+                    </h2>
+                    {certifications.map((c) => (
+                      <div key={c.id} className="flex justify-between">
+                        <span><strong>{c.name}</strong> — {c.issuer}</span>
+                        <span>{c.date}</span>
                       </div>
                     ))}
                   </div>
