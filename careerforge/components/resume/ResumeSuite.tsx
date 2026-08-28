@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Section } from "@/components/ui/Section";
 import { RoleId } from "@/lib/types";
 import { Analyzer } from "./Analyzer";
@@ -15,8 +15,18 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
-export function ResumeSuite({ role }: { role: RoleId }) {
-  const [active, setActive] = useState<TabId>("analyzer");
+export function ResumeSuite({
+  role,
+  initialTab = "analyzer",
+}: {
+  role: RoleId;
+  initialTab?: TabId;
+}) {
+  const [active, setActive] = useState<TabId>(initialTab);
+
+  useEffect(() => {
+    setActive(initialTab);
+  }, [initialTab]);
 
   return (
     <Section
