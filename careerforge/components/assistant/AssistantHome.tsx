@@ -102,50 +102,90 @@ export function AssistantHome({
     onRedirect(feature, tab);
   };
 
-  const runPrompt = (prompt: string) => {
+  const runPrompt = async (prompt: string) => {
     if (!prompt.trim() || busy) return;
     setBusy(true);
 
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const userMsgId = `user-${Date.now()}`;
     const userMsgText = prompt.trim();
-    setMessages((prev) => [...prev, { id: userMsgId, role: "user", text: userMsgText, time: now }]);
+    
+    const nextMessages: Msg[] = [
+      ...messages,
+      { id: userMsgId, role: "user", text: userMsgText, time: now },
+    ];
+    setMessages(nextMessages);
     scrollToBottom();
 
-    const intent = parseIntent(userMsgText);
-    if (intent.role) setTargetRole(intent.role);
+    try {
+      const res = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map((m) => ({ role: m.role, text: m.text })),
+          userProfile: {
+            name: user?.name,
+            email: user?.email,
+            targetRole: user?.targetRole || undefined,
+          },
+          targetRole: user?.targetRole || "frontend",
+        }),
+      });
 
-    window.setTimeout(() => {
-      const assistantMsgId = `ai-${Date.now()}`;
-      const hasFeature = Boolean(intent.feature);
+      if (!res.ok) throw new Error("Chat request failed");
+      const data = await res.json();
+
+      const replyText = data.reply || "I'm here to support your career journey. What would you like to explore next?";
       const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const hasFeature = Boolean(data.feature);
+
+      const intent: ParsedIntent = {
+        feature: data.feature || null,
+        featureTitle: data.featureTitle,
+        resumeTab: data.resumeTab,
+        reply: replyText,
+      };
+
+      if (data.role) {
+        setTargetRole(data.role);
+      }
 
       setMessages((prev) => [
         ...prev,
         {
-          id: assistantMsgId,
+          id: `ai-${Date.now()}`,
           role: "assistant",
           time: replyTime,
-          text: intent.reply,
+          text: replyText,
           intent,
           redirecting: hasFeature,
         },
       ]);
       scrollToBottom();
 
-      if (hasFeature && intent.feature) {
-        const featureToOpen = intent.feature;
-        const tabToOpen = intent.resumeTab;
-
-        setRedirectCountdown(2);
+      if (hasFeature && data.feature) {
+        setRedirectCountdown(3);
         const timer = setTimeout(() => {
-          executeRedirect(featureToOpen, tabToOpen);
-        }, 2200);
+          executeRedirect(data.feature, data.resumeTab);
+        }, 3200);
         setActiveTimer(timer);
       } else {
         setBusy(false);
       }
-    }, 450);
+    } catch (err) {
+      console.error("[AssistantHome] LLM call error:", err);
+      // Fallback
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          text: "I'm right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+        },
+      ]);
+      setBusy(false);
+    }
   };
 
   const onSubmit = (e: FormEvent) => {
