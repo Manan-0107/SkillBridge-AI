@@ -10,6 +10,8 @@ export type AtsTemplate = {
   recommendedFont: string;
   structure: "single_column" | "two_column";
   features: string[];
+  supportedColors: string[]; // List of color IDs supported by this GitHub framework standard
+  colorPolicyNotes: string;
 };
 
 export const atsTemplates: AtsTemplate[] = [
@@ -23,6 +25,8 @@ export const atsTemplates: AtsTemplate[] = [
     recommendedFont: "Merriweather / Times / Serif",
     structure: "single_column",
     features: ["100% Parser Compliant", "Standardized Section Headers", "Metric-Driven Bullet Structure", "Zero Tables/Icons"],
+    supportedColors: ["black"],
+    colorPolicyNotes: "Harvard ATS standard from GitHub strictly enforces pure Monochrome Black & White for maximum ATS parse rate.",
   },
   {
     id: "silicon",
@@ -34,6 +38,8 @@ export const atsTemplates: AtsTemplate[] = [
     recommendedFont: "Inter / Sans-Serif",
     structure: "single_column",
     features: ["Accent Border Headings", "Tech Stack Badges", "Repository & Demo Links", "Clean Hierarchy"],
+    supportedColors: ["black", "navy", "emerald", "indigo", "crimson"],
+    colorPolicyNotes: "Reactive-Resume standard fully supports all vibrant color accent themes.",
   },
   {
     id: "two_column",
@@ -45,6 +51,8 @@ export const atsTemplates: AtsTemplate[] = [
     recommendedFont: "Outfit / Inter",
     structure: "two_column",
     features: ["1-Page Fit Optimization", "Skill Tag Cloud", "Compact Date Labels", "Side Rail Contact Info"],
+    supportedColors: ["black", "navy", "emerald", "indigo", "crimson"],
+    colorPolicyNotes: "JSONResume Kendall theme supports multi-color side rail and border accents.",
   },
   {
     id: "executive",
@@ -56,6 +64,8 @@ export const atsTemplates: AtsTemplate[] = [
     recommendedFont: "Inter / Georgia",
     structure: "single_column",
     features: ["Executive Bio Spotlight", "Quantified Outcomes Focus", "Clean Divider Accents", "Leadership Highlights"],
+    supportedColors: ["black", "navy", "emerald", "indigo", "crimson"],
+    colorPolicyNotes: "Executive template supports all executive palette accent tones.",
   },
   {
     id: "latex",
@@ -67,6 +77,8 @@ export const atsTemplates: AtsTemplate[] = [
     recommendedFont: "JetBrains Mono / Inter",
     structure: "single_column",
     features: ["LaTeX Style Geometry", "Monospace Tech Highlights", "Clean Right-Aligned Dates", "Clear Category Separation"],
+    supportedColors: ["black", "crimson", "navy"],
+    colorPolicyNotes: "Awesome-CV standard supports Monochrome, Awesome-CV Red (Crimson), and Midnight Navy.",
   },
 ];
 

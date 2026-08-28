@@ -48,6 +48,7 @@ body {
 /* =========================================================
    ATS RESUME PRINT ONLY CSS
    Ensures that only the resume sheet is downloaded/printed
+   and strictly fits 1 page when 1-page mode is enabled
    ========================================================= */
 @media print {
   /* Hide all app chrome, navigation, tabs, sidebars, and buttons */
@@ -57,7 +58,8 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
   body * {
@@ -77,14 +79,30 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 18mm 20mm !important;
+    padding: 10mm 12mm !important;
     border: none !important;
     box-shadow: none !important;
     background: #FFFFFF !important;
     color: #111827 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 
-  /* Page setup for standard A4 / Letter */
+  /* When 1-Page fit is active, strictly lock height to prevent page 2 spillover */
+  #printable-resume.force-one-page {
+    max-height: 270mm !important;
+    overflow: hidden !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #printable-resume.force-one-page * {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page setup for standard Letter / A4 portrait */
   @page {
     size: letter portrait;
     margin: 0;
@@ -94,10 +112,5 @@ body {
   h1, h2, h3, h4 {
     page-break-after: avoid;
     break-after: avoid;
-  }
-
-  .resume-section {
-    page-break-inside: avoid;
-    break-inside: avoid;
   }
 }
