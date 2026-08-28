@@ -174,7 +174,6 @@ export function AssistantHome({
       }
     } catch (err) {
       console.error("[AssistantHome] LLM call error:", err);
-      // Fallback
       setMessages((prev) => [
         ...prev,
         {
@@ -217,8 +216,9 @@ export function AssistantHome({
       recognition.maxAlternatives = 1;
 
       setIsListening(true);
-      recognition.onresult = (event: { results: { [x: string]: { [x: string]: { transcript: string; }; }; }; }) => {
-        const speechResult = event.results[0][0].transcript;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onresult = (event: any) => {
+        const speechResult = event.results?.[0]?.[0]?.transcript || "";
         setInput((prev) => (prev ? `${prev} ${speechResult}` : speechResult));
         setIsListening(false);
       };
@@ -269,25 +269,16 @@ export function AssistantHome({
               return (
                 <div
                   key={m.id}
-                  className={`flex items-start gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}
+                  className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
                 >
-                  {/* AI Spark Avatar */}
-                  {!isUser && (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-neutral-900 via-neutral-800 to-neutral-700 text-white shadow-sm ring-1 ring-black/5">
-                      <SparklesIcon className="h-4.5 w-4.5 text-amber-300" />
-                    </div>
-                  )}
+                  {/* Role / Timestamp Header */}
+                  <div className={`mb-1 flex items-center gap-2 text-[11px] font-medium text-neutral-400 px-1`}>
+                    <span>{isUser ? (userDisplayName || "You") : "CareerForge AI"}</span>
+                    {m.time && <span>&bull; {m.time}</span>}
+                  </div>
 
-                  {/* Message Bubble Container */}
-                  <div className={`space-y-2 max-w-[85%] sm:max-w-[78%]`}>
-                    
-                    {/* Role / Timestamp Header */}
-                    <div className={`flex items-center gap-2 text-[11px] font-medium text-neutral-400 ${isUser ? "justify-end" : "justify-start"}`}>
-                      <span>{isUser ? (userDisplayName || "You") : "CareerForge Copilot"}</span>
-                      {m.time && <span>&bull; {m.time}</span>}
-                    </div>
-
-                    {/* Chat Bubble */}
+                  {/* Message Bubble */}
+                  <div className={`space-y-2 max-w-[90%] sm:max-w-[80%]`}>
                     <div
                       className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                         isUser
@@ -298,7 +289,7 @@ export function AssistantHome({
                       <p className="whitespace-pre-line">{m.text}</p>
                     </div>
 
-                    {/* Interactive Action Card if AI detected a feature intent */}
+                    {/* Interactive Action Card if AI recommended a feature */}
                     {m.intent?.feature && (
                       <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
                         <div className="flex items-center justify-between">
@@ -310,7 +301,7 @@ export function AssistantHome({
                           </div>
                           {m.redirecting && redirectCountdown !== null && (
                             <span className="text-[11px] font-semibold text-amber-700 animate-pulse">
-                              Opening tool in 2s…
+                              Opening tool in 3s…
                             </span>
                           )}
                         </div>
@@ -339,22 +330,15 @@ export function AssistantHome({
                       </div>
                     )}
                   </div>
-
-                  {/* User Avatar */}
-                  {isUser && (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-200 text-neutral-800 text-xs font-bold shadow-xs">
-                      {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                    </div>
-                  )}
                 </div>
               );
             })}
 
-            {/* AI Typing Animated Indicator */}
+            {/* AI Typing Animated Indicator (Clean, without avatar) */}
             {busy && redirectCountdown === null && (
-              <div className="flex items-start gap-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-neutral-900 via-neutral-800 to-neutral-700 text-white shadow-sm">
-                  <SparklesIcon className="h-4.5 w-4.5 text-amber-300 animate-spin" />
+              <div className="flex flex-col items-start">
+                <div className="mb-1 text-[11px] font-medium text-neutral-400 px-1">
+                  CareerForge AI is thinking…
                 </div>
                 <div className="rounded-2xl rounded-tl-xs border border-neutral-200 bg-white px-4 py-3 shadow-xs">
                   <div className="flex items-center gap-1.5">
@@ -378,7 +362,7 @@ export function AssistantHome({
             onSubmit={onSubmit}
             className="flex items-center gap-2 rounded-2xl border border-neutral-300 bg-neutral-50/80 p-2 shadow-sm focus-within:border-neutral-900 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all"
           >
-            {/* Voice Dictation Button (Crucial Accessibility for Motor Disabilities) */}
+            {/* Voice Dictation Button */}
             <button
               type="button"
               onClick={toggleVoiceInput}
@@ -434,19 +418,6 @@ export function AssistantHome({
         </div>
       </div>
     </div>
-  );
-}
-
-function SparklesIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-      />
-    </svg>
   );
 }
 
