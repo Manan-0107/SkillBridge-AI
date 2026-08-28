@@ -173,7 +173,7 @@ export function AssistantHome({
     <div className="flex min-h-[calc(100vh-4.25rem)] flex-col bg-paper">
       {/* Scrollable Chat / AI Exploration Area */}
       <div ref={listRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-5xl flex-col px-4 py-8 md:py-12">
+        <div className="mx-auto flex max-w-content flex-col px-6 py-8 md:py-12">
           {emptyThread && (
             <div className="mb-8 text-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-line bg-white/80 px-3.5 py-1 text-xs font-medium text-graphite shadow-sm backdrop-blur">
@@ -190,7 +190,7 @@ export function AssistantHome({
           )}
 
           {/* Conversation Stream */}
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-3xl mx-auto w-full">
             {messages.map((m) => {
               const isUser = m.role === "user";
               return (
@@ -278,11 +278,11 @@ export function AssistantHome({
 
           {/* Quick Exploration Cards (when empty thread) */}
           {emptyThread && (
-            <div className="mt-8 space-y-3">
+            <div className="mt-8 space-y-3 w-full">
               <p className="text-xs font-semibold uppercase tracking-wider text-graphite text-center">
                 Explore Career Modules
               </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 w-full">
                 {explorationCards.map((card) => (
                   <button
                     key={card.title}
