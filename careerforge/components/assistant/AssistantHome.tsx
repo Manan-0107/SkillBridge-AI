@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState, useEffect } from "react";
+import { FormEvent, useRef, useState, useEffect, ChangeEvent } from "react";
 import { useApp } from "@/lib/store";
 import { FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
 
@@ -9,6 +9,7 @@ export type Msg = {
   role: "user" | "assistant";
   text: string;
   time?: string;
+  attachedDocName?: string;
   intent?: ParsedIntent;
   redirecting?: boolean;
 };
@@ -45,10 +46,18 @@ export function AssistantHome({
   const [sidebarTab, setSidebarTab] = useState<"all" | "pinned" | "archived">("all");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Document attachment state
+  const [attachedFile, setAttachedFile] = useState<{
+    name: string;
+    text: string;
+  } | null>(null);
+  const [parsingDoc, setParsingDoc] = useState(false);
+
   const listRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userDisplayName = user?.name
     ? user.name.split(" ")[0]
@@ -118,6 +127,7 @@ export function AssistantHome({
     saveConversations(updated);
     setActiveConvId(newId);
     setInput("");
+    setAttachedFile(null);
   };
 
   // Active conversation helper
@@ -140,7 +150,6 @@ export function AssistantHome({
       c.id === convId ? { ...c, archived: !c.archived } : c
     );
     saveConversations(updated);
-    // If archiving the active chat, switch to another non-archived chat
     if (convId === activeConvId) {
       const next = updated.find((c) => !c.archived);
       if (next) setActiveConvId(next.id);
@@ -161,7 +170,50 @@ export function AssistantHome({
     }
   };
 
-  // ─── 5. Auto Scroll & Timers ────────────────────────────────────────────────
+  // ─── 5. Document Upload Handler ─────────────────────────────────────────────
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setParsingDoc(true);
+    const filename = file.name;
+    const isText =
+      file.type.includes("text") ||
+      file.name.endsWith(".txt") ||
+      file.name.endsWith(".md");
+
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const textContent = (event.target?.result as string) || "";
+        setAttachedFile({ name: filename, text: textContent });
+        setParsingDoc(false);
+      };
+      reader.readAsText(file);
+    } else {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
+        const data = await res.json();
+        setAttachedFile({
+          name: filename,
+          text: data.text || `Attached document: ${filename}`,
+        });
+      } catch {
+        setAttachedFile({
+          name: filename,
+          text: `Attached document: ${filename}`,
+        });
+      } finally {
+        setParsingDoc(false);
+      }
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ─── 6. Auto Scroll & Timers ────────────────────────────────────────────────
   const scrollToBottom = () => {
     window.setTimeout(() => {
       if (listRef.current) {
@@ -183,27 +235,42 @@ export function AssistantHome({
     onRedirect(feature, tab);
   };
 
-  // ─── 6. Send Prompt via LLM Backend ─────────────────────────────────────────
+  // ─── 7. Send Prompt via LLM Backend ─────────────────────────────────────────
   const runPrompt = async (prompt: string) => {
-    if (!prompt.trim() || busy || !activeConversation) return;
+    if ((!prompt.trim() && !attachedFile) || busy || !activeConversation) return;
     setBusy(true);
 
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const userMsgId = `user-${Date.now()}`;
     const userMsgText = prompt.trim();
+    const docInfo = attachedFile;
 
-    // Derive chat title from first user prompt if new
+    // Full prompt sent to LLM including attached document text
+    let fullPromptForLlm = userMsgText;
+    if (docInfo) {
+      fullPromptForLlm = userMsgText
+        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${docInfo.text}`
+        : `Please review and analyze my attached document: ${docInfo.name}\n\n${docInfo.text}`;
+    }
+
+    // Chat Title
     let chatTitle = activeConversation.title;
     if (chatTitle === "New Career Chat" || chatTitle === "New Conversation") {
-      chatTitle = userMsgText.slice(0, 36) + (userMsgText.length > 36 ? "…" : "");
+      const displayTitle = userMsgText || `Review: ${docInfo?.name || "Document"}`;
+      chatTitle = displayTitle.slice(0, 36) + (displayTitle.length > 36 ? "…" : "");
     }
 
     const nextMessages: Msg[] = [
       ...messages,
-      { id: userMsgId, role: "user", text: userMsgText, time: now },
+      {
+        id: userMsgId,
+        role: "user",
+        text: userMsgText || `Uploaded document: ${docInfo?.name}`,
+        attachedDocName: docInfo?.name,
+        time: now,
+      },
     ];
 
-    // Optimistically update state
     const updatedConv: Conversation = {
       ...activeConversation,
       title: chatTitle,
@@ -215,6 +282,7 @@ export function AssistantHome({
       c.id === activeConversation.id ? updatedConv : c
     );
     saveConversations(updatedList);
+    setAttachedFile(null);
     scrollToBottom();
 
     try {
@@ -222,7 +290,10 @@ export function AssistantHome({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.map((m) => ({ role: m.role, text: m.text })),
+          messages: nextMessages.map((m, idx) => ({
+            role: m.role,
+            text: idx === nextMessages.length - 1 ? fullPromptForLlm : m.text,
+          })),
           userProfile: {
             name: user?.name,
             email: user?.email,
@@ -309,41 +380,7 @@ export function AssistantHome({
     runPrompt(value);
   };
 
-  // ─── 7. Voice Dictation (Web Speech API) ────────────────────────────────────
-  const toggleVoiceInput = () => {
-    if (typeof window === "undefined") return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice dictation is supported in Chrome, Edge, and Safari.");
-      return;
-    }
-
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
-      recognition.interimResults = false;
-      setIsListening(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      recognition.onresult = (event: any) => {
-        const speechResult = event.results?.[0]?.[0]?.transcript || "";
-        setInput((prev) => (prev ? `${prev} ${speechResult}` : speechResult));
-        setIsListening(false);
-      };
-      recognition.onerror = () => setIsListening(false);
-      recognition.onend = () => setIsListening(false);
-      recognition.start();
-    } catch {
-      setIsListening(false);
-    }
-  };
-
-  // Filter conversations based on sidebar tab
+  // Filter conversations
   const filteredConversations = conversations.filter((c) => {
     if (sidebarTab === "pinned") return c.pinned && !c.archived;
     if (sidebarTab === "archived") return c.archived;
@@ -355,17 +392,17 @@ export function AssistantHome({
   return (
     <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-[#FDFDFB]">
       
-      {/* ─── LEFT AI CHAT SIDEBAR (Shown only when in AI Assistant) ───────────── */}
+      {/* ─── LEFT AI SIDEBAR (Vertical List of Features & Chats) ───────────── */}
       <aside
         className={`flex flex-col border-r border-neutral-200 bg-white transition-all duration-200 z-20 ${
           sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
       >
-        {/* Sidebar Header & New Chat Button */}
-        <div className="p-3.5 border-b border-neutral-200 space-y-2.5">
+        {/* Top Action: New Chat */}
+        <div className="p-3.5 border-b border-neutral-200 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-700">
-              Conversations
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+              AI Assistant
             </span>
             <button
               type="button"
@@ -382,54 +419,72 @@ export function AssistantHome({
             onClick={createNewConversation}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-neutral-900 py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-black transition-all"
           >
-            <span className="text-base font-bold">+</span>
-            <span>New Career Chat</span>
+            <span className="text-sm font-bold">+</span>
+            <span>New Chat</span>
           </button>
-
-          {/* Filter Tabs: All / Pinned / Archived */}
-          <div className="flex rounded-lg border border-neutral-200 p-0.5 bg-neutral-50 text-[11px] font-semibold">
-            <button
-              type="button"
-              onClick={() => setSidebarTab("all")}
-              className={`flex-1 py-1 rounded transition-colors ${
-                sidebarTab === "all"
-                  ? "bg-white text-neutral-900 shadow-xs"
-                  : "text-neutral-500 hover:text-neutral-900"
-              }`}
-            >
-              All ({conversations.filter((c) => !c.archived).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarTab("pinned")}
-              className={`flex-1 py-1 rounded transition-colors ${
-                sidebarTab === "pinned"
-                  ? "bg-white text-neutral-900 shadow-xs"
-                  : "text-neutral-500 hover:text-neutral-900"
-              }`}
-            >
-              ⭐ Pinned ({conversations.filter((c) => c.pinned && !c.archived).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarTab("archived")}
-              className={`flex-1 py-1 rounded transition-colors ${
-                sidebarTab === "archived"
-                  ? "bg-white text-neutral-900 shadow-xs"
-                  : "text-neutral-500 hover:text-neutral-900"
-              }`}
-            >
-              📦 Archive
-            </button>
-          </div>
         </div>
 
-        {/* Conversation List */}
+        {/* Vertical Navigation Sections (Modern AI Sidebar Style) */}
+        <div className="p-2 space-y-1 border-b border-neutral-100">
+          <button
+            type="button"
+            onClick={() => setSidebarTab("all")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "all"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <ChatBubbleIcon className="w-4 h-4 text-neutral-500" />
+            <span className="flex-1 text-left">All Recent Chats</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => !c.archived).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarTab("pinned")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "pinned"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <PinIcon filled className="w-4 h-4 text-amber-600" />
+            <span className="flex-1 text-left">Pinned &amp; Starred</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => c.pinned && !c.archived).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarTab("archived")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "archived"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <ArchiveIcon className="w-4 h-4 text-neutral-500" />
+            <span className="flex-1 text-left">Archived Chats</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => c.archived).length}
+            </span>
+          </button>
+        </div>
+
+        {/* Vertical Conversation List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+            {sidebarTab === "pinned" ? "Pinned Discussions" : sidebarTab === "archived" ? "Archive" : "History"}
+          </p>
+
           {filteredConversations.length === 0 ? (
             <div className="p-4 text-center text-xs text-neutral-400">
               {sidebarTab === "pinned"
-                ? "No pinned conversations yet. Click ⭐ to pin."
+                ? "No pinned chats. Click the pin icon to keep important chats at top."
                 : sidebarTab === "archived"
                 ? "No archived conversations."
                 : "No previous chats."}
@@ -448,40 +503,40 @@ export function AssistantHome({
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <span className="text-amber-500 shrink-0">⭐</span>}
+                    {conv.pinned && <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
                     <span className="truncate">{conv.title}</span>
                   </div>
 
                   {/* Actions on Hover */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Pin Action */}
+                    {/* Accurate Pin SVG Icon */}
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
                       className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-amber-600"
                     >
-                      ⭐
+                      <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Archive Action */}
+                    {/* Archive SVG Icon */}
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
                       className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-800"
                     >
-                      📦
+                      <ArchiveIcon className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Delete Action */}
+                    {/* Delete SVG Icon */}
                     <button
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
                       className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-red-600"
                     >
-                      🗑️
+                      <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -491,21 +546,19 @@ export function AssistantHome({
         </div>
       </aside>
 
-      {/* ─── MAIN CHAT & CONVERSATION VIEW ──────────────────────────────────── */}
+      {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         
-        {/* Top Chat Toolbar with Sidebar Toggle */}
+        {/* Top Chat Toolbar */}
         <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2.5">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs"
-              title="Toggle Chats Sidebar"
+              title="Toggle Sidebar"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-              </svg>
+              <SidebarToggleIcon className="w-4 h-4" />
               <span>{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
@@ -531,7 +584,7 @@ export function AssistantHome({
               <div className="mb-8 text-center space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold text-neutral-700 shadow-xs">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>AI Career Assistant &bull; Online</span>
+                  <span>AI Career Assistant &bull; Ready</span>
                 </div>
 
                 <h1 className="font-display text-3xl italic text-ink md:text-4xl tracking-tight">
@@ -539,7 +592,7 @@ export function AssistantHome({
                 </h1>
 
                 <p className="mx-auto max-w-md text-xs text-graphite leading-relaxed">
-                  Powered by real open-source &amp; GitHub LLMs. Ask any career question below.
+                  Ask career questions, upload your resume for review, or explore guided tracks below.
                 </p>
               </div>
             )}
@@ -559,6 +612,14 @@ export function AssistantHome({
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
+                      {/* Attached Document Pill (if message included a document) */}
+                      {m.attachedDocName && (
+                        <div className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs text-neutral-700 w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                          <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
+                        </div>
+                      )}
+
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
@@ -569,7 +630,7 @@ export function AssistantHome({
                         <p className="whitespace-pre-line">{m.text}</p>
                       </div>
 
-                      {/* Interactive Action Card if AI recommended a workspace tool */}
+                      {/* Interactive Workspace Action */}
                       {m.intent?.feature && (
                         <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
                           <div className="flex items-center justify-between">
@@ -614,7 +675,7 @@ export function AssistantHome({
                 );
               })}
 
-              {/* AI Thinking Animation */}
+              {/* AI Thinking Indicator */}
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start">
                   <div className="mb-1 text-[11px] font-medium text-neutral-400 px-1">
@@ -633,37 +694,74 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* Floating AI Prompt Composer */}
+        {/* ─── Floating AI Prompt Composer with Document Upload ─────────────── */}
         <div className="border-t border-neutral-200/80 bg-white/95 px-4 pb-6 pt-3.5 backdrop-blur-md">
-          <div className="mx-auto max-w-3xl space-y-3">
+          <div className="mx-auto max-w-3xl space-y-2.5">
+            
+            {/* Hidden Document File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.txt,.md,.rtf"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="ai-doc-upload"
+            />
+
+            {/* Attached Document Preview Badge */}
+            {attachedFile && (
+              <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-800 animate-in fade-in">
+                <div className="flex items-center gap-2 truncate">
+                  <PaperclipIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span className="font-semibold truncate">{attachedFile.name}</span>
+                  <span className="text-[11px] text-neutral-400 font-mono">(Ready for AI audit)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFile(null)}
+                  className="rounded p-1 text-neutral-400 hover:text-red-600"
+                  title="Remove attachment"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* AI Composer Box */}
             <form
               onSubmit={onSubmit}
               className="flex items-center gap-2 rounded-2xl border border-neutral-300 bg-neutral-50/80 p-2 shadow-sm focus-within:border-neutral-900 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all"
             >
+              {/* Document Upload Button (Replaces Mic) */}
               <button
                 type="button"
-                onClick={toggleVoiceInput}
-                title={isListening ? "Listening... (Click to stop)" : "Voice input (Speak prompt)"}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                  isListening
-                    ? "bg-red-500 text-white animate-pulse"
-                    : "text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900"
-                }`}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={parsingDoc}
+                title="Upload document (PDF, DOCX, TXT)"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors disabled:opacity-50"
               >
-                <MicIcon className="h-4.5 w-4.5" />
+                {parsingDoc ? (
+                  <span className="h-4 w-4 rounded-full border-2 border-neutral-500 border-t-transparent animate-spin" />
+                ) : (
+                  <PaperclipIcon className="h-4.5 w-4.5" />
+                )}
               </button>
 
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isListening ? "Listening... Speak now" : "Ask CareerForge AI anything (or speak)..."}
+                placeholder={
+                  attachedFile
+                    ? `Ask anything about ${attachedFile.name}...`
+                    : "Ask CareerForge AI or attach a document..."
+                }
                 className="min-h-[40px] flex-1 bg-transparent px-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
               />
 
               <button
                 type="submit"
-                disabled={busy || !input.trim()}
+                disabled={busy || (!input.trim() && !attachedFile)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white transition-all hover:bg-black disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
                 title="Send message"
               >
@@ -692,15 +790,57 @@ export function AssistantHome({
   );
 }
 
-function MicIcon({ className = "w-4 h-4" }: { className?: string }) {
+// ─── SVG Vector Icons ─────────────────────────────────────────────────────────
+
+function PaperclipIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-      />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+function PinIcon({ filled = false, className = "w-3.5 h-3.5" }: { filled?: boolean; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="17" x2="12" y2="22" />
+      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+    </svg>
+  );
+}
+
+function ArchiveIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <line x1="9" y1="3" x2="9" y2="21" />
     </svg>
   );
 }
