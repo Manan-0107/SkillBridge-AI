@@ -9,7 +9,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-lg border border-line bg-white/60 p-6 ${className}`}
+      className={`rounded-xl border border-line bg-white/70 p-6 sm:p-8 text-base ${className}`}
     >
       {children}
     </div>
@@ -18,7 +18,7 @@ export function Card({
 
 export function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-graphite">
+    <span className="inline-flex items-center rounded-full border border-line px-3 py-1 text-xs font-semibold text-graphite tracking-wide">
       {children}
     </span>
   );
@@ -31,7 +31,7 @@ export function PrimaryButton({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg bg-ink px-6 py-3.5 text-base font-semibold text-paper shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px] ${className}`}
       {...props}
     >
       {children}
@@ -46,7 +46,7 @@ export function GhostButton({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-md border border-line px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg border border-line bg-white px-6 py-3 text-base font-medium text-ink transition-all hover:border-ink hover:bg-neutral-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px] ${className}`}
       {...props}
     >
       {children}
@@ -56,11 +56,12 @@ export function GhostButton({
 
 export function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-graphite">
+    <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-graphite">
       {children}
     </label>
   );
 }
 
 export const inputClasses =
-  "w-full rounded-md border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-ink";
+  "w-full rounded-lg border border-line bg-white px-4 py-3 text-base text-ink placeholder:text-graphite/60 focus:border-ink focus:ring-1 focus:ring-ink min-h-[48px]";
+
