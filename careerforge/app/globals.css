@@ -4,14 +4,11 @@
 
 :root {
   --font-display: 'Newsreader', serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --base-font-size: 18px;
+  --font-body: 'Inter', sans-serif;
 }
 
 html {
-  font-size: var(--base-font-size);
-  -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
+  font-size: 17px;
 }
 
 * {
@@ -20,19 +17,7 @@ html {
 
 body {
   background-color: #FAFAF8;
-  color: #121214;
-  font-family: var(--font-body);
-  line-height: 1.65;
-  letter-spacing: 0.01em;
-  font-size: 1rem;
-}
-
-/* Accessibility Text Scale Modes */
-html.font-scale-lg {
-  --base-font-size: 20px;
-}
-html.font-scale-xl {
-  --base-font-size: 22px;
+  color: #17171A;
 }
 
 ::selection {
@@ -40,10 +25,10 @@ html.font-scale-xl {
   color: #FAFAF8;
 }
 
-/* Enhanced High-Visibility keyboard focus for motor and visual accessibility */
+/* visible keyboard focus, everywhere */
 :focus-visible {
-  outline: 3px solid #0284C7;
-  outline-offset: 3px;
+  outline: 2px solid #17171A;
+  outline-offset: 2px;
 }
 
 .hairline {
