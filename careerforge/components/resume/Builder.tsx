@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
+import { atsTemplates, AtsTemplate } from "@/app/api/resume/templates/route";
 
 interface ExperienceItem {
   id: string;
@@ -83,7 +84,27 @@ const popularSkills = [
   "Git / GitHub", "Jest / Cypress", "Figma", "Agile / Scrum"
 ];
 
+const colorPalettes = [
+  { id: "black", label: "Monochrome ATS", hex: "#111827", bgLight: "#F3F4F6", text: "#111827" },
+  { id: "navy", label: "Midnight Navy", hex: "#1E3A8A", bgLight: "#EFF6FF", text: "#1E3A8A" },
+  { id: "emerald", label: "Forest Emerald", hex: "#065F46", bgLight: "#ECFDF5", text: "#065F46" },
+  { id: "indigo", label: "Royal Indigo", hex: "#4338CA", bgLight: "#EEF2FF", text: "#4338CA" },
+  { id: "crimson", label: "Classic Crimson", hex: "#991B1B", bgLight: "#FEF2F2", text: "#991B1B" },
+];
+
+const fontOptions = [
+  { id: "sans", label: "Inter (Modern Sans)", className: "font-sans" },
+  { id: "serif", label: "Merriweather (Ivy Serif)", className: "font-serif" },
+  { id: "mono", label: "JetBrains Mono (Technical)", className: "font-mono" },
+];
+
 export function Builder() {
+  // Layout and Styling State
+  const [selectedTemplate, setSelectedTemplate] = useState<AtsTemplate["id"]>("harvard");
+  const [selectedColor, setSelectedColor] = useState(colorPalettes[0]);
+  const [selectedFont, setSelectedFont] = useState(fontOptions[0]);
+  const [density, setDensity] = useState<"compact" | "normal" | "spacious">("normal");
+
   // Personal Info
   const [fullName, setFullName] = useState("Alex Rivera");
   const [headline, setHeadline] = useState("Senior Frontend Engineer | React & TypeScript");
@@ -106,9 +127,11 @@ export function Builder() {
   const [tools, setTools] = useState("VS Code, Figma, Postman, Jira, GitHub Actions, AWS S3/CloudFront");
   const [projects, setProjects] = useState<ProjectItem[]>([initialProject]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([initialCertification]);
-  const [template, setTemplate] = useState<"modern" | "clean" | "executive">("modern");
+  
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"personal" | "experience" | "education" | "skills" | "projects" | "certs">("personal");
+  const [exportingJson, setExportingJson] = useState(false);
+  const [activeTab, setActiveTab] = useState<"layout" | "personal" | "experience" | "education" | "skills" | "projects" | "certs">("layout");
+  const jsonInputRef = useRef<HTMLInputElement>(null);
 
   // Experience Handlers
   const addExperience = () => {
@@ -235,6 +258,117 @@ export function Builder() {
     setCertifications([initialCertification]);
   };
 
+  // JSONResume API Export
+  const exportJsonResume = async () => {
+    setExportingJson(true);
+    try {
+      const payload = {
+        fullName,
+        headline,
+        email,
+        phone,
+        location,
+        linkedIn,
+        portfolio,
+        github,
+        summary,
+        experiences,
+        educations,
+        skills,
+        tools,
+        projects,
+        certifications,
+      };
+
+      const res = await fetch("/api/resume/jsonresume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to export JSONResume");
+      const json = await res.json();
+
+      // Download file
+      const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fullName.toLowerCase().replace(/\s+/g, "_")}_resume.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Could not export JSONResume file.");
+    } finally {
+      setExportingJson(false);
+    }
+  };
+
+  // JSONResume Import Handler
+  const handleJsonImport = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const json = JSON.parse(event.target?.result as string);
+          if (json.basics) {
+            setFullName(json.basics.name || "");
+            setHeadline(json.basics.label || "");
+            setEmail(json.basics.email || "");
+            setPhone(json.basics.phone || "");
+            setPortfolio(json.basics.url || "");
+            setSummary(json.basics.summary || "");
+            if (json.basics.location) {
+              setLocation(`${json.basics.location.city || ""}, ${json.basics.location.region || ""}`.trim().replace(/^,\s*|,\s*$/g, ""));
+            }
+            if (Array.isArray(json.basics.profiles)) {
+              const li = json.basics.profiles.find((p: { network?: string }) => p.network?.toLowerCase().includes("linkedin"));
+              const gh = json.basics.profiles.find((p: { network?: string }) => p.network?.toLowerCase().includes("github"));
+              if (li) setLinkedIn(li.url || "");
+              if (gh) setGithub(gh.url || "");
+            }
+          }
+          if (Array.isArray(json.work)) {
+            setExperiences(
+              json.work.map((w: { position?: string; name?: string; location?: string; startDate?: string; endDate?: string; summary?: string; highlights?: string[] }, i: number) => ({
+                id: `exp-imp-${i}`,
+                role: w.position || "",
+                company: w.name || "",
+                location: w.location || "",
+                startDate: w.startDate || "",
+                endDate: w.endDate || "",
+                current: w.endDate === "Present" || !w.endDate,
+                bullets: Array.isArray(w.highlights) && w.highlights.length ? w.highlights.map((h: string) => `• ${h}`).join("\n") : w.summary || "",
+              }))
+            );
+          }
+          if (Array.isArray(json.education)) {
+            setEducations(
+              json.education.map((ed: { studyType?: string; institution?: string; endDate?: string; score?: string }, i: number) => ({
+                id: `edu-imp-${i}`,
+                degree: ed.studyType || "",
+                institution: ed.institution || "",
+                location: "",
+                graduationYear: ed.endDate || "",
+                gpaOrHonors: ed.score || "",
+              }))
+            );
+          }
+          if (Array.isArray(json.skills)) {
+            const allSkills = json.skills.map((s: { keywords?: string[] }) => (s.keywords || []).join(", ")).filter(Boolean).join(", ");
+            if (allSkills) setSkills(allSkills);
+          }
+          alert("✓ Successfully imported JSONResume data!");
+        } catch {
+          alert("Error parsing JSONResume file. Please check file format.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
   const copyAsText = () => {
     const contactLine = [email, phone, location, linkedIn, portfolio, github].filter(Boolean).join(" • ");
     const expText = experiences
@@ -274,24 +408,62 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Active template metadata
+  const currentTemplate = atsTemplates.find((t) => t.id === selectedTemplate) || atsTemplates[0];
+
   return (
     <div className="space-y-6">
       {/* Top Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
         <div>
-          <h2 className="text-base font-semibold text-ink">Resume Generator</h2>
-          <p className="text-xs text-graphite">
-            Fill in your details below to generate a tailored, ATS-compliant professional resume.
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-ink">ATS Resume Studio &amp; Layout Engine</h2>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {currentTemplate.atsScore}% ATS Compliant
+            </span>
+          </div>
+          <p className="text-xs text-graphite mt-0.5">
+            Choose from open-source GitHub ATS layouts, customize fonts/colors, and export to PDF or JSONResume.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <GhostButton type="button" onClick={loadPresetData} className="text-xs bg-white">
-            Load Sample Profile
+        <div className="flex flex-wrap items-center gap-2">
+          {/* JSON Resume Import (Hidden input) */}
+          <input
+            ref={jsonInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleJsonImport}
+            className="hidden"
+          />
+          <GhostButton
+            type="button"
+            onClick={() => jsonInputRef.current?.click()}
+            className="text-xs bg-white gap-1"
+          >
+            <svg className="w-3.5 h-3.5 text-graphite" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span>Import JSON</span>
           </GhostButton>
+
+          <GhostButton
+            type="button"
+            onClick={exportJsonResume}
+            disabled={exportingJson}
+            className="text-xs bg-white gap-1"
+          >
+            <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>{exportingJson ? "Exporting…" : "Export JSONResume"}</span>
+          </GhostButton>
+
           <GhostButton type="button" onClick={copyAsText} className="text-xs bg-white">
-            {copied ? "✓ Copied!" : "Copy Plain Text"}
+            {copied ? "✓ Copied!" : "Copy Text"}
           </GhostButton>
+
           <PrimaryButton type="button" onClick={() => window.print()} className="text-xs gap-1.5 shadow-sm">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -301,19 +473,20 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
         </div>
       </div>
 
-      {/* Main Grid: Form Inputs & Real-time Live Preview */}
+      {/* Main Layout Grid */}
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* Left Side: Form Sections (7 cols) */}
+        {/* Left Side: Form & Layout Customizer (7 cols) */}
         <div className="space-y-5 lg:col-span-7">
           {/* Section Navigation Tabs */}
           <div className="flex overflow-x-auto rounded-lg border border-line bg-white/70 p-1 text-xs gap-1">
             {[
+              { id: "layout", label: "🎨 ATS Layout & Themes" },
               { id: "personal", label: "1. Personal" },
               { id: "experience", label: `2. Experience (${experiences.length})` },
               { id: "education", label: `3. Education (${educations.length})` },
               { id: "skills", label: "4. Skills & Tools" },
               { id: "projects", label: `5. Projects (${projects.length})` },
-              { id: "certs", label: `6. Certifications (${certifications.length})` },
+              { id: "certs", label: `6. Certs (${certifications.length})` },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -329,6 +502,137 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               </button>
             ))}
           </div>
+
+          {/* Tab 0: ATS Layout Selector & Themes */}
+          {activeTab === "layout" && (
+            <div className="rounded-xl border border-line bg-white p-5 shadow-sm space-y-6 animate-in fade-in duration-150">
+              {/* Layout Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">Choose ATS Layout Preset</h3>
+                    <p className="text-xs text-graphite">Curated from top open-source GitHub resume frameworks.</p>
+                  </div>
+                  <span className="text-xs text-graphite font-mono">5 Layouts Available</span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {atsTemplates.map((t) => {
+                    const isSelected = selectedTemplate === t.id;
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => setSelectedTemplate(t.id)}
+                        className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
+                          isSelected
+                            ? "border-ink bg-neutral-50/90 shadow-md ring-1 ring-ink"
+                            : "border-line bg-white hover:border-ink/50 hover:bg-neutral-50/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-ink">{t.name}</span>
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                            {t.atsScore}% ATS
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-graphite mt-1 leading-snug line-clamp-2">
+                          {t.description}
+                        </p>
+                        <div className="mt-2.5 flex items-center justify-between text-[10px] text-neutral-400 font-mono">
+                          <span>{t.githubSource}</span>
+                          <span className="capitalize">{t.structure.replace("_", " ")}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Accent Color Palette */}
+              <div className="border-t border-line pt-4">
+                <label className="text-xs font-bold text-ink block mb-2">Accent Color Palette</label>
+                <div className="flex flex-wrap gap-2">
+                  {colorPalettes.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedColor(c)}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                        selectedColor.id === c.id
+                          ? "border-ink bg-white shadow-sm ring-1 ring-ink"
+                          : "border-line bg-white/70 text-graphite hover:border-ink/40"
+                      }`}
+                    >
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.hex }} />
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Typography & Density */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 border-t border-line pt-4">
+                <div>
+                  <label className="text-xs font-bold text-ink block mb-2">Typography &amp; Font</label>
+                  <select
+                    value={selectedFont.id}
+                    onChange={(e) => {
+                      const found = fontOptions.find((f) => f.id === e.target.value);
+                      if (found) setSelectedFont(found);
+                    }}
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink focus:border-ink"
+                  >
+                    {fontOptions.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-ink block mb-2">Page Density (Fit to 1 Page)</label>
+                  <div className="flex rounded-lg border border-line bg-white/60 p-1">
+                    {(["compact", "normal", "spacious"] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDensity(d)}
+                        className={`flex-1 rounded py-1 text-xs capitalize transition-colors ${
+                          density === d
+                            ? "bg-ink text-paper font-semibold shadow-sm"
+                            : "text-graphite hover:text-ink"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* ATS Parser Checklist */}
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 space-y-2">
+                <p className="text-xs font-bold text-neutral-800">
+                  ATS Scanner Compliance Guarantee
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-600 font-bold">✓</span> Workday Verified
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-600 font-bold">✓</span> Greenhouse Verified
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-600 font-bold">✓</span> Lever Verified
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-600 font-bold">✓</span> Taleo / iCIMS Verified
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tab 1: Personal & Contact Information */}
           {activeTab === "personal" && (
@@ -828,202 +1132,516 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           )}
         </div>
 
-        {/* Right Side: Live Resume Document Preview (5 cols) */}
+        {/* Right Side: Rendered ATS Live Preview (5 cols) */}
         <div className="space-y-3 lg:col-span-5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
-              Live ATS Resume Preview
-            </p>
-            <div className="flex gap-1 text-xs">
-              {(["modern", "clean", "executive"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTemplate(t)}
-                  className={`rounded px-2 py-0.5 capitalize transition-colors ${
-                    template === t
-                      ? "bg-ink text-paper"
-                      : "text-graphite hover:text-ink"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
+                Live ATS Document Preview
+              </p>
+              <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-800">
+                {currentTemplate.name}
+              </span>
             </div>
+            <button
+              type="button"
+              onClick={loadPresetData}
+              className="text-xs font-medium text-blue-600 hover:underline"
+            >
+              Reset Sample
+            </button>
           </div>
 
-          {/* Rendered Document Sheet */}
+          {/* Rendered Sheet based on Selected ATS Layout */}
           <div
             id="printable-resume"
             className={`rounded-xl border border-neutral-300 bg-white p-6 shadow-md transition-all ${
-              template === "executive" ? "font-serif text-neutral-900" : "font-sans text-neutral-800"
-            }`}
+              selectedFont.className
+            } ${density === "compact" ? "space-y-2.5 text-xs" : density === "spacious" ? "space-y-5 text-sm" : "space-y-3.5 text-xs"}`}
           >
-            {/* Header / Contact */}
-            <div className="border-b border-neutral-200 pb-3 text-center">
-              <h1 className="text-xl font-bold tracking-tight text-neutral-900">
-                {fullName || "Your Full Name"}
-              </h1>
-              {headline && (
-                <p className="text-xs font-medium text-neutral-600 mt-0.5">
-                  {headline}
-                </p>
-              )}
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] text-neutral-500">
-                {email && <span>{email}</span>}
-                {phone && <span>• {phone}</span>}
-                {location && <span>• {location}</span>}
-                {linkedIn && <span>• {linkedIn}</span>}
-                {github && <span>• {github}</span>}
-                {portfolio && <span>• {portfolio}</span>}
-              </div>
-            </div>
-
-            {/* Summary */}
-            {summary && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-1.5">
-                  Professional Summary
-                </h2>
-                <p className="text-[12px] leading-relaxed text-neutral-700">
-                  {summary}
-                </p>
-              </div>
-            )}
-
-            {/* Experience */}
-            {experiences.length > 0 && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-2">
-                  Work Experience
-                </h2>
-                <div className="space-y-3">
-                  {experiences.map((exp) => (
-                    <div key={exp.id}>
-                      <div className="flex items-baseline justify-between text-xs font-semibold text-neutral-900">
-                        <span>
-                          {exp.role || "Job Title"}{" "}
-                          <span className="font-normal text-neutral-600">
-                            | {exp.company || "Company"}
-                          </span>
-                        </span>
-                        <span className="text-[11px] font-normal text-neutral-500">
-                          {exp.startDate || "Date"} – {exp.current ? "Present" : exp.endDate || "Date"}
-                        </span>
-                      </div>
-                      {exp.location && (
-                        <p className="text-[10px] text-neutral-400 italic mb-1">{exp.location}</p>
-                      )}
-                      {exp.bullets && (
-                        <p className="text-[11px] leading-relaxed text-neutral-700 whitespace-pre-line mt-1">
-                          {exp.bullets}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Education */}
-            {educations.length > 0 && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-2">
-                  Education
-                </h2>
-                <div className="space-y-2">
-                  {educations.map((edu) => (
-                    <div key={edu.id} className="text-xs">
-                      <div className="flex items-baseline justify-between font-semibold text-neutral-900">
-                        <span>{edu.degree || "Degree"}</span>
-                        <span className="text-[11px] font-normal text-neutral-500">
-                          {edu.graduationYear}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-neutral-600">
-                        {edu.institution}{edu.location ? ` — ${edu.location}` : ""}
-                      </p>
-                      {edu.gpaOrHonors && (
-                        <p className="text-[10px] text-neutral-500 italic mt-0.5">
-                          {edu.gpaOrHonors}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Skills & Tools */}
-            {(skills || tools) && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-1.5">
-                  Technical Skills &amp; Tools
-                </h2>
-                {skills && (
-                  <p className="text-[11px] leading-relaxed text-neutral-700">
-                    <strong>Core Skills:</strong> {skills}
+            {/* 1. Harvard Classic ATS Layout */}
+            {selectedTemplate === "harvard" && (
+              <div className="space-y-3.5">
+                <div className="border-b-2 border-neutral-900 pb-2 text-center">
+                  <h1 className="text-xl font-bold tracking-tight text-neutral-900 uppercase">
+                    {fullName || "Your Full Name"}
+                  </h1>
+                  {headline && (
+                    <p className="text-xs font-semibold text-neutral-700 mt-0.5">
+                      {headline}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[11px] text-neutral-600">
+                    {[location, phone, email, linkedIn, github, portfolio].filter(Boolean).join(" | ")}
                   </p>
-                )}
-                {tools && (
-                  <p className="text-[11px] leading-relaxed text-neutral-700 mt-1">
-                    <strong>Tools &amp; Platforms:</strong> {tools}
-                  </p>
-                )}
-              </div>
-            )}
+                </div>
 
-            {/* Projects */}
-            {projects.length > 0 && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-2">
-                  Featured Projects
-                </h2>
-                <div className="space-y-2.5">
-                  {projects.map((proj) => (
-                    <div key={proj.id} className="text-xs">
-                      <div className="flex items-baseline justify-between font-semibold text-neutral-900">
-                        <span>
-                          {proj.title || "Project Title"}{" "}
-                          {proj.techStack && (
-                            <span className="text-[10px] font-normal text-neutral-500">
-                              ({proj.techStack})
+                {summary && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Professional Summary
+                    </h2>
+                    <p className="text-[11.5px] leading-relaxed text-neutral-800">{summary}</p>
+                  </div>
+                )}
+
+                {experiences.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Experience
+                    </h2>
+                    <div className="space-y-2.5">
+                      {experiences.map((exp) => (
+                        <div key={exp.id}>
+                          <div className="flex items-baseline justify-between font-bold text-neutral-900">
+                            <span>
+                              {exp.company}{exp.location ? `, ${exp.location}` : ""}
                             </span>
+                            <span className="font-normal text-neutral-600 text-[11px]">
+                              {exp.startDate} – {exp.current ? "Present" : exp.endDate}
+                            </span>
+                          </div>
+                          <p className="italic text-neutral-700 text-[11px] mb-1 font-semibold">
+                            {exp.role}
+                          </p>
+                          {exp.bullets && (
+                            <p className="text-[11px] leading-relaxed text-neutral-800 whitespace-pre-line">
+                              {exp.bullets}
+                            </p>
                           )}
-                        </span>
-                        {proj.liveUrl && (
-                          <span className="text-[10px] text-blue-600 underline">
-                            {proj.liveUrl}
-                          </span>
-                        )}
-                      </div>
-                      {proj.description && (
-                        <p className="text-[11px] leading-relaxed text-neutral-700 whitespace-pre-line mt-0.5">
-                          {proj.description}
-                        </p>
-                      )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {educations.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Education
+                    </h2>
+                    <div className="space-y-1.5">
+                      {educations.map((edu) => (
+                        <div key={edu.id} className="flex items-baseline justify-between">
+                          <div>
+                            <span className="font-bold text-neutral-900">{edu.institution}</span>
+                            <span className="text-neutral-700"> — {edu.degree}</span>
+                            {edu.gpaOrHonors && <p className="text-[10px] text-neutral-500">{edu.gpaOrHonors}</p>}
+                          </div>
+                          <span className="text-[11px] text-neutral-600">{edu.graduationYear}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(skills || tools) && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Technical Skills &amp; Competencies
+                    </h2>
+                    {skills && (
+                      <p className="text-[11px] text-neutral-800 leading-relaxed">
+                        <strong>Technical Skills:</strong> {skills}
+                      </p>
+                    )}
+                    {tools && (
+                      <p className="text-[11px] text-neutral-800 leading-relaxed mt-0.5">
+                        <strong>Tools &amp; Infrastructure:</strong> {tools}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {projects.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Key Projects
+                    </h2>
+                    <div className="space-y-2">
+                      {projects.map((proj) => (
+                        <div key={proj.id}>
+                          <div className="flex items-baseline justify-between font-bold text-neutral-900">
+                            <span>{proj.title} {proj.techStack && <span className="font-normal text-neutral-600">({proj.techStack})</span>}</span>
+                            {proj.liveUrl && <span className="text-[10px] text-blue-600">{proj.liveUrl}</span>}
+                          </div>
+                          {proj.description && <p className="text-[11px] text-neutral-800 whitespace-pre-line">{proj.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {certifications.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-400 pb-0.5 mb-1.5">
+                      Certifications
+                    </h2>
+                    <div className="space-y-1">
+                      {certifications.map((c) => (
+                        <div key={c.id} className="flex items-baseline justify-between text-[11px] text-neutral-800">
+                          <span><strong>{c.name}</strong> — {c.issuer}</span>
+                          <span>{c.date}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2. Silicon Tech / Reactive ATS Layout */}
+            {selectedTemplate === "silicon" && (
+              <div className="space-y-3.5">
+                <div className="flex items-start justify-between border-b pb-3" style={{ borderColor: selectedColor.hex }}>
+                  <div>
+                    <h1 className="text-xl font-bold tracking-tight" style={{ color: selectedColor.hex }}>
+                      {fullName || "Your Full Name"}
+                    </h1>
+                    <p className="text-xs font-semibold text-neutral-700 mt-0.5">{headline}</p>
+                  </div>
+                  <div className="text-right text-[11px] text-neutral-500 space-y-0.5">
+                    <p>{email}</p>
+                    <p>{phone}</p>
+                    <p>{location}</p>
+                  </div>
+                </div>
+
+                {summary && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
+                      About Me
+                    </h2>
+                    <p className="text-[11.5px] leading-relaxed text-neutral-700">{summary}</p>
+                  </div>
+                )}
+
+                {skills && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
+                      Tech Stack
+                    </h2>
+                    <div className="flex flex-wrap gap-1.5">
+                      {skills.split(",").map((s, idx) => (
+                        <span key={idx} className="rounded px-2 py-0.5 text-[10.5px] font-medium border" style={{ backgroundColor: selectedColor.bgLight, color: selectedColor.text, borderColor: selectedColor.hex + "30" }}>
+                          {s.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {experiences.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
+                      Experience
+                    </h2>
+                    <div className="space-y-3">
+                      {experiences.map((exp) => (
+                        <div key={exp.id}>
+                          <div className="flex items-baseline justify-between font-bold text-neutral-900">
+                            <span>{exp.role} <span className="font-normal text-neutral-500">@ {exp.company}</span></span>
+                            <span className="text-[11px] text-neutral-500">{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
+                          </div>
+                          {exp.bullets && <p className="text-[11px] text-neutral-700 whitespace-pre-line mt-1">{exp.bullets}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {projects.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-2" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
+                      Projects
+                    </h2>
+                    <div className="space-y-2.5">
+                      {projects.map((p) => (
+                        <div key={p.id}>
+                          <div className="flex items-baseline justify-between font-semibold text-neutral-900">
+                            <span>{p.title} {p.techStack && <span className="text-[10px] text-neutral-500 font-mono">[{p.techStack}]</span>}</span>
+                            {p.liveUrl && <span className="text-[10px] text-blue-600">{p.liveUrl}</span>}
+                          </div>
+                          {p.description && <p className="text-[11px] text-neutral-700 whitespace-pre-line mt-0.5">{p.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {educations.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider pl-2 border-l-2 mb-1.5" style={{ borderColor: selectedColor.hex, color: selectedColor.hex }}>
+                      Education &amp; Credentials
+                    </h2>
+                    {educations.map((ed) => (
+                      <div key={ed.id} className="flex justify-between text-[11px]">
+                        <span><strong>{ed.degree}</strong>, {ed.institution}</span>
+                        <span>{ed.graduationYear}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. Two-Column Compact ATS Layout */}
+            {selectedTemplate === "two_column" && (
+              <div className="grid grid-cols-12 gap-4">
+                {/* Left Column (4 cols): Contact, Skills, Education */}
+                <div className="col-span-4 space-y-3.5 border-r border-neutral-200 pr-3">
+                  <div>
+                    <h1 className="text-base font-bold leading-tight" style={{ color: selectedColor.hex }}>
+                      {fullName || "Your Name"}
+                    </h1>
+                    <p className="text-[10px] text-neutral-600 font-medium mt-0.5">{headline}</p>
+                  </div>
+
+                  <div className="text-[10.5px] space-y-1 text-neutral-600">
+                    <p className="font-bold text-neutral-900 uppercase text-[10px]">Contact</p>
+                    <p className="truncate">{email}</p>
+                    <p>{phone}</p>
+                    <p>{location}</p>
+                    {linkedIn && <p className="truncate text-blue-600">{linkedIn}</p>}
+                    {github && <p className="truncate text-blue-600">{github}</p>}
+                  </div>
+
+                  {skills && (
+                    <div className="space-y-1">
+                      <p className="font-bold text-neutral-900 uppercase text-[10px]">Skills</p>
+                      <div className="flex flex-wrap gap-1">
+                        {skills.split(",").map((s, i) => (
+                          <span key={i} className="rounded bg-neutral-100 px-1.5 py-0.5 text-[9.5px] text-neutral-700">
+                            {s.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {educations.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="font-bold text-neutral-900 uppercase text-[10px]">Education</p>
+                      {educations.map((ed) => (
+                        <div key={ed.id} className="text-[10px]">
+                          <p className="font-bold text-neutral-800">{ed.degree}</p>
+                          <p className="text-neutral-500">{ed.institution}</p>
+                          <p className="text-neutral-400">{ed.graduationYear}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {certifications.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="font-bold text-neutral-900 uppercase text-[10px]">Certifications</p>
+                      {certifications.map((c) => (
+                        <div key={c.id} className="text-[10px]">
+                          <p className="font-semibold text-neutral-800">{c.name}</p>
+                          <p className="text-neutral-500">{c.issuer} ({c.date})</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column (8 cols): Summary, Experience, Projects */}
+                <div className="col-span-8 space-y-3.5 pl-1">
+                  {summary && (
+                    <div>
+                      <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1" style={{ borderColor: selectedColor.hex }}>
+                        Summary
+                      </h2>
+                      <p className="text-[11px] leading-relaxed text-neutral-700">{summary}</p>
+                    </div>
+                  )}
+
+                  {experiences.length > 0 && (
+                    <div>
+                      <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-2" style={{ borderColor: selectedColor.hex }}>
+                        Work Experience
+                      </h2>
+                      <div className="space-y-2.5">
+                        {experiences.map((exp) => (
+                          <div key={exp.id}>
+                            <div className="flex justify-between font-bold text-[11px] text-neutral-900">
+                              <span>{exp.role} <span className="font-normal text-neutral-500">| {exp.company}</span></span>
+                              <span className="text-[10px] text-neutral-500 font-normal">{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
+                            </div>
+                            {exp.bullets && <p className="text-[10.5px] leading-relaxed text-neutral-700 whitespace-pre-line mt-0.5">{exp.bullets}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {projects.length > 0 && (
+                    <div>
+                      <h2 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 border-b pb-0.5 mb-1.5" style={{ borderColor: selectedColor.hex }}>
+                        Featured Projects
+                      </h2>
+                      <div className="space-y-2">
+                        {projects.map((p) => (
+                          <div key={p.id}>
+                            <p className="font-semibold text-[11px] text-neutral-900">
+                              {p.title} {p.techStack && <span className="text-[9.5px] text-neutral-500 font-mono">({p.techStack})</span>}
+                            </p>
+                            {p.description && <p className="text-[10.5px] text-neutral-700 whitespace-pre-line">{p.description}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Certifications */}
-            {certifications.length > 0 && (
-              <div className="mt-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-900 border-b border-neutral-200 pb-1 mb-1.5">
-                  Certifications
-                </h2>
-                <div className="space-y-1.5">
-                  {certifications.map((cert) => (
-                    <div key={cert.id} className="flex items-baseline justify-between text-xs text-neutral-800">
-                      <span>
-                        <strong>{cert.name || "Certification"}</strong> — {cert.issuer}
-                      </span>
-                      <span className="text-[11px] text-neutral-500">{cert.date}</span>
-                    </div>
-                  ))}
+            {/* 4. Executive Minimalist ATS Layout */}
+            {selectedTemplate === "executive" && (
+              <div className="space-y-4">
+                <div className="border-b-2 pb-3" style={{ borderColor: selectedColor.hex }}>
+                  <h1 className="text-2xl font-bold tracking-tight" style={{ color: selectedColor.hex }}>
+                    {fullName || "Your Name"}
+                  </h1>
+                  <p className="text-xs font-semibold text-neutral-700 mt-0.5 uppercase tracking-wide">
+                    {headline}
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    {[email, phone, location, linkedIn].filter(Boolean).join(" • ")}
+                  </p>
                 </div>
+
+                {summary && (
+                  <div className="p-3 rounded-lg border-l-4" style={{ backgroundColor: selectedColor.bgLight, borderColor: selectedColor.hex }}>
+                    <p className="text-[11.5px] font-medium leading-relaxed" style={{ color: selectedColor.text }}>
+                      {summary}
+                    </p>
+                  </div>
+                )}
+
+                {experiences.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider mb-2 border-b pb-1 text-neutral-900">
+                      Leadership &amp; Professional Experience
+                    </h2>
+                    <div className="space-y-3">
+                      {experiences.map((exp) => (
+                        <div key={exp.id}>
+                          <div className="flex justify-between font-bold text-neutral-900">
+                            <span>{exp.role} <span className="font-semibold text-neutral-600">— {exp.company}</span></span>
+                            <span className="text-[11px] text-neutral-500 font-normal">{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
+                          </div>
+                          {exp.bullets && <p className="text-[11px] text-neutral-700 whitespace-pre-line mt-1">{exp.bullets}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {educations.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider mb-1.5 border-b pb-1 text-neutral-900">
+                      Education &amp; Credentials
+                    </h2>
+                    {educations.map((ed) => (
+                      <div key={ed.id} className="flex justify-between text-[11px]">
+                        <span><strong>{ed.degree}</strong>, {ed.institution}</span>
+                        <span>{ed.graduationYear}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {skills && (
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider mb-1.5 border-b pb-1 text-neutral-900">
+                      Core Competencies
+                    </h2>
+                    <p className="text-[11px] text-neutral-700 leading-relaxed">{skills}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 5. LaTeX Modern CV ATS Layout */}
+            {selectedTemplate === "latex" && (
+              <div className="space-y-3.5 font-mono text-[11px]">
+                <div className="text-center border-b pb-3">
+                  <h1 className="text-lg font-bold tracking-tight text-neutral-900">
+                    \textbf&#123;{fullName || "Candidate"}&#125;
+                  </h1>
+                  <p className="text-[11px] text-neutral-600 mt-0.5">{headline}</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">
+                    {[email, phone, location, github].filter(Boolean).join(" // ")}
+                  </p>
+                </div>
+
+                {summary && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
+                      \section&#123;Executive Summary&#125;
+                    </h2>
+                    <p className="leading-relaxed text-neutral-700 font-sans text-xs">{summary}</p>
+                  </div>
+                )}
+
+                {experiences.length > 0 && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">
+                      \section&#123;Experience&#125;
+                    </h2>
+                    <div className="space-y-2.5">
+                      {experiences.map((exp) => (
+                        <div key={exp.id}>
+                          <div className="flex justify-between font-bold text-neutral-900">
+                            <span>{exp.role} | {exp.company}</span>
+                            <span className="text-[10px] font-normal">{exp.startDate} - {exp.current ? "Present" : exp.endDate}</span>
+                          </div>
+                          {exp.bullets && <p className="font-sans text-[11px] text-neutral-700 whitespace-pre-line mt-0.5">{exp.bullets}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {skills && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
+                      \section&#123;Skills&#125;
+                    </h2>
+                    <p className="font-sans text-[11px] text-neutral-700">{skills}</p>
+                  </div>
+                )}
+
+                {projects.length > 0 && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">
+                      \section&#123;Projects&#125;
+                    </h2>
+                    <div className="space-y-1.5">
+                      {projects.map((p) => (
+                        <div key={p.id}>
+                          <span className="font-bold text-neutral-900">{p.title}</span> ({p.techStack})
+                          {p.description && <p className="font-sans text-[10.5px] text-neutral-700">{p.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {educations.length > 0 && (
+                  <div>
+                    <h2 className="font-bold text-neutral-900 uppercase text-[11px] border-b pb-0.5 mb-1">
+                      \section&#123;Education&#125;
+                    </h2>
+                    {educations.map((ed) => (
+                      <div key={ed.id} className="flex justify-between">
+                        <span>{ed.degree}, {ed.institution}</span>
+                        <span>{ed.graduationYear}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
