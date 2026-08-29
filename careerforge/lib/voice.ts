@@ -1,0 +1,257 @@
+/**
+ * Universal Multi-Language Voice & Accessibility Engine (100% Free & Unlimited)
+ * - Automatic Language-Matching: If user speaks English, replies in English. If Hindi, replies in Hindi, etc.
+ * - Multi-Language Speech Recognition (STT): All Indian, European, Asian & Global languages
+ * - High-Quality Speech Synthesis (TTS): Detects language & speaks with matching native voice
+ */
+
+export interface SupportedLanguage {
+  code: string;
+  name: string;
+  nativeName: string;
+  flag: string;
+}
+
+export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
+  { code: "en-US", name: "English (US)", nativeName: "English (US)", flag: "🇺🇸" },
+  { code: "en-IN", name: "English (India)", nativeName: "English (India)", flag: "🇮🇳" },
+  { code: "hi-IN", name: "Hindi", nativeName: "हिन्दी", flag: "🇮🇳" },
+  { code: "gu-IN", name: "Gujarati", nativeName: "ગુજરાતી", flag: "🇮🇳" },
+  { code: "mr-IN", name: "Marathi", nativeName: "मराठी", flag: "🇮🇳" },
+  { code: "ta-IN", name: "Tamil", nativeName: "தமிழ்", flag: "🇮🇳" },
+  { code: "te-IN", name: "Telugu", nativeName: "తెలుగు", flag: "🇮🇳" },
+  { code: "bn-IN", name: "Bengali", nativeName: "বাংলা", flag: "🇮🇳" },
+  { code: "es-ES", name: "Spanish", nativeName: "Español", flag: "🇪🇸" },
+  { code: "fr-FR", name: "French", nativeName: "Français", flag: "🇫🇷" },
+  { code: "de-DE", name: "German", nativeName: "Deutsch", flag: "🇩🇪" },
+  { code: "ja-JP", name: "Japanese", nativeName: "日本語", flag: "🇯🇵" },
+  { code: "zh-CN", name: "Mandarin", nativeName: "简体中文", flag: "🇨🇳" },
+  { code: "ar-SA", name: "Arabic", nativeName: "العربية", flag: "🇸🇦" },
+  { code: "pt-BR", name: "Portuguese", nativeName: "Português", flag: "🇧🇷" },
+];
+
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+let currentLanguage = "en-US";
+
+// ─── 1. Automatic Language Detection from Text ─────────────────────────────────
+export function detectTextLanguage(text: string): string {
+  if (!text) return currentLanguage || "en-US";
+  const clean = text.trim();
+
+  // 1. Non-Latin scripts (High Precision)
+  if (/[\u0A80-\u0AFF]/.test(clean)) return "gu-IN"; // Gujarati (ગુજરાતી)
+  if (/[\u0900-\u097F]/.test(clean)) return "hi-IN"; // Hindi / Marathi (हिन्दी)
+  if (/[\u0B80-\u0BFF]/.test(clean)) return "ta-IN"; // Tamil (தமிழ்)
+  if (/[\u0C00-\u0C7F]/.test(clean)) return "te-IN"; // Telugu (తెలుగు)
+  if (/[\u0980-\u09FF]/.test(clean)) return "bn-IN"; // Bengali (বাংলা)
+  if (/[\u0600-\u06FF]/.test(clean)) return "ar-SA"; // Arabic (العربية)
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(clean)) return "ja-JP"; // Japanese (日本語)
+  if (/[\u4E00-\u9FFF]/.test(clean)) return "zh-CN"; // Chinese (中文)
+
+  // 2. Specific European characters
+  if (/[ñáéíóú¿¡]/i.test(clean) && !/\b(the|is|in|at|to|for|and|jobs|developer|engineer|software|resume)\b/i.test(clean)) return "es-ES";
+  if (/[äöüß]/i.test(clean) && !/\b(the|is|in|at|to|for|and)\b/i.test(clean)) return "de-DE";
+  if (/[éèêëàâîïôûùç]/i.test(clean) && !/\b(the|is|in|at|to|for|and|resume)\b/i.test(clean)) return "fr-FR";
+
+  // 3. Default to English for Latin text
+  return "en-US";
+}
+
+export function setGlobalVoiceLanguage(langCode: string) {
+  currentLanguage = langCode;
+}
+
+export function getGlobalVoiceLanguage(): string {
+  return currentLanguage || "en-US";
+}
+
+// ─── 2. Multi-Language Text-to-Speech (TTS) ───────────────────────────────────
+
+export function isSpeechSynthesisSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+export function stopSpeaking() {
+  if (isSpeechSynthesisSupported()) {
+    window.speechSynthesis.cancel();
+    activeUtterance = null;
+  }
+}
+
+export function isSpeaking(): boolean {
+  if (!isSpeechSynthesisSupported()) return false;
+  return window.speechSynthesis.speaking;
+}
+
+export function speakText(
+  text: string,
+  options?: {
+    lang?: string;
+    rate?: number;
+    pitch?: number;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: (err: unknown) => void;
+  }
+) {
+  if (!isSpeechSynthesisSupported()) {
+    options?.onError?.("SpeechSynthesis not supported on this device.");
+    return;
+  }
+
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+
+  // Strip Markdown & action directives
+  const cleanText = text
+    .replace(/\[ACTION:.*?\]/g, "")
+    .replace(/```[\s\S]*?```/g, "Code block.")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/#+\s/g, "")
+    .replace(/>\s/g, "")
+    .replace(/[•\-\*]\s/g, "")
+    .trim();
+
+  if (!cleanText) {
+    options?.onEnd?.();
+    return;
+  }
+
+  // Automatically detect language if not explicitly provided
+  const targetLang = options?.lang || detectTextLanguage(cleanText);
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  activeUtterance = utterance;
+
+  utterance.lang = targetLang;
+  utterance.rate = options?.rate || 0.96;
+  utterance.pitch = options?.pitch || 1.0;
+  utterance.volume = 1.0;
+
+  // Find the highest quality native voice matching the language exactly
+  const voices = window.speechSynthesis.getVoices();
+  const langPrefix = targetLang.split("-")[0].toLowerCase();
+
+  const matchingVoice =
+    voices.find((v) => v.lang.toLowerCase() === targetLang.toLowerCase()) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix)) ||
+    voices.find((v) => v.name.toLowerCase().includes(langPrefix)) ||
+    voices.find((v) => v.name.includes("Google") || v.name.includes("Natural")) ||
+    voices[0];
+
+  if (matchingVoice) {
+    utterance.voice = matchingVoice;
+  }
+
+  utterance.onstart = () => {
+    options?.onStart?.();
+  };
+
+  utterance.onend = () => {
+    activeUtterance = null;
+    options?.onEnd?.();
+  };
+
+  utterance.onerror = (e) => {
+    activeUtterance = null;
+    options?.onError?.(e);
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// ─── 3. Multi-Language Speech-to-Text (STT) ───────────────────────────────────
+
+export function isSpeechRecognitionSupported(): boolean {
+  if (typeof window === "undefined") return false;
+  return "webkitSpeechRecognition" in window || "SpeechRecognition" in window;
+}
+
+export type SpeechRecognitionController = {
+  stop: () => void;
+};
+
+export function startSpeechRecognition(
+  callbacks: {
+    onTranscript: (text: string, isFinal: boolean) => void;
+    onListeningChange: (listening: boolean) => void;
+    onError: (error: string) => void;
+  },
+  options?: {
+    lang?: string;
+  }
+): SpeechRecognitionController | null {
+  if (!isSpeechRecognitionSupported()) {
+    callbacks.onError("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
+    callbacks.onListeningChange(false);
+    return null;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionClass();
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = options?.lang || currentLanguage || "en-US";
+
+    recognition.onstart = () => {
+      callbacks.onListeningChange(true);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      let final = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          final += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+
+      if (final) {
+        const detected = detectTextLanguage(final);
+        currentLanguage = detected;
+        callbacks.onTranscript(final, true);
+      } else if (interim) {
+        callbacks.onTranscript(interim, false);
+      }
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (event: any) => {
+      if (event.error !== "no-speech") {
+        callbacks.onError(event.error || "Microphone recognition error");
+      }
+      callbacks.onListeningChange(false);
+    };
+
+    recognition.onend = () => {
+      callbacks.onListeningChange(false);
+    };
+
+    recognition.start();
+
+    return {
+      stop: () => {
+        try {
+          recognition.stop();
+        } catch {
+          // ignore
+        }
+        callbacks.onListeningChange(false);
+      },
+    };
+  } catch (err) {
+    console.error("[Voice] Speech recognition init failed:", err);
+    callbacks.onError("Please check microphone permissions.");
+    callbacks.onListeningChange(false);
+    return null;
+  }
+}
