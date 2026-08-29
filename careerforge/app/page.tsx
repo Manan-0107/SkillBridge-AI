@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { TopNav } from "@/components/nav/TopNav";
 import { AssistantHome } from "@/components/assistant/AssistantHome";
 import { Workspace } from "@/components/workspace/Workspace";
+import { VoiceModeDetector } from "@/components/accessibility/VoiceModeDetector";
 import { FeatureId, ResumeTab } from "@/lib/intent";
 
 type View =
@@ -27,6 +28,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-paper">
+      {/* Automatic 3-Attempt Voice Detection on Login / Initial Session */}
+      <VoiceModeDetector />
+
       <TopNav
         view={current}
         onAssistant={() => setView({ kind: "assistant" })}

@@ -11,9 +11,7 @@ import {
   stopSpeaking,
   startSpeechRecognition,
   SpeechRecognitionController,
-  SUPPORTED_LANGUAGES,
-  getGlobalVoiceLanguage,
-  setGlobalVoiceLanguage,
+  detectTextLanguage,
 } from "@/lib/voice";
 
 interface SuggestionItem {
@@ -27,7 +25,7 @@ interface SuggestionItem {
 }
 
 export function LocalOpportunities() {
-  const { targetRole, user } = useApp();
+  const { targetRole, user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [activeType, setActiveType] = useState<"all" | "remote" | "onsite" | "internship">("all");
@@ -36,9 +34,6 @@ export function LocalOpportunities() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationProfile | null>(null);
   const [playingJobId, setPlayingJobId] = useState<string | null>(null);
-
-  // Multi-Language Voice State (Embedded inline, no giant bar)
-  const [selectedLanguage, setSelectedLanguage] = useState(getGlobalVoiceLanguage());
   const [listeningSearch, setListeningSearch] = useState(false);
 
   // Email Job Alert State (LinkedIn-style)
@@ -114,6 +109,10 @@ export function LocalOpportunities() {
     });
     setShowDropdown(false);
     fetchLiveJobs(searchTerm, activeType, targetRole, cityName, loc.countryCode, loc.latitude, loc.longitude);
+
+    if (voiceMode) {
+      speakText(`Location set to ${cityName}. Tracking live positions.`, { lang: voiceLanguage });
+    }
   };
 
   // ─── 2. Uber-Style Live Location Predictive Geolocation ────────────────────
@@ -179,7 +178,12 @@ export function LocalOpportunities() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
+        const loadedJobs: LiveJob[] = data.jobs || [];
+        setJobs(loadedJobs);
+
+        if (voiceMode && loadedJobs.length > 0) {
+          speakText(`Found ${loadedJobs.length} live openings in ${loc || "your area"}.`, { lang: voiceLanguage });
+        }
       }
     } catch (err) {
       console.error("[LocalOpportunities] Failed to fetch live jobs:", err);
@@ -206,7 +210,7 @@ export function LocalOpportunities() {
     fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
   };
 
-  // ─── Multi-Language Voice Dictation Search ─────────────────────────────────
+  // ─── Automatic Multi-Language Voice Dictation Search ───────────────────────
   const toggleVoiceSearch = () => {
     if (listeningSearch) {
       speechControllerRef.current?.stop();
@@ -218,12 +222,14 @@ export function LocalOpportunities() {
       {
         onTranscript: (transcript) => {
           setSearchTerm(transcript);
+          const detected = detectTextLanguage(transcript);
+          setVoiceLanguage(detected);
           fetchLiveJobs(transcript, activeType, targetRole, locationInput);
         },
         onListeningChange: (isList) => setListeningSearch(isList),
         onError: () => setListeningSearch(false),
       },
-      { lang: selectedLanguage }
+      { lang: voiceLanguage }
     );
     speechControllerRef.current = controller;
   };
@@ -239,7 +245,7 @@ export function LocalOpportunities() {
     setPlayingJobId(job.id);
     const audioContent = `${job.title} at ${job.company}. Work arrangement: ${job.workArrangementLabel}. Location: ${job.location}. ${job.distanceKm ? `Distance: ${job.distanceKm} kilometers away.` : ""} Salary: ${job.salary?.formatted || "Competitive market compensation"}. Details: ${job.descriptionSnippet}`;
     speakText(audioContent, {
-      lang: selectedLanguage,
+      lang: voiceLanguage,
       onEnd: () => setPlayingJobId(null),
       onError: () => setPlayingJobId(null),
     });
@@ -275,6 +281,9 @@ export function LocalOpportunities() {
 
       if (res.ok) {
         setAlertSuccessMsg(`Opening at ${job.company} with direct registration form link sent to ${email}!`);
+        if (voiceMode) {
+          speakText(`Application form link for ${job.company} dispatched to ${email}.`, { lang: voiceLanguage });
+        }
         setTimeout(() => setAlertSuccessMsg(null), 6000);
       }
     } catch {
@@ -305,6 +314,9 @@ export function LocalOpportunities() {
 
       if (res.ok) {
         setAlertSuccessMsg(`Real-time job tracker active for ${locationInput || "your city"}! Alert with registration links sent to ${alertEmail}.`);
+        if (voiceMode) {
+          speakText(`Job tracker activated for ${locationInput || "your location"}. Alerts will be emailed to ${alertEmail}.`, { lang: voiceLanguage });
+        }
         setTimeout(() => setAlertSuccessMsg(null), 7000);
       }
     } catch {
@@ -319,13 +331,13 @@ export function LocalOpportunities() {
       id="local"
       eyebrow="Real-Time Job Tracker"
       title="Live Tech Opportunities & Real-Time Alerts"
-      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, multi-language voice detection, and direct registration forms."
+      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, automatic voice detection, and direct registration forms."
     >
       {/* ─── LINKEDIN-STYLE REAL-TIME JOB TRACKING & EMAIL ALERTS HEADER ───────── */}
       <div className="mb-6 rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 via-white to-indigo-50/70 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
@@ -333,6 +345,24 @@ export function LocalOpportunities() {
               <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900">
                 LinkedIn-Style Live Location Job Tracker Active
               </span>
+
+              {/* Mode Indicator & 1-Click Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !voiceMode;
+                  setVoiceMode(next);
+                  speakText(next ? "Voice Mode enabled." : "Text Mode enabled.", { lang: voiceLanguage });
+                }}
+                className={`ml-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                  voiceMode
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "bg-neutral-200/80 text-neutral-700 hover:bg-neutral-300"
+                }`}
+                title="Click to toggle between Voice Mode and Text Mode"
+              >
+                <span>{voiceMode ? "🎙️ Voice Mode Active" : "⌨️ Text Mode"}</span>
+              </button>
             </div>
             <h3 className="mt-1 font-display text-xl sm:text-2xl italic text-ink capitalize">
               {targetRole || "Software Engineering"} in {locationInput || currentLocation?.city || "Your Location"}
@@ -368,51 +398,31 @@ export function LocalOpportunities() {
         )}
       </div>
 
-      {/* ─── DUAL SEARCH: MULTI-LANGUAGE VOICE & UBER-STYLE GEOLOCATION ───────── */}
+      {/* ─── DUAL SEARCH: CLEAN SEARCH INPUT WITH INTEGRATED VOICE MIC & GPS ───── */}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form onSubmit={handleSearch} className="flex flex-1 flex-col sm:flex-row gap-2 max-w-2xl">
-          {/* Role/Keyword Search with Voice Mic & Language Selector */}
+          {/* Clean Role Search with Voice Mic (Zero Overlapping Selects) */}
           <div className="relative flex flex-1 items-center">
             <input
-              className={`${inputClasses} pr-16 w-full`}
+              className={`${inputClasses} pr-10 w-full`}
               placeholder={`Search ${targetRole || "tech"} skills or titles…`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
 
-            {/* Inline Language Selector & Voice Mic Buttons (Sleek & Integrated) */}
-            <div className="absolute right-2 flex items-center gap-1">
-              {/* Compact Language Selector */}
-              <select
-                value={selectedLanguage}
-                onChange={(e) => {
-                  setSelectedLanguage(e.target.value);
-                  setGlobalVoiceLanguage(e.target.value);
-                }}
-                className="bg-transparent text-[11px] font-bold text-neutral-600 focus:outline-none cursor-pointer pr-1"
-                title="Voice Language"
-              >
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.flag} {lang.nativeName}
-                  </option>
-                ))}
-              </select>
-
-              {/* Multi-Language Voice Mic */}
-              <button
-                type="button"
-                onClick={toggleVoiceSearch}
-                className={`rounded-lg p-1 transition-all ${
-                  listeningSearch
-                    ? "bg-red-500 text-white animate-pulse shadow-sm"
-                    : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60"
-                }`}
-                title={`Voice Dictation in ${selectedLanguage} (Click to speak)`}
-              >
-                🎙️
-              </button>
-            </div>
+            {/* Clean Voice Dictation Mic */}
+            <button
+              type="button"
+              onClick={toggleVoiceSearch}
+              className={`absolute right-2.5 rounded-lg p-1.5 transition-all cursor-pointer ${
+                listeningSearch || voiceMode
+                  ? "bg-red-500 text-white animate-pulse shadow-sm"
+                  : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60"
+              }`}
+              title="Click to speak (Voice recognition in any language)"
+            >
+              🎙️
+            </button>
           </div>
 
           {/* Uber-Style Predictive Geolocation Input */}
@@ -635,7 +645,7 @@ export function LocalOpportunities() {
                         ? "bg-blue-600 text-white animate-pulse shadow-md shadow-blue-500/20"
                         : "border border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
                     }`}
-                    title={`Click to listen to job description in ${selectedLanguage}`}
+                    title="Click to listen to job description aloud"
                   >
                     {playingJobId === job.id ? (
                       <>
@@ -715,7 +725,7 @@ export function LocalOpportunities() {
         <p>
           Live scraping from <strong>LinkedIn</strong>, <strong>Google Jobs</strong>, <strong>Arbeitnow</strong>, <strong>Remotive</strong>, and <strong>Jobicy</strong>.
         </p>
-        <span>Multi-Language Voice Detection &bull; Universal Accessibility &bull; Zero Fees</span>
+        <span>Automatic Voice Detection &bull; Universal Accessibility &bull; Zero Fees</span>
       </div>
     </Section>
   );
