@@ -1,8 +1,8 @@
 /**
  * Universal Multi-Language Voice & Accessibility Engine (100% Free & Unlimited)
+ * - Automatic Language-Matching: If user speaks English, replies in English. If Hindi, replies in Hindi, etc.
  * - Multi-Language Speech Recognition (STT): All Indian, European, Asian & Global languages
- * - Automatic Language-Matching Speech Synthesis (TTS): Detects language & speaks with matching native voice
- * - Step-by-Step AI Accessibility Audio Assistance for Disabled Users
+ * - High-Quality Speech Synthesis (TTS): Detects language & speaks with matching native voice
  */
 
 export interface SupportedLanguage {
@@ -13,7 +13,7 @@ export interface SupportedLanguage {
 }
 
 export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
-  { code: "en-US", name: "English (US)", nativeName: "English", flag: "🇺🇸" },
+  { code: "en-US", name: "English (US)", nativeName: "English (US)", flag: "🇺🇸" },
   { code: "en-IN", name: "English (India)", nativeName: "English (India)", flag: "🇮🇳" },
   { code: "hi-IN", name: "Hindi", nativeName: "हिन्दी", flag: "🇮🇳" },
   { code: "gu-IN", name: "Gujarati", nativeName: "ગુજરાતી", flag: "🇮🇳" },
@@ -31,36 +31,30 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 ];
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
-let currentLanguage = "en-IN";
+let currentLanguage = "en-US";
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
 export function detectTextLanguage(text: string): string {
-  if (!text) return currentLanguage || "en-IN";
+  if (!text) return currentLanguage || "en-US";
+  const clean = text.trim();
 
-  // Gujarati
-  if (/[\u0A80-\u0AFF]/.test(text)) return "gu-IN";
-  // Hindi / Marathi / Sanskrit (Devanagari)
-  if (/[\u0900-\u097F]/.test(text)) return "hi-IN";
-  // Tamil
-  if (/[\u0B80-\u0BFF]/.test(text)) return "ta-IN";
-  // Telugu
-  if (/[\u0C00-\u0C7F]/.test(text)) return "te-IN";
-  // Bengali
-  if (/[\u0980-\u09FF]/.test(text)) return "bn-IN";
-  // Arabic
-  if (/[\u0600-\u06FF]/.test(text)) return "ar-SA";
-  // Japanese
-  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return "ja-JP";
-  // Chinese
-  if (/[\u4E00-\u9FFF]/.test(text)) return "zh-CN";
-  // Spanish
-  if (/[ñáéíóú¿¡]/i.test(text)) return "es-ES";
-  // German
-  if (/[äöüß]/i.test(text)) return "de-DE";
-  // French
-  if (/[éèêëàâîïôûùç]/i.test(text)) return "fr-FR";
+  // 1. Non-Latin scripts (High Precision)
+  if (/[\u0A80-\u0AFF]/.test(clean)) return "gu-IN"; // Gujarati (ગુજરાતી)
+  if (/[\u0900-\u097F]/.test(clean)) return "hi-IN"; // Hindi / Marathi (हिन्दी)
+  if (/[\u0B80-\u0BFF]/.test(clean)) return "ta-IN"; // Tamil (தமிழ்)
+  if (/[\u0C00-\u0C7F]/.test(clean)) return "te-IN"; // Telugu (తెలుగు)
+  if (/[\u0980-\u09FF]/.test(clean)) return "bn-IN"; // Bengali (বাংলা)
+  if (/[\u0600-\u06FF]/.test(clean)) return "ar-SA"; // Arabic (العربية)
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(clean)) return "ja-JP"; // Japanese (日本語)
+  if (/[\u4E00-\u9FFF]/.test(clean)) return "zh-CN"; // Chinese (中文)
 
-  return currentLanguage || "en-US";
+  // 2. Specific European characters
+  if (/[ñáéíóú¿¡]/i.test(clean) && !/\b(the|is|in|at|to|for|and|jobs|developer|engineer|software|resume)\b/i.test(clean)) return "es-ES";
+  if (/[äöüß]/i.test(clean) && !/\b(the|is|in|at|to|for|and)\b/i.test(clean)) return "de-DE";
+  if (/[éèêëàâîïôûùç]/i.test(clean) && !/\b(the|is|in|at|to|for|and|resume)\b/i.test(clean)) return "fr-FR";
+
+  // 3. Default to English for Latin text
+  return "en-US";
 }
 
 export function setGlobalVoiceLanguage(langCode: string) {
@@ -68,7 +62,7 @@ export function setGlobalVoiceLanguage(langCode: string) {
 }
 
 export function getGlobalVoiceLanguage(): string {
-  return currentLanguage || "en-IN";
+  return currentLanguage || "en-US";
 }
 
 // ─── 2. Multi-Language Text-to-Speech (TTS) ───────────────────────────────────
@@ -105,7 +99,7 @@ export function speakText(
     return;
   }
 
-  // Cancel any active speech
+  // Cancel any ongoing speech
   window.speechSynthesis.cancel();
 
   // Strip Markdown & action directives
@@ -125,24 +119,25 @@ export function speakText(
     return;
   }
 
-  // Determine target language (explicit or auto-detected)
+  // Automatically detect language if not explicitly provided
   const targetLang = options?.lang || detectTextLanguage(cleanText);
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   activeUtterance = utterance;
 
   utterance.lang = targetLang;
-  utterance.rate = options?.rate || 0.95; // Slightly slower for maximum accessibility clarity
+  utterance.rate = options?.rate || 0.96;
   utterance.pitch = options?.pitch || 1.0;
   utterance.volume = 1.0;
 
-  // Find the highest quality voice matching the language
+  // Find the highest quality native voice matching the language exactly
   const voices = window.speechSynthesis.getVoices();
-  const langPrefix = targetLang.split("-")[0];
+  const langPrefix = targetLang.split("-")[0].toLowerCase();
 
   const matchingVoice =
     voices.find((v) => v.lang.toLowerCase() === targetLang.toLowerCase()) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix.toLowerCase())) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix)) ||
+    voices.find((v) => v.name.toLowerCase().includes(langPrefix)) ||
     voices.find((v) => v.name.includes("Google") || v.name.includes("Natural")) ||
     voices[0];
 
@@ -201,7 +196,7 @@ export function startSpeechRecognition(
 
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = options?.lang || currentLanguage || "en-IN";
+    recognition.lang = options?.lang || currentLanguage || "en-US";
 
     recognition.onstart = () => {
       callbacks.onListeningChange(true);
@@ -221,9 +216,8 @@ export function startSpeechRecognition(
       }
 
       if (final) {
-        // Auto-update global language if non-English script is spoken
         const detected = detectTextLanguage(final);
-        if (detected !== "en-IN") currentLanguage = detected;
+        currentLanguage = detected;
         callbacks.onTranscript(final, true);
       } else if (interim) {
         callbacks.onTranscript(interim, false);
@@ -260,39 +254,4 @@ export function startSpeechRecognition(
     callbacks.onListeningChange(false);
     return null;
   }
-}
-
-// ─── 4. Step-by-Step AI Accessibility Co-Pilot Audio Guide ────────────────────
-export function speakAccessibilityGuide(
-  step: "overview" | "search" | "location" | "apply" | "alerts",
-  lang = currentLanguage
-) {
-  const guideScripts: Record<string, Record<string, string>> = {
-    "hi-IN": {
-      overview: "नमस्ते! करियरफोर्ज में आपका स्वागत है। यहाँ आप अपने शहर में जॉब्स खोज सकते हैं, वॉयस से सुन सकते हैं, और सीधे रजिस्ट्रेशन फॉर्म पा सकते हैं। स्टेप एक: अपनी जॉब रोल बोलें या लिखें। स्टेप दो: अपने शहर की जॉब्स देखने के लिए लोकेशन बटन दबाएं।",
-      search: "जॉब सर्च करने के लिए माइक बटन दबाएं और बोलें, या सर्च बॉक्स में लिखें।",
-      location: "लोकेशन बटन पर क्लिक करें। यह आपके शहर या जिले की सभी नई ओपनिंग्स दिखाएगा।",
-      apply: "अप्लाई करने के लिए अप्लाई नाउ बटन दबाएं, या ईमेल फॉर्म लिंक पर क्लिक करें।",
-      alerts: "ईमेल अलर्ट्स एक्टिवेट करने के लिए अपना ईमेल डालें और सेट जॉब अलर्ट दबाएं।",
-    },
-    "gu-IN": {
-      overview: "નમસ્તે! કરિયરફોર્જમાં આપનું સ્વાગત છે. અહીં તમે તમારા શહેરમાં જોબ શોધી શકો છો, અવાજથી સાંભળી શકો છો અને સીધું રજીસ્ટ્રેશન ફોર્મ મેળવી શકો છો.",
-      search: "જોબ શોધવા માટે માઈક બટન દબાવો અને બોલો.",
-      location: "તમારા શહેરની લાઈવ જોબ્સ જોવા માટે લોકેશન બટન પર ક્લિક કરો.",
-      apply: "અરજી કરવા માટે એપ્લાય નાઉ બટન દબાવો અથવા ઇમેઇલ ફોર્મ પર ક્લિક કરો.",
-      alerts: "નવી જોબ્સના એલર્ટ માટે ઇમેઇલ દાખલ કરો.",
-    },
-    "en-IN": {
-      overview: "Welcome to CareerForge Accessibility Co-Pilot. Follow these easy steps: Step 1: Use the microphone to speak your role. Step 2: Click the Location Pin to track verified jobs in your city. Step 3: Click Listen to hear any job aloud, or click Email Form to receive the registration form directly.",
-      search: "Click the voice button and speak any role or skill.",
-      location: "Click the location pin to automatically find jobs in your exact city or district.",
-      apply: "Click Apply Now to open the registration form, or Email Form to send it to your inbox.",
-      alerts: "Enter your email to activate real-time opening alerts for your city.",
-    },
-  };
-
-  const selectedLangDict = guideScripts[lang] || guideScripts["en-IN"];
-  const scriptText = selectedLangDict[step] || selectedLangDict.overview;
-
-  speakText(scriptText, { lang });
 }
