@@ -363,6 +363,7 @@ export function AssistantHome({
             targetRole: user?.targetRole || undefined,
           },
           targetRole: user?.targetRole || "frontend",
+          voiceMode,
         }),
       });
 
@@ -371,7 +372,7 @@ export function AssistantHome({
 
       const replyText =
         data.reply ||
-        "I'm here to support your career journey. What would you like to explore next?";
+        "I'm right here with you. What would you like to explore or work on today?";
       const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const hasFeature = Boolean(data.feature);
 
@@ -408,6 +409,11 @@ export function AssistantHome({
       );
       scrollToBottom();
 
+      // Automatically speak the response if in Voice Mode
+      if (voiceMode) {
+        speakText(replyText);
+      }
+
       if (hasFeature && data.feature) {
         setRedirectCountdown(3);
         const timer = setTimeout(() => {
@@ -425,7 +431,7 @@ export function AssistantHome({
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          text: "I am right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+          text: "I am right here with you! What would you like to chat about or explore today?",
         },
       ];
       saveConversations(
@@ -763,17 +769,22 @@ export function AssistantHome({
                 );
               })}
 
-              {/* AI Thinking Indicator */}
+              {/* AI Thinking / Reasoning Indicator */}
               {busy && redirectCountdown === null && (
-                <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-neutral-400 px-1">
-                    CareerForge AI is thinking…
+                <div className="flex flex-col items-start animate-in fade-in">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 px-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                    </span>
+                    <span>AI is thinking & reasoning…</span>
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-neutral-200 bg-white px-4 py-3 shadow-xs">
+                  <div className="rounded-2xl rounded-tl-xs border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-white to-blue-50/50 px-4 py-3 shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce" />
+                      <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-indigo-600 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" />
+                      <span className="ml-2 text-xs font-medium text-neutral-500">Synthesizing response</span>
                     </div>
                   </div>
                 </div>

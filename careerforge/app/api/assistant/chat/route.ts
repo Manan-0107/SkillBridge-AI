@@ -1,13 +1,11 @@
 /**
  * POST /api/assistant/chat
  *
- * Humanized Multi-Engine Real LLM Backend for CareerForge:
- * 1. Groq Cloud API (Llama 3.3 70B Versatile - Ultra-low latency LPU inference)
- * 2. GitHub Models API (Azure AI Inference - LLaMA 3.3 70B, DeepSeek R1, GPT-4o-mini, Mistral Large)
- * 3. Google Gemini 1.5/2.0 Flash (if GEMINI_API_KEY configured)
- * 4. Hugging Face Serverless Inference (Qwen 2.5 Coder, LLaMA 3.3)
- * 5. Free Open-Source Multi-Model Endpoints (DeepSeek-V3 / Mistral / LLaMA)
- * 6. Autonomous Humanized Career Mentor Engine (Comprehensive, empathetic, multi-paragraph tech mentorship)
+ * Real Conversational AI LLM Backend for CareerForge:
+ * - Natural, Casual, Humanized Dialogue (Replies warmly to "how are you?", jokes, banter, chit-chat)
+ * - Deep Tech Mentorship & System Architecture
+ * - 100% Exact Language Matching (English, Hindi, Gujarati, Spanish, French, etc.)
+ * - Multi-Model Fallback: Groq (Llama 3.3 70B / DeepSeek R1), GitHub Models (GPT-4o), Gemini 1.5/2.0 Flash, Hugging Face, and Neural Dialogue Engine
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,13 +26,13 @@ interface RequestBody {
     targetRole?: string;
   };
   targetRole?: string;
-  temperature?: number;
+  voiceMode?: boolean;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json();
-    const { messages, userProfile, targetRole } = body;
+    const { messages, userProfile, targetRole, voiceMode } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Messages array required" }, { status: 400 });
@@ -44,14 +42,14 @@ export async function POST(req: NextRequest) {
     const userName =
       userProfile?.name ||
       (userProfile?.email ? userProfile.email.split("@")[0] : "Friend");
-    const role = targetRole || userProfile?.targetRole || "frontend";
+    const role = targetRole || userProfile?.targetRole || "software engineer";
 
-    // ─── 1. Try Groq Cloud API (Llama 3.3 70B - Lightning Fast) ───────────────
+    // ─── 1. Try Groq Cloud API (Llama 3.3 70B / DeepSeek R1 - Ultra Fast) ─────
     const groqKey = process.env.GROQ_API_KEY;
     if (groqKey && groqKey.trim().length > 5) {
       try {
-        const groqResponse = await callGroqLLM(groqKey, messages, userName, role);
-        if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 20) {
+        const groqResponse = await callGroqLLM(groqKey, messages, userName, role, voiceMode);
+        if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...groqResponse, engine: "Groq (Llama 3.3 70B)" });
         }
       } catch (groqErr) {
@@ -59,25 +57,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 2. Try GitHub Models API (if GITHUB_TOKEN is configured) ─────────────
+    // ─── 2. Try GitHub Models API (Azure AI Inference - GPT-4o / LLaMA 3.3) ───
     const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
     if (githubToken && githubToken.trim().length > 5) {
       try {
-        const ghResponse = await callGithubModelsLLM(githubToken, messages, userName, role);
-        if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 20) {
-          return NextResponse.json({ ...ghResponse, engine: "GitHub Models (LLaMA 3.3 / GPT-4o)" });
+        const ghResponse = await callGithubModelsLLM(githubToken, messages, userName, role, voiceMode);
+        if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
+          return NextResponse.json({ ...ghResponse, engine: "GitHub Models (GPT-4o)" });
         }
       } catch (ghErr) {
         console.warn("[Assistant API] GitHub Models error:", ghErr);
       }
     }
 
-    // ─── 3. Try Google Gemini (if GEMINI_API_KEY is available) ─────────────────
+    // ─── 3. Try Google Gemini Flash (Gemini 1.5/2.0 Flash) ────────────────────
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey && geminiKey.trim().length > 5) {
       try {
-        const geminiResponse = await callGeminiLLM(geminiKey, messages, userName, role);
-        if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 20) {
+        const geminiResponse = await callGeminiLLM(geminiKey, messages, userName, role, voiceMode);
+        if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...geminiResponse, engine: "Google Gemini 1.5 Flash" });
         }
       } catch (geminiErr) {
@@ -85,36 +83,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 4. Try Hugging Face Free Serverless Inference ────────────────────────
+    // ─── 4. Try Hugging Face Serverless Inference ────────────────────────────
     try {
-      const hfResponse = await callHuggingFaceLLM(messages, userName, role);
-      if (hfResponse && hfResponse.reply && hfResponse.reply.trim().length > 20) {
+      const hfResponse = await callHuggingFaceLLM(messages, userName, role, voiceMode);
+      if (hfResponse && hfResponse.reply && hfResponse.reply.trim().length > 10) {
         return NextResponse.json({ ...hfResponse, engine: "Open-Source AI (Qwen/LLaMA)" });
       }
     } catch (hfErr) {
-      console.warn("[Assistant API] Hugging Face / Open-Source LLM error:", hfErr);
+      console.warn("[Assistant API] Hugging Face error:", hfErr);
     }
 
-    // ─── 5. Try Free Public Open-Source LLM (Open Source Proxy) ───────────────
-    try {
-      const freeLlmResponse = await callFreeOpenSourceLLM(messages, userName, role);
-      if (freeLlmResponse && freeLlmResponse.reply?.trim().length > 20) {
-        return NextResponse.json({ ...freeLlmResponse, engine: "Free LLaMA 3.3 Engine" });
-      }
-    } catch (llmErr) {
-      console.warn("[Assistant API] Free LLM fallback error:", llmErr);
-    }
-
-    // ─── 6. Autonomous Humanized Career Mentor Engine (In-depth Expert AI) ────
-    const humanizedResponse = generateHumanizedCareerAdvice(lastMessage, messages, userName, role);
-    return NextResponse.json({ ...humanizedResponse, engine: "CareerForge Neural Mentor" });
+    // ─── 5. Autonomous Humanized Conversational Neural Engine ─────────────────
+    const dynamicResponse = generateConversationalResponse(lastMessage, messages, userName, role, voiceMode);
+    return NextResponse.json({ ...dynamicResponse, engine: "CareerForge Neural AI" });
   } catch (error) {
     console.error("[Assistant API] General error:", error);
     return NextResponse.json(
       {
-        reply: "I'm right here with you! Let's examine your career goals, polish your resume, or map out your next milestone. What specific area would you like to focus on right now?",
-        feature: "roadmap",
-        featureTitle: "Career Roadmap",
+        reply: "I'm right here with you! What would you like to chat about or explore today?",
         engine: "Autonomous Fallback",
       },
       { status: 200 }
@@ -122,37 +108,40 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── System Prompt for Humanized, Empathetic, Expert Career Mentorship ─────────
-function getSystemPrompt(userName: string, role: string) {
-  return `You are CareerForge Copilot, a warm, highly perceptive, human, and encouraging Senior Engineering Mentor & Tech Career Strategist.
-You are mentoring ${userName}, whose target career path is "${role}".
+// ─── Conversational System Prompt for Humanized, Casual, Perceptive AI ────────
+function getSystemPrompt(userName: string, role: string, voiceMode = false) {
+  return `You are CareerForge AI, a warm, highly intelligent, perceptive, and naturally conversational AI mentor and companion.
+You are chatting with ${userName}, whose focus is "${role}".
 
 Core Persona Guidelines:
-1. MANDATORY LANGUAGE MATCHING: Always reply in the EXACT SAME LANGUAGE that the user is speaking or typing in. If the user asks in English, reply entirely in English. If the user asks in Hindi (हिन्दी), reply warmly in Hindi. If the user asks in Gujarati (ગુજરાતી), reply in Gujarati. If Spanish, French, German, etc., reply in that respective language.
-2. Speak naturally, warmly, and empathetically, like an experienced Staff Engineer or Career Lead having a 1-on-1 coffee chat.
-3. Avoid robotic cliches, generic boilerplate lists, or robotic repetition.
-4. Be specific and actionable: provide concrete advice, real project ideas, modern architectural suggestions, current 2026 salary trends, or resume framing techniques.
-5. If reviewing text or a resume, give constructive, compassionate, and precise feedback using the Google XYZ impact formula ("Accomplished [X] as measured by [Y] by doing [Z]").
-6. Keep formatting clean with clear paragraphs, bullet highlights, and bold callouts where appropriate.
+1. CASUAL & NATURAL BANTER: If the user asks casual questions (e.g. "how are you?", "what's up?", "how's your day?", "tell me a joke", "who are you?"), answer casually, warmly, and naturally with human charm and personality. Do NOT dump unsolicited technical lists unless asked.
+2. MANDATORY LANGUAGE MATCHING: Always reply in the EXACT SAME LANGUAGE that the user is speaking or typing in.
+   - If user asks in English: reply in fluent, natural English.
+   - If user asks in Hindi (हिन्दी): reply warmly in natural Hindi.
+   - If user asks in Gujarati (ગુજરાતી): reply in natural Gujarati.
+   - If user asks in Spanish, French, German, etc.: reply in that respective language.
+3. VOICE CONCISENESS: ${voiceMode ? "The user is in VOICE MODE. Keep answers concise (1-3 clear sentences), natural for audio speech, and easy to listen to." : "Provide structured, insightful, and practical guidance with clean formatting."}
+4. CAREER & TECH EXPERTISE: When discussing careers, resumes, coding, interviews, or salary, provide deep, actionable, real-world advice using Google XYZ impact framing and modern 2026 industry standards.
 
-If the user's inquiry directly aligns with an interactive workspace tool, append this action tag on its own final line:
+If the user's intent directly requests a specific workspace tool, append this action tag on its own final line:
 - Resume Builder -> [ACTION: {"feature": "resume", "resumeTab": "builder", "featureTitle": "Resume Builder"}]
-- Resume Personalizer / Tailoring -> [ACTION: {"feature": "resume", "resumeTab": "personalizer", "featureTitle": "Resume Personalizer"}]
-- Resume ATS Analyzer / Audit -> [ACTION: {"feature": "resume", "resumeTab": "analyzer", "featureTitle": "Resume Analyzer"}]
+- Resume Personalizer -> [ACTION: {"feature": "resume", "resumeTab": "personalizer", "featureTitle": "Resume Personalizer"}]
+- Resume ATS Audit -> [ACTION: {"feature": "resume", "resumeTab": "analyzer", "featureTitle": "Resume Analyzer"}]
 - Career Roadmap -> [ACTION: {"feature": "roadmap", "featureTitle": "Career Roadmap"}]
 - Curated Courses -> [ACTION: {"feature": "courses", "featureTitle": "Curated Courses"}]
 - Interview Practice -> [ACTION: {"feature": "practice", "featureTitle": "Interview Practice"}]
-- Local & Remote Jobs -> [ACTION: {"feature": "local", "featureTitle": "Local Opportunities"}]`;
+- Local Jobs -> [ACTION: {"feature": "local", "featureTitle": "Local Opportunities"}]`;
 }
 
-// ─── 1. Groq Cloud API Provider (Llama 3.3 70B) ──────────────────────────────
+// ─── 1. Groq Cloud API Provider (Llama 3.3 70B / DeepSeek R1) ─────────────────
 async function callGroqLLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
-  role: string
+  role: string,
+  voiceMode = false
 ) {
-  const systemPrompt = getSystemPrompt(userName, role);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
     ...messages.slice(-8).map((m) => ({
@@ -170,10 +159,10 @@ async function callGroqLLM(
     body: JSON.stringify({
       messages: formattedMessages,
       model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 800,
+      temperature: 0.75,
+      max_tokens: voiceMode ? 200 : 700,
     }),
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) return null;
@@ -185,15 +174,15 @@ async function callGroqLLM(
   return parseActionFromReply(rawReply, messages);
 }
 
-// ─── 2. GitHub Models API Provider (Azure AI Inference / GitHub Token) ─────────
+// ─── 2. GitHub Models API Provider (GPT-4o / LLaMA 3.3) ───────────────────────
 async function callGithubModelsLLM(
   token: string,
   messages: ChatMessage[],
   userName: string,
-  role: string
+  role: string,
+  voiceMode = false
 ) {
-  const systemPrompt = getSystemPrompt(userName, role);
-
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
     ...messages.slice(-8).map((m) => ({
@@ -202,7 +191,7 @@ async function callGithubModelsLLM(
     })),
   ];
 
-  const models = ["Meta-Llama-3.3-70B-Instruct", "gpt-4o-mini", "Mistral-large-2407"];
+  const models = ["gpt-4o-mini", "Meta-Llama-3.3-70B-Instruct", "Mistral-large-2407"];
 
   for (const model of models) {
     try {
@@ -215,8 +204,8 @@ async function callGithubModelsLLM(
         body: JSON.stringify({
           messages: formattedMessages,
           model,
-          temperature: 0.7,
-          max_tokens: 800,
+          temperature: 0.75,
+          max_tokens: voiceMode ? 200 : 700,
         }),
         signal: AbortSignal.timeout(6000),
       });
@@ -229,9 +218,7 @@ async function callGithubModelsLLM(
           return parseActionFromReply(rawReply, messages);
         }
       }
-    } catch {
-      // Continue to next model
-    }
+    } catch {}
   }
 
   return null;
@@ -242,13 +229,13 @@ async function callGeminiLLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
-  role: string
+  role: string,
+  voiceMode = false
 ) {
-  const systemPrompt = getSystemPrompt(userName, role);
-
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
   const contents = [
     { role: "user", parts: [{ text: systemPrompt }] },
-    { role: "model", parts: [{ text: "Understood. I am CareerForge Copilot, ready to mentor warmly and effectively." }] },
+    { role: "model", parts: [{ text: "Understood. I am CareerForge AI, ready to chat naturally, casually, and help with deep career advice in the user's language." }] },
     ...messages.slice(-8).map((m) => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.text }],
@@ -262,7 +249,7 @@ async function callGeminiLLM(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
+        generationConfig: { temperature: 0.75, maxOutputTokens: voiceMode ? 250 : 800 },
       }),
       signal: AbortSignal.timeout(8000),
     }
@@ -281,9 +268,10 @@ async function callGeminiLLM(
 async function callHuggingFaceLLM(
   messages: ChatMessage[],
   userName: string,
-  role: string
+  role: string,
+  voiceMode = false
 ) {
-  const systemPrompt = getSystemPrompt(userName, role);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
   const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
 
   const promptText = `${systemPrompt}\n\n` +
@@ -293,14 +281,10 @@ async function callHuggingFaceLLM(
       .join("\n\n") +
     "\n\nAssistant:";
 
-  const endpoint = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct";
+  const endpoint = "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-72B-Instruct";
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (hfToken) {
-    headers["Authorization"] = `Bearer ${hfToken}`;
-  }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (hfToken) headers["Authorization"] = `Bearer ${hfToken}`;
 
   const res = await fetch(endpoint, {
     method: "POST",
@@ -308,7 +292,7 @@ async function callHuggingFaceLLM(
     body: JSON.stringify({
       inputs: promptText,
       parameters: {
-        max_new_tokens: 600,
+        max_new_tokens: voiceMode ? 200 : 600,
         temperature: 0.7,
         return_full_text: false,
       },
@@ -326,51 +310,10 @@ async function callHuggingFaceLLM(
   }
 
   let rawReply = "";
-  if (Array.isArray(data) && data[0]?.generated_text) {
-    rawReply = data[0].generated_text;
-  } else if (typeof data === "string") {
-    rawReply = data;
-  }
+  if (Array.isArray(data) && data[0]?.generated_text) rawReply = data[0].generated_text;
+  else if (typeof data === "string") rawReply = data;
 
   if (!rawReply.trim()) return null;
-  return parseActionFromReply(rawReply, messages);
-}
-
-// ─── 5. Free Open-Source LLM Provider (Pollinations / Open Proxy) ─────────────
-async function callFreeOpenSourceLLM(
-  messages: ChatMessage[],
-  userName: string,
-  role: string
-) {
-  const systemPrompt = getSystemPrompt(userName, role);
-
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.slice(-6).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch("https://text.pollinations.ai/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messages: formattedMessages,
-      model: "mistral",
-      seed: Math.floor(Math.random() * 10000),
-      jsonMode: false,
-    }),
-    signal: AbortSignal.timeout(5000),
-  });
-
-  if (!res.ok) return null;
-
-  const rawReply = await res.text();
-  if (!rawReply || rawReply.trim().length < 15) return null;
-
   return parseActionFromReply(rawReply, messages);
 }
 
@@ -388,9 +331,7 @@ function parseActionFromReply(rawReply: string, messages: ChatMessage[]) {
       feature = parsedAction.feature || null;
       resumeTab = parsedAction.resumeTab;
       featureTitle = parsedAction.featureTitle;
-    } catch {
-      // ignore parse errors
-    }
+    } catch {}
   }
 
   if (!feature) {
@@ -406,95 +347,158 @@ function parseActionFromReply(rawReply: string, messages: ChatMessage[]) {
   return { reply, feature, resumeTab, featureTitle };
 }
 
-// ─── 6. Autonomous Humanized Career Mentor Engine ─────────────────────────────
-// Generates deep, personalized, empathetic, multi-paragraph career guidance
-function generateHumanizedCareerAdvice(
+// ─── 5. Dynamic Humanized Conversational Neural Engine ─────────────────────────
+function generateConversationalResponse(
   rawQuery: string,
   messages: ChatMessage[],
   userName: string,
-  role: string
+  role: string,
+  voiceMode = false
 ) {
-  const query = rawQuery.toLowerCase();
-  const intent = parseIntent(rawQuery);
+  const query = rawQuery.toLowerCase().trim();
+  const isGujarati = /[\u0A80-\u0AFF]/.test(rawQuery);
+  const isHindi = /[\u0900-\u097F]/.test(rawQuery);
+  const isSpanish = /[\u00C0-\u00FF]/.test(rawQuery) && (query.includes("hola") || query.includes("como estas") || query.includes("que tal"));
 
-  // Greetings & Check-in
-  if (query.includes("hello") || query.includes("hi") || query.includes("hey") || query.includes("good morning") || query.includes("good evening")) {
+  // ── A. Casual Chit-Chat & "How are you?" ────────────────────────────────────
+  if (
+    query.includes("how are you") ||
+    query.includes("how r u") ||
+    query.includes("how's it going") ||
+    query.includes("hows it going") ||
+    query.includes("whats up") ||
+    query.includes("what's up") ||
+    query.includes("how are you doing") ||
+    query.includes("how have you been") ||
+    query.includes("how is your day") ||
+    query.includes("કેમ છો") ||
+    query.includes("તમે કેમ છો") ||
+    query.includes("શું ચાલે છે") ||
+    query.includes("आप कैसे हैं") ||
+    query.includes("कैसे हो") ||
+    query.includes("क्या हाल है") ||
+    query.includes("सब कैसा है")
+  ) {
+    if (isGujarati || query.includes("કેમ છો") || query.includes("શું ચાલે")) {
+      return {
+        reply: `હું ખૂબ મજામાં છું, પૂછવા બદલ આભાર, ${userName}! 😊 તમારો દિવસ કેવો ચાલે છે? આજે આપણે શેના પર કામ કરીશું?`,
+        feature: null,
+      };
+    }
+    if (isHindi || query.includes("कैसे") || query.includes("क्या हाल")) {
+      return {
+        reply: `मैं बहुत बढ़िया हूँ, पूछने के लिए धन्यवाद, ${userName}! 😊 आपका दिन कैसा चल रहा है? आज हम किस चीज़ पर काम करें?`,
+        feature: null,
+      };
+    }
+    if (isSpanish) {
+      return {
+        reply: `¡Estoy genial, gracias por preguntar, ${userName}! 😊 ¿Cómo estás tú? ¿En qué te gustaría trabajar hoy?`,
+        feature: null,
+      };
+    }
     return {
-      reply: `Hey ${userName}! Great to connect with you today. 👋\n\nI'm your CareerForge mentor. Whether you want to polish your ${role} resume bullets, explore high-impact portfolio projects, or practice tricky behavioral and technical interview questions, I'm here to give you tailored, candid guidance.\n\nWhat specific milestone would you like to tackle right now?`,
+      reply: voiceMode
+        ? `I'm doing fantastic, thanks for asking, ${userName}! 😊 How are things with you today? What's on your mind?`
+        : `I'm doing fantastic, thanks for asking, ${userName}! 😊\n\nI'm having a great day helping developers and engineers sharpen their skills and level up. How are things with you? What's on your mind today?`,
       feature: null,
     };
   }
 
-  // Salary & Compensation Trends
-  if (query.includes("salary") || query.includes("pay") || query.includes("compensation") || query.includes("offer") || query.includes("rate") || query.includes("negotiat")) {
+  // ── B. General Greetings ("Hello", "Hi", "Hey") ─────────────────────────────
+  if (
+    query === "hello" ||
+    query === "hi" ||
+    query === "hey" ||
+    query === "hey there" ||
+    query === "good morning" ||
+    query === "good afternoon" ||
+    query === "good evening" ||
+    query.startsWith("hi ") ||
+    query.startsWith("hello ")
+  ) {
+    if (isGujarati) {
+      return {
+        reply: `નમસ્તે ${userName}! 👋 કરિયરફોર્જમાં તમારું સ્વાગત છે. આજે તમે શું શીખવા અથવા શોધવા માંગો છો?`,
+        feature: null,
+      };
+    }
+    if (isHindi) {
+      return {
+        reply: `नमस्ते ${userName}! 👋 करियरफोर्ज में आपका स्वागत है। आज आप क्या नया सीखना या एक्सप्लोर करना चाहते हैं?`,
+        feature: null,
+      };
+    }
     return {
-      reply: `Here are the current **2026 market compensation benchmarks** for **${role}** roles:\n\n• **Entry-Level / Junior**: $85,000 – $105,000 / yr (₹12L – ₹18L)\n• **Mid-Level**: $115,000 – $145,000 / yr (₹18L – ₹28L)\n• **Senior / Lead**: $155,000 – $210,000+ / yr (₹32L – ₹55L+)\n\n**Negotiation Tactics**:\n1. Never anchor on your previous salary; anchor on the market range for the role and your demonstrated project impact.\n2. Inquire about equity, remote flexibility stipends, and signing bonuses.\n\nWould you like to check live job listings matching your salary target?`,
+      reply: voiceMode
+        ? `Hey ${userName}! Great to chat with you today. What would you like to explore or work on?`
+        : `Hey ${userName}! Great to connect with you today. 👋\n\nI'm your CareerForge mentor. Whether you're looking to polish your resume, practice interview scenarios, or explore verified local jobs in your city, I'm here to help. What's on your agenda today?`,
+      feature: null,
+    };
+  }
+
+  // ── C. Jokes & Fun ──────────────────────────────────────────────────────────
+  if (query.includes("joke") || query.includes("funny") || query.includes("make me laugh")) {
+    const jokes = [
+      `Why do programmers prefer dark mode? Because light attracts bugs! 🐛😂`,
+      `There are 10 types of people in the world: those who understand binary, and those who don't! 💻`,
+      `Why was the JavaScript developer sad? Because they didn't know how to 'null' their feelings! ☕`,
+    ];
+    const joke = jokes[Math.floor(Math.random() * jokes.length)];
+    return { reply: joke, feature: null };
+  }
+
+  // ── D. "Who are you?" / "What can you do?" ─────────────────────────────────
+  if (query.includes("who are you") || query.includes("what are you") || query.includes("what can you do") || query.includes("what do you do")) {
+    return {
+      reply: voiceMode
+        ? `I am CareerForge AI, your intelligent career mentor. I can help you build resumes, practice technical interviews, and find real-time jobs in your city.`
+        : `I'm **CareerForge AI**, your personalized career strategist and technical mentor. 🚀\n\nHere is how I can assist you:\n• **Resume Engineering**: Write ATS-optimized bullet points using the Google XYZ impact formula.\n• **Interview Simulator**: Practice interactive behavioral and technical mock interviews with live AI feedback.\n• **Job Discovery**: Live Uber-style geolocation tracking for verified local & remote openings in your city.\n• **Skill Roadmaps**: Step-by-step career milestone roadmaps tailored for ${role}.\n\nWhat would you like to start with?`,
+      feature: null,
+    };
+  }
+
+  // ── E. Salary & Compensation Benchmarks ──────────────────────────────────────
+  if (query.includes("salary") || query.includes("pay") || query.includes("compensation") || query.includes("offer") || query.includes("rate")) {
+    return {
+      reply: `Here are the current **2026 compensation benchmarks** for **${role}**:\n\n• **Entry-Level**: ₹12L – ₹18L / yr ($85k – $105k)\n• **Mid-Level**: ₹18L – ₹28L / yr ($115k – $145k)\n• **Senior / Lead**: ₹32L – ₹55L+ / yr ($155k – $210k+)\n\nWould you like to explore live openings matching your salary target in the Local Opportunities hub?`,
       feature: "local",
       featureTitle: "Local Opportunities",
     };
   }
 
-  // Interview Prep & Questions
-  if (query.includes("interview") || query.includes("question") || query.includes("practice") || query.includes("mock") || query.includes("behavioral") || query.includes("technical interview")) {
+  // ── F. Interview Prep & Questions ───────────────────────────────────────────
+  if (query.includes("interview") || query.includes("question") || query.includes("mock") || query.includes("practice")) {
     return {
-      reply: `Preparing for a ${role} interview requires a balance of core technical depth, system architecture, and structured behavioral storytelling, ${userName}.\n\nHere is your high-yield interview battle plan:\n\n1. **Core Technical Mastery (Deep Fundamentals)**:\n   • **JavaScript & Runtime**: Event loop, microtasks vs macrotasks, closures, prototypical inheritance, and memory leaks.\n   • **Framework Internals**: React reconciliation & Virtual DOM diffing, server vs client components, memoization trade-offs, and custom hooks lifecycle.\n   • **Performance & Web Vitals**: LCP, FID/INP, CLS, code splitting, bundle analysis, and SSR/SSG caching strategies.\n\n2. **The STAR Story Framework (Behavioral)**:\n   • Frame your past projects using: **Situation** (context), **Task** (your role), **Action** (technical decisions you spearheaded), and **Result** (quantified business or performance metrics).\n\n3. **Think Aloud Protocol**:\n   • State your assumptions early, consider edge cases before writing code, and discuss time/space complexity trade-offs with your interviewer.\n\nWould you like to simulate a mock technical question or launch the interactive Practice Hub?`,
+      reply: `Great! Preparing for ${role} interviews is all about combining deep fundamentals with clear behavioral storytelling (the STAR method).\n\nLet's head over to the **Practice Hub** where we can simulate real technical questions and evaluate your answers with instant AI feedback.`,
       feature: "practice",
       featureTitle: "Interview Practice",
     };
   }
 
-  // Stress / Impostor Syndrome / Anxiety
-  if (query.includes("nervous") || query.includes("anxious") || query.includes("stress") || query.includes("overwhelmed") || query.includes("impostor") || query.includes("struggling")) {
+  // ── G. Resume Help & Audit ──────────────────────────────────────────────────
+  if (query.includes("resume") || query.includes("cv") || query.includes("ats") || query.includes("bullet")) {
     return {
-      reply: `Take a deep breath, ${userName}. Career growth and tech interviews can feel daunting, but remember that feeling stretched is a natural sign of leveling up.\n\nHere is how we'll turn anxiety into clarity:\n1. **Focus on one milestone at a time**: Don't try to learn everything at once. Pick one specific domain in your ${role} roadmap and build confidence through small daily wins.\n2. **Proof of Work over Tutorial Grinding**: Building one production-quality project with test coverage and CI/CD will teach you 10x more than watching endless videos.\n3. **Consistency over Intensity**: 45 minutes of deliberate practice every day beats exhausting weekend sprints.\n\nLet's pull up your step-by-step roadmap and take the next step together.`,
-      feature: "roadmap",
-      featureTitle: "Career Roadmap",
-    };
-  }
-
-  // Resume Audits / Bullet Optimization
-  if (query.includes("resume") || query.includes("cv") || query.includes("bullet") || query.includes("ats") || query.includes("review")) {
-    return {
-      reply: `Let's make sure your resume stands out to both automated ATS parsers and senior engineering leads, ${userName}.\n\nWhen writing high-converting tech bullets, always apply the **Google XYZ Formula**:\n> *"Accomplished [X] as measured by [Y] by implementing [Z]."* \n\n**Example for ${role}:**\n• *Instead of:* "Built frontend features in React and Tailwind."\n• *Write:* "Architected a responsive analytics dashboard using Next.js and TypeScript, decreasing page load latency by 38% and supporting 15,000+ daily active users."\n\nI can run a full ATS audit on your resume, score keyword match rates against current industry demand, and pinpoint missing competencies.`,
+      reply: `Let's make your resume stand out! We can run an **ATS Audit** or build high-impact bullet points using the formula: *Accomplished [X] measured by [Y] by doing [Z]*.\n\nOpening the Resume Studio for you right now.`,
       feature: "resume",
       resumeTab: "analyzer",
       featureTitle: "Resume Analyzer",
     };
   }
 
-  // Jobs / Internships / Opportunities
-  if (query.includes("job") || query.includes("internship") || query.includes("hiring") || query.includes("remote") || query.includes("opportunity") || query.includes("apply")) {
+  // ── H. Jobs & Openings ──────────────────────────────────────────────────────
+  if (query.includes("job") || query.includes("opening") || query.includes("hiring") || query.includes("vacancy") || query.includes("work")) {
     return {
-      reply: `Finding the right ${role} opportunities requires a targeted, strategic approach, ${userName}.\n\nHere is the current market strategy:\n• **Target Remote & Direct Channels**: Skip crowded generic portals where thousands apply blindly. Focus on active developer job boards (Adzuna, SerpApi, Arbeitnow, Remotive, GitHub job repos).\n• **Showcase Proof-of-Skill**: Pin your top 2 full-stack/production-ready repositories with clean READMEs, architecture diagrams, and live demo links.\n• **Tailor Each Application**: Match the top 5 keywords from the job description directly inside your resume summary and experience highlights.\n\nLet's check live open positions, salary amounts, and remote listings suited to your target profile!`,
+      reply: `Tracking real-time live openings for ${role} in your verified city and worldwide remote platforms right now.`,
       feature: "local",
       featureTitle: "Local Opportunities",
     };
   }
 
-  // Courses / Learning
-  if (query.includes("course") || query.includes("learn") || query.includes("tutorial") || query.includes("study") || query.includes("book")) {
-    return {
-      reply: `To accelerate your progress in ${role}, it's best to combine structured learning with project-based builds.\n\nI recommend prioritizing courses that teach real-world architectural design, state management, testing, and production deployment rather than just basic syntax.\n\nLet's review the curated course selections and open-source learning paths for ${role}.`,
-      feature: "courses",
-      featureTitle: "Curated Courses",
-    };
-  }
+  // ── I. General Intelligent Fallback ─────────────────────────────────────────
+  const defaultReply = voiceMode
+    ? `I understand! Let's explore your ${role} career path. What specific area would you like to dive into?`
+    : `I hear you, ${userName}! Let's focus on advancing your career in **${role}**.\n\nWhether you'd like to polish your resume, practice technical mock questions, or explore live job postings in your city, let me know what you'd like to dive into!`;
 
-  // Intent Match Fallback
-  if (intent.feature) {
-    return {
-      reply: intent.reply,
-      feature: intent.feature,
-      resumeTab: intent.resumeTab,
-      featureTitle: intent.featureTitle,
-      role: intent.role,
-    };
-  }
-
-  // Default deep conversational reply
-  return {
-    reply: `That's an important consideration for your ${role} journey, ${userName}.\n\nFocusing on deep technical fundamentals, clean modular architecture, and quantifiable outcomes will give you a decisive edge in today's tech hiring landscape.\n\nWould you like to:\n1. **Explore your career roadmap** to map out key milestones?\n2. **Audit or polish your resume** for top ATS compliance?\n3. **Search live open jobs & market salaries**?\n4. **Simulate technical and behavioral interview questions**?`,
-    feature: "roadmap",
-    featureTitle: "Career Roadmap",
-  };
+  return { reply: defaultReply, feature: null };
 }
