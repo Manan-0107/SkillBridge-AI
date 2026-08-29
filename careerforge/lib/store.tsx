@@ -15,12 +15,24 @@ interface AppState {
   ready: boolean;
   signIn: (email: string, name?: string) => Promise<void>;
   signInWithGoogle: (name: string, email: string, picture?: string) => Promise<void>;
+  signInWithGithub: (name: string, email: string, picture?: string) => Promise<void>;
+  signInWithPhone: (phone: string, name?: string) => Promise<void>;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
 const STORAGE_KEY = "careerforge.user";
+
+function extractDisplayName(email: string, name?: string): string {
+  if (name && name.trim()) return name.trim();
+  const username = email.split("@")[0] || "User";
+  return username
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -44,9 +56,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
   const signIn = async (email: string, name?: string) => {
+    const displayName = extractDisplayName(email, name);
     // Immediately sign in locally so the UI responds instantly
     const localUser: User = {
-      name: name || email.split("@")[0],
+      name: displayName,
       email,
       authProvider: "email",
       targetRole: user?.targetRole ?? null,
@@ -101,6 +114,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
+  const signInWithGithub = async (name: string, email: string, picture?: string) => {
+    const localUser: User = {
+      name: name || email.split("@")[0],
+      email,
+      picture,
+      authProvider: "github",
+      targetRole: user?.targetRole ?? null,
+      dbId: null,
+    };
+    persist(localUser);
+
+    try {
+      const dbRow = await upsertUser({
+        email,
+        name: localUser.name,
+        picture,
+        authProvider: "github",
+        targetRole: localUser.targetRole ?? undefined,
+      });
+      if (dbRow?.id) {
+        const updated = { ...localUser, dbId: dbRow.id };
+        persist(updated);
+      }
+    } catch (e) {
+      console.warn("[auth] DB upsert failed:", e);
+    }
+  };
+
+  /** Phone sign-in — upserts phone user to DB then persists locally. */
+  const signInWithPhone = async (phone: string, name?: string) => {
+    const cleanPhone = phone.trim();
+    const formattedEmail = `${cleanPhone.replace(/[^0-9]/g, "")}@phone.careerforge.io`;
+    const localUser: User = {
+      name: name || `User (${cleanPhone})`,
+      email: formattedEmail,
+      phone: cleanPhone,
+      authProvider: "phone",
+      targetRole: user?.targetRole ?? null,
+      dbId: null,
+    };
+    persist(localUser);
+
+    try {
+      const dbRow = await upsertUser({
+        email: formattedEmail,
+        name: localUser.name,
+        phone: cleanPhone,
+        authProvider: "phone",
+        targetRole: localUser.targetRole ?? undefined,
+      });
+      if (dbRow?.id) {
+        const updated = { ...localUser, dbId: dbRow.id };
+        persist(updated);
+      }
+    } catch (e) {
+      console.warn("[auth] DB upsert failed:", e);
+    }
+  };
+
   const signOut = () => persist(null);
 
   const setTargetRole = (role: RoleId) => {
@@ -117,7 +190,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ user, ready, signIn, signInWithGoogle, signOut, setTargetRole }}
+      value={{
+        user,
+        ready,
+        signIn,
+        signInWithGoogle,
+        signInWithGithub,
+        signInWithPhone,
+        signOut,
+        setTargetRole,
+      }}
     >
       {children}
     </AppContext.Provider>

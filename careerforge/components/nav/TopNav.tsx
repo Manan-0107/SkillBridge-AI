@@ -6,7 +6,6 @@ import { FeatureId } from "@/lib/intent";
 const links: { id: FeatureId; label: string }[] = [
   { id: "resume", label: "Resume" },
   { id: "roadmap", label: "Roadmap" },
-  { id: "courses", label: "Courses" },
   { id: "practice", label: "Practice" },
   { id: "local", label: "Local" },
 ];
@@ -28,7 +27,7 @@ export function TopNav({
         <button
           type="button"
           onClick={onAssistant}
-          className="font-display text-lg italic text-ink"
+          className="font-display text-xl italic text-ink"
         >
           CareerForge
         </button>
@@ -37,7 +36,7 @@ export function TopNav({
           <button
             type="button"
             onClick={onAssistant}
-            className={`text-[13px] font-medium transition-colors ${
+            className={`text-sm font-medium transition-colors ${
               view === "assistant" ? "text-ink" : "text-graphite hover:text-ink"
             }`}
           >
@@ -48,7 +47,7 @@ export function TopNav({
               key={l.id}
               type="button"
               onClick={() => onFeature(l.id)}
-              className={`text-[13px] font-medium transition-colors ${
+              className={`text-sm font-medium transition-colors ${
                 view === l.id ? "text-ink" : "text-graphite hover:text-ink"
               }`}
             >
@@ -66,13 +65,13 @@ export function TopNav({
               className="hidden h-7 w-7 rounded-full sm:block"
             />
           ) : null}
-          <span className="hidden text-[13px] text-graphite sm:inline">
+          <span className="hidden text-sm text-graphite sm:inline">
             {user?.name}
           </span>
           <button
             type="button"
             onClick={signOut}
-            className="text-[13px] font-medium text-graphite underline decoration-line underline-offset-4 hover:text-ink"
+            className="text-sm font-medium text-graphite underline decoration-line underline-offset-4 hover:text-ink"
           >
             Sign out
           </button>
@@ -83,7 +82,7 @@ export function TopNav({
         <button
           type="button"
           onClick={onAssistant}
-          className="whitespace-nowrap text-[13px] font-medium text-graphite hover:text-ink"
+          className="whitespace-nowrap text-sm font-medium text-graphite hover:text-ink"
         >
           Assistant
         </button>
@@ -92,7 +91,7 @@ export function TopNav({
             key={l.id}
             type="button"
             onClick={() => onFeature(l.id)}
-            className="whitespace-nowrap text-[13px] font-medium text-graphite hover:text-ink"
+            className="whitespace-nowrap text-sm font-medium text-graphite hover:text-ink"
           >
             {l.label}
           </button>

@@ -1,69 +1,37 @@
 "use client";
 
-import { FormEvent, useRef, useState, useEffect } from "react";
+import { FormEvent, useRef, useState, useEffect, ChangeEvent } from "react";
 import { useApp } from "@/lib/store";
-import { parseIntent, FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
+import { FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
 
-type Msg = {
+export type Msg = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  time?: string;
+  attachedDocName?: string;
   intent?: ParsedIntent;
   redirecting?: boolean;
 };
 
-const explorationCards = [
-  {
-    icon: (
-      <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-      </svg>
-    ),
-    title: "Career Roadmap",
-    desc: "Explore step-by-step milestones & skill trees for your target role.",
-    prompt: "Show me my career roadmap and what skills to learn next",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-      </svg>
-    ),
-    title: "Curated Courses",
-    desc: "Find hand-picked tutorials, courses, and recognized certifications.",
-    prompt: "Recommend the best courses and certifications for my role",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
-    title: "Interview Practice",
-    desc: "Drill coding challenges, system design, and behavioral mock questions.",
-    prompt: "I want to practice interview questions and coding challenges",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-    title: "Local Opportunities",
-    desc: "Find active job openings, internships, and tech meetups in your area.",
-    prompt: "Show local jobs, internships, and tech meetups near me",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-    title: "Resume Suite",
-    desc: "Draft a fresh resume, personalize for roles, or scan ATS score.",
-    prompt: "Help me build or personalize my resume",
-  },
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Msg[];
+  createdAt: string;
+  updatedAt: string;
+  pinned?: boolean;
+  archived?: boolean;
+}
+
+const STORAGE_KEY = "careerforge.conversations";
+
+const quickPills = [
+  { label: "🗺️ Check Roadmap", prompt: "Show me my career roadmap" },
+  { label: "📚 Find Courses", prompt: "Recommend the best courses for my role" },
+  { label: "🎯 Interview Practice", prompt: "I want to practice interview questions" },
+  { label: "📄 Audit Resume", prompt: "Help me audit my resume" },
+  { label: "📍 Local Jobs", prompt: "Show local jobs and meetups near me" },
 ];
 
 export function AssistantHome({
@@ -72,37 +40,181 @@ export function AssistantHome({
   onRedirect: (feature: FeatureId, tab?: ResumeTab) => void;
 }) {
   const { user, setTargetRole } = useApp();
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<"all" | "pinned" | "archived">("all");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Document attachment state
+  const [attachedFile, setAttachedFile] = useState<{
+    name: string;
+    text: string;
+  } | null>(null);
+  const [parsingDoc, setParsingDoc] = useState(false);
+
   const listRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const greetingName = user?.name || "there";
+  const userDisplayName = user?.name
+    ? user.name.split(" ")[0]
+    : user?.email
+    ? user.email.split("@")[0]
+    : "there";
 
-  // Initial greeting
+  // ─── 1. Load Conversations from LocalStorage ────────────────────────────────
   useEffect(() => {
-    setMessages([
-      {
-        id: "intro-1",
-        role: "assistant",
-        text: `Hello ${greetingName}! I'm your CareerForge AI Copilot. Tell me what you'd like to achieve today — whether it's checking your career roadmap, finding courses, preparing for interviews, exploring local jobs, or building an ATS-ready resume.`,
-      },
-    ]);
-  }, [greetingName]);
-
-  // Countdown timer effect
-  useEffect(() => {
-    if (redirectCountdown === null) return;
-    if (redirectCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRedirectCountdown((prev) => (prev !== null ? prev - 1 : null));
-      }, 1000);
-      return () => clearTimeout(timer);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: Conversation[] = JSON.parse(raw);
+        if (parsed.length > 0) {
+          setConversations(parsed);
+          const firstActive = parsed.find((c) => !c.archived) || parsed[0];
+          setActiveConvId(firstActive.id);
+          return;
+        }
+      }
+    } catch {
+      // ignore
     }
-  }, [redirectCountdown]);
 
+    // Create Initial Default Conversation
+    createNewConversation();
+  }, [user?.name, user?.email]);
+
+  // ─── 2. Persist Conversations ───────────────────────────────────────────────
+  const saveConversations = (updated: Conversation[]) => {
+    setConversations(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  const getGreetingMessage = (): Msg => {
+    const hour = new Date().getHours();
+    const timeOfDay =
+      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    return {
+      id: "intro-1",
+      role: "assistant",
+      time: now,
+      text: `${timeOfDay}, ${userDisplayName}! 👋 I'm your CareerForge AI Copilot. What would you like to work on today?`,
+    };
+  };
+
+  // ─── 3. New Chat Action ────────────────────────────────────────────────────
+  const createNewConversation = () => {
+    const newId = `conv-${Date.now()}`;
+    const newConv: Conversation = {
+      id: newId,
+      title: "New Career Chat",
+      messages: [getGreetingMessage()],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      archived: false,
+    };
+
+    const updated = [newConv, ...conversations.filter((c) => c.id !== newId)];
+    saveConversations(updated);
+    setActiveConvId(newId);
+    setInput("");
+    setAttachedFile(null);
+  };
+
+  // Active conversation helper
+  const activeConversation =
+    conversations.find((c) => c.id === activeConvId) || conversations[0] || null;
+  const messages = activeConversation?.messages || [];
+
+  // ─── 4. Conversation Actions (Pin, Archive, Delete) ─────────────────────────
+  const togglePin = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = conversations.map((c) =>
+      c.id === convId ? { ...c, pinned: !c.pinned } : c
+    );
+    saveConversations(updated);
+  };
+
+  const toggleArchive = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = conversations.map((c) =>
+      c.id === convId ? { ...c, archived: !c.archived } : c
+    );
+    saveConversations(updated);
+    if (convId === activeConvId) {
+      const next = updated.find((c) => !c.archived);
+      if (next) setActiveConvId(next.id);
+      else createNewConversation();
+    }
+  };
+
+  const deleteConversation = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const filtered = conversations.filter((c) => c.id !== convId);
+    if (filtered.length === 0) {
+      createNewConversation();
+    } else {
+      saveConversations(filtered);
+      if (convId === activeConvId) {
+        setActiveConvId(filtered[0].id);
+      }
+    }
+  };
+
+  // ─── 5. Document Upload Handler ─────────────────────────────────────────────
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setParsingDoc(true);
+    const filename = file.name;
+    const isText =
+      file.type.includes("text") ||
+      file.name.endsWith(".txt") ||
+      file.name.endsWith(".md");
+
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const textContent = (event.target?.result as string) || "";
+        setAttachedFile({ name: filename, text: textContent });
+        setParsingDoc(false);
+      };
+      reader.readAsText(file);
+    } else {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
+        const data = await res.json();
+        setAttachedFile({
+          name: filename,
+          text: data.text || `Attached document: ${filename}`,
+        });
+      } catch {
+        setAttachedFile({
+          name: filename,
+          text: `Attached document: ${filename}`,
+        });
+      } finally {
+        setParsingDoc(false);
+      }
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ─── 6. Auto Scroll & Timers ────────────────────────────────────────────────
   const scrollToBottom = () => {
     window.setTimeout(() => {
       if (listRef.current) {
@@ -115,14 +227,6 @@ export function AssistantHome({
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `cancelled-${Date.now()}`,
-        role: "assistant",
-        text: "Auto-redirection cancelled. You can continue chatting or explore other topics.",
-      },
-    ]);
   };
 
   const executeRedirect = (feature: FeatureId, tab?: ResumeTab) => {
@@ -132,48 +236,142 @@ export function AssistantHome({
     onRedirect(feature, tab);
   };
 
-  const runPrompt = (prompt: string) => {
-    if (!prompt.trim() || busy) return;
+  // ─── 7. Send Prompt via LLM Backend ─────────────────────────────────────────
+  const runPrompt = async (prompt: string) => {
+    if ((!prompt.trim() && !attachedFile) || busy || !activeConversation) return;
     setBusy(true);
 
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const userMsgId = `user-${Date.now()}`;
     const userMsgText = prompt.trim();
-    setMessages((prev) => [...prev, { id: userMsgId, role: "user", text: userMsgText }]);
+    const docInfo = attachedFile;
+
+    // Full prompt sent to LLM including attached document text
+    let fullPromptForLlm = userMsgText;
+    if (docInfo) {
+      fullPromptForLlm = userMsgText
+        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${docInfo.text}`
+        : `Please review and analyze my attached document: ${docInfo.name}\n\n${docInfo.text}`;
+    }
+
+    // Chat Title
+    let chatTitle = activeConversation.title;
+    if (chatTitle === "New Career Chat" || chatTitle === "New Conversation") {
+      const displayTitle = userMsgText || `Review: ${docInfo?.name || "Document"}`;
+      chatTitle = displayTitle.slice(0, 32) + (displayTitle.length > 32 ? "…" : "");
+    }
+
+    const nextMessages: Msg[] = [
+      ...messages,
+      {
+        id: userMsgId,
+        role: "user",
+        text: userMsgText || `Uploaded document: ${docInfo?.name}`,
+        attachedDocName: docInfo?.name,
+        time: now,
+      },
+    ];
+
+    const updatedConv: Conversation = {
+      ...activeConversation,
+      title: chatTitle,
+      messages: nextMessages,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedList = conversations.map((c) =>
+      c.id === activeConversation.id ? updatedConv : c
+    );
+    saveConversations(updatedList);
+    setAttachedFile(null);
     scrollToBottom();
 
-    const intent = parseIntent(userMsgText);
-    if (intent.role) setTargetRole(intent.role);
+    try {
+      const res = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map((m, idx) => ({
+            role: m.role,
+            text: idx === nextMessages.length - 1 ? fullPromptForLlm : m.text,
+          })),
+          userProfile: {
+            name: user?.name,
+            email: user?.email,
+            targetRole: user?.targetRole || undefined,
+          },
+          targetRole: user?.targetRole || "frontend",
+        }),
+      });
 
-    // Simulate conversational AI processing
-    window.setTimeout(() => {
-      const assistantMsgId = `ai-${Date.now()}`;
-      const hasFeature = Boolean(intent.feature);
+      if (!res.ok) throw new Error("Chat request failed");
+      const data = await res.json();
 
-      setMessages((prev) => [
-        ...prev,
+      const replyText =
+        data.reply ||
+        "I'm here to support your career journey. What would you like to explore next?";
+      const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const hasFeature = Boolean(data.feature);
+
+      const intent: ParsedIntent = {
+        feature: data.feature || null,
+        featureTitle: data.featureTitle,
+        resumeTab: data.resumeTab,
+        reply: replyText,
+      };
+
+      if (data.role) setTargetRole(data.role);
+
+      const finalMessages: Msg[] = [
+        ...nextMessages,
         {
-          id: assistantMsgId,
+          id: `ai-${Date.now()}`,
           role: "assistant",
-          text: intent.reply,
+          time: replyTime,
+          text: replyText,
           intent,
           redirecting: hasFeature,
         },
-      ]);
+      ];
+
+      const finalizedConv: Conversation = {
+        ...updatedConv,
+        messages: finalMessages,
+        updatedAt: new Date().toISOString(),
+      };
+
+      saveConversations(
+        conversations.map((c) => (c.id === finalizedConv.id ? finalizedConv : c))
+      );
       scrollToBottom();
 
-      if (hasFeature && intent.feature) {
-        const featureToOpen = intent.feature;
-        const tabToOpen = intent.resumeTab;
-
-        setRedirectCountdown(2);
+      if (hasFeature && data.feature) {
+        setRedirectCountdown(3);
         const timer = setTimeout(() => {
-          executeRedirect(featureToOpen, tabToOpen);
-        }, 2200);
+          executeRedirect(data.feature, data.resumeTab);
+        }, 3200);
         setActiveTimer(timer);
       } else {
         setBusy(false);
       }
-    }, 400);
+    } catch (err) {
+      console.error("[AssistantHome] LLM call error:", err);
+      const fallbackMessages: Msg[] = [
+        ...nextMessages,
+        {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          text: "I am right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+        },
+      ];
+      saveConversations(
+        conversations.map((c) =>
+          c.id === updatedConv.id ? { ...updatedConv, messages: fallbackMessages } : c
+        )
+      );
+      setBusy(false);
+    }
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -183,160 +381,356 @@ export function AssistantHome({
     runPrompt(value);
   };
 
+  // Filter conversations
+  const filteredConversations = conversations.filter((c) => {
+    if (sidebarTab === "pinned") return c.pinned && !c.archived;
+    if (sidebarTab === "archived") return c.archived;
+    return !c.archived;
+  });
+
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex min-h-[calc(100vh-4.25rem)] flex-col bg-paper">
-      {/* Scrollable Chat / AI Exploration Area */}
-      <div ref={listRef} className="flex-1 overflow-y-auto">
-        <div className="app-shell flex flex-col py-8 md:py-12">
-          {emptyThread && (
-            <div className="mb-8 text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-line bg-white/80 px-3.5 py-1 text-xs font-medium text-graphite shadow-sm backdrop-blur">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                CareerForge AI Copilot &bull; Ready
-              </div>
-              <h1 className="mt-4 font-display text-3xl italic text-ink md:text-5xl">
-                What are you looking to work on?
-              </h1>
-              <p className="mx-auto mt-3 max-w-lg text-sm text-graphite leading-relaxed">
-                Ask in natural language. I’ll provide personalized guidance and take you straight to the right workspace tools.
-              </p>
-            </div>
-          )}
-
-          {/* Conversation Stream */}
-          <div className="space-y-4 w-full">
-            {messages.map((m) => {
-              const isUser = m.role === "user";
-              return (
-                <div
-                  key={m.id}
-                  className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-                >
-                  {!isUser && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-paper text-xs font-semibold shadow-sm">
-                      AI
-                    </div>
-                  )}
-
-                  <div className={`max-w-[85%] space-y-3`}>
-                    <div
-                      className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                        isUser
-                          ? "bg-ink text-paper"
-                          : "border border-line bg-white text-ink"
-                      }`}
-                    >
-                      <p>{m.text}</p>
-                    </div>
-
-                    {/* Feature Navigation Card */}
-                    {m.intent?.feature && (
-                      <div className="rounded-xl border border-line bg-neutral-50/90 p-4 shadow-sm space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded bg-ink/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink">
-                              {m.intent.badge || "Workspace Tool"}
-                            </span>
-                            <span className="text-xs font-medium text-graphite">
-                              {m.intent.featureTitle || m.intent.feature}
-                            </span>
-                          </div>
-                          {m.redirecting && redirectCountdown !== null && (
-                            <span className="text-xs text-amber-700 font-medium animate-pulse">
-                              Redirecting in 2s…
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          {m.redirecting && (
-                            <button
-                              type="button"
-                              onClick={cancelRedirect}
-                              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-graphite hover:bg-neutral-100 hover:text-ink transition-colors"
-                            >
-                              Stay in Chat
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-1.5 text-xs font-medium text-paper hover:bg-neutral-800 transition-colors shadow-sm"
-                          >
-                            <span>Open {m.intent.featureTitle || "Feature"}</span>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {isUser && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-ink text-xs font-semibold">
-                      {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {busy && redirectCountdown === null && (
-              <div className="flex items-center gap-2 text-xs text-graphite pl-11">
-                <span className="h-1.5 w-1.5 rounded-full bg-graphite animate-ping" />
-                AI is thinking…
-              </div>
-            )}
+    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-[#FDFDFB]">
+      
+      {/* ─── LEFT AI SIDEBAR (Vertical List of Features & Chats) ───────────── */}
+      <aside
+        className={`flex flex-col border-r border-neutral-200 bg-white transition-all duration-200 z-20 ${
+          sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
+        }`}
+      >
+        {/* Top Action: New Chat */}
+        <div className="p-3.5 border-b border-neutral-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+              AI Assistant
+            </span>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 sm:hidden"
+              title="Close sidebar"
+            >
+              ✕
+            </button>
           </div>
 
-          {/* Quick Exploration Cards (when empty thread) */}
-          {emptyThread && (
-            <div className="mt-8 space-y-3 w-full">
-              <p className="text-xs font-semibold uppercase tracking-wider text-graphite text-center">
-                Explore Career Modules
-              </p>
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 w-full">
-                {explorationCards.map((card) => (
-                  <button
-                    key={card.title}
-                    type="button"
-                    onClick={() => runPrompt(card.prompt)}
-                    className="flex flex-col text-left rounded-xl border border-line bg-white/70 p-4 transition-all hover:border-ink hover:bg-white hover:shadow-md group"
-                  >
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <div className="p-1.5 rounded-lg bg-neutral-100 group-hover:bg-neutral-200 transition-colors">
-                        {card.icon}
-                      </div>
-                      <p className="text-sm font-semibold text-ink group-hover:text-black">
-                        {card.title}
-                      </p>
-                    </div>
-                    <p className="text-xs text-graphite leading-relaxed flex-1">
-                      {card.desc}
-                    </p>
-                    <span className="mt-3 inline-flex items-center text-[11px] font-medium text-ink group-hover:translate-x-0.5 transition-transform">
-                      Try prompt &rarr;
-                    </span>
-                  </button>
-                ))}
-              </div>
+          <button
+            type="button"
+            onClick={createNewConversation}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-neutral-900 py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-black transition-all"
+          >
+            <span className="text-sm font-bold">+</span>
+            <span>New Chat</span>
+          </button>
+        </div>
+
+        {/* Vertical Navigation Sections (Modern AI Sidebar Style) */}
+        <div className="p-2 space-y-1 border-b border-neutral-100">
+          <button
+            type="button"
+            onClick={() => setSidebarTab("all")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "all"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+            <span className="flex-1 text-left">All Recent Chats</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => !c.archived).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarTab("pinned")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "pinned"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="flex-1 text-left">Pinned &amp; Starred</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => c.pinned && !c.archived).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarTab("archived")}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              sidebarTab === "archived"
+                ? "bg-neutral-100 text-neutral-900 font-semibold"
+                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+            }`}
+          >
+            <ArchiveIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+            <span className="flex-1 text-left">Archived Chats</span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              {conversations.filter((c) => c.archived).length}
+            </span>
+          </button>
+        </div>
+
+        {/* Vertical Conversation List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+            {sidebarTab === "pinned" ? "Pinned Discussions" : sidebarTab === "archived" ? "Archive" : "History"}
+          </p>
+
+          {filteredConversations.length === 0 ? (
+            <div className="p-4 text-center text-xs text-neutral-400">
+              {sidebarTab === "pinned"
+                ? "No pinned chats. Click the pin icon to keep important chats at top."
+                : sidebarTab === "archived"
+                ? "No archived conversations."
+                : "No previous chats."}
             </div>
+          ) : (
+            filteredConversations.map((conv) => {
+              const isActive = conv.id === activeConvId;
+              return (
+                <div
+                  key={conv.id}
+                  onClick={() => setActiveConvId(conv.id)}
+                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
+                    isActive
+                      ? "bg-neutral-100 font-semibold text-neutral-900"
+                      : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-600 shrink-0" />}
+                    <span className="truncate">{conv.title}</span>
+                  </div>
+
+                  {/* Actions on Hover */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Pin Action */}
+                    <button
+                      type="button"
+                      onClick={(e) => togglePin(conv.id, e)}
+                      title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-amber-600 transition-colors"
+                    >
+                      <PinIcon filled={conv.pinned} className="w-3 h-3" />
+                    </button>
+
+                    {/* Archive Action */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleArchive(conv.id, e)}
+                      title={conv.archived ? "Unarchive chat" : "Archive chat"}
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-800 transition-colors"
+                    >
+                      <ArchiveIcon className="w-3 h-3" />
+                    </button>
+
+                    {/* Delete Action */}
+                    <button
+                      type="button"
+                      onClick={(e) => deleteConversation(conv.id, e)}
+                      title="Delete chat"
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-red-600 transition-colors"
+                    >
+                      <TrashIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* AI Prompt Input Bar */}
-      <div className="sticky bottom-0 border-t border-line bg-paper/95 pb-6 pt-3.5 backdrop-blur">
-        <div className="app-shell">
-          <div>
+      {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        
+        {/* Top Chat Toolbar */}
+        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs"
+              title="Toggle Sidebar"
+            >
+              <SidebarToggleIcon className="w-3.5 h-3.5" />
+              <span>{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
+            </button>
+
+            <span className="text-xs font-semibold text-neutral-800 truncate max-w-[200px] sm:max-w-md">
+              {activeConversation?.title || "Career Copilot"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={createNewConversation}
+            className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+            title="Start new chat"
+          >
+            <span>+ New</span>
+          </button>
+        </div>
+
+        {/* Scrollable Conversation Stream */}
+        <div ref={listRef} className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
+            {emptyThread && (
+              <div className="mb-8 text-center space-y-3">
+                <h1 className="font-display text-3xl italic text-ink md:text-4xl tracking-tight">
+                  {userDisplayName ? `Hello, ${userDisplayName}` : "How can I help you today?"}
+                </h1>
+
+                <p className="mx-auto max-w-md text-xs text-graphite leading-relaxed">
+                  Ask career questions, upload your resume for review, or explore guided tracks below.
+                </p>
+              </div>
+            )}
+
+            {/* Message Stream */}
+            <div className="space-y-6 w-full">
+              {messages.map((m) => {
+                const isUser = m.role === "user";
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
+                  >
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-neutral-400 px-1">
+                      <span>{isUser ? userDisplayName : "CareerForge AI"}</span>
+                      {m.time && <span>&bull; {m.time}</span>}
+                    </div>
+
+                    <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
+                      {/* Attached Document Pill (if message included a document) */}
+                      {m.attachedDocName && (
+                        <div className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs text-neutral-700 w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                          <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
+                        </div>
+                      )}
+
+                      <div
+                        className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
+                          isUser
+                            ? "bg-ink text-paper rounded-tr-xs shadow-sm font-normal"
+                            : "border border-neutral-200/80 bg-white text-ink rounded-tl-xs shadow-xs"
+                        }`}
+                      >
+                        <p className="whitespace-pre-line">{m.text}</p>
+                      </div>
+
+                      {/* Interactive Workspace Action */}
+                      {m.intent?.feature && (
+                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-2 w-2 rounded-full bg-blue-500" />
+                              <span className="text-xs font-semibold text-neutral-900">
+                                {m.intent.featureTitle || "Workspace Tool"}
+                              </span>
+                            </div>
+                            {m.redirecting && redirectCountdown !== null && (
+                              <span className="text-[11px] font-semibold text-amber-700 animate-pulse">
+                                Opening in 3s…
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-200/60">
+                            {m.redirecting && (
+                              <button
+                                type="button"
+                                onClick={cancelRedirect}
+                                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 hover:text-ink transition-colors"
+                              >
+                                Stay in Chat
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-sm"
+                            >
+                              <span>Open {m.intent.featureTitle || "Tool"}</span>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* AI Thinking Indicator */}
+              {busy && redirectCountdown === null && (
+                <div className="flex flex-col items-start">
+                  <div className="mb-1 text-[11px] font-medium text-neutral-400 px-1">
+                    CareerForge AI is thinking…
+                  </div>
+                  <div className="rounded-2xl rounded-tl-xs border border-neutral-200 bg-white px-4 py-3 shadow-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ─── MODERN AI PROMPT COMPOSER (ChatGPT / Claude Style) ─────────────── */}
+        <div className="border-t border-neutral-200/80 bg-white/95 px-4 pb-6 pt-3.5 backdrop-blur-md">
+          <div className="mx-auto max-w-3xl space-y-2.5">
+            
+            {/* Hidden Document File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.txt,.md,.rtf"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="ai-doc-upload"
+            />
+
+            {/* AI Rounded-3xl Card Box */}
             <form
               onSubmit={onSubmit}
-              className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm focus-within:border-ink focus-within:ring-1 focus-within:ring-ink transition-all"
+              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-neutral-300 bg-neutral-50/70 p-3 shadow-sm focus-within:border-neutral-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/5 transition-all"
             >
+              {/* Attached Document Preview Badge */}
+              {attachedFile && (
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-800 animate-in fade-in shadow-2xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <PaperclipIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="font-semibold truncate">{attachedFile.name}</span>
+                    <span className="text-[10px] text-neutral-400 font-mono">(Ready for AI audit)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="rounded p-1 text-neutral-400 hover:text-red-600"
+                    title="Remove attachment"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Textarea Input */}
               <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -346,38 +740,58 @@ export function AssistantHome({
                   }
                 }}
                 rows={1}
-                placeholder="Ask anything (e.g., 'Show my roadmap', 'Find React courses', 'Practice interview questions', 'Jobs near me')..."
-                className="max-h-36 min-h-[44px] flex-1 resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:outline-none"
+                placeholder={
+                  attachedFile
+                    ? `Ask anything about ${attachedFile.name}...`
+                    : "Message CareerForge AI or attach a document..."
+                }
+                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
               />
-              <button
-                type="submit"
-                disabled={busy || !input.trim()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-paper transition-all hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-                title="Send prompt"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
+
+              {/* Bottom Control Bar inside Composer */}
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-200/50 mt-1">
+                {/* Left: Document Upload Action */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={parsingDoc}
+                  title="Attach document (PDF, DOCX, TXT)"
+                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900 transition-colors disabled:opacity-50"
+                >
+                  {parsingDoc ? (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-neutral-500 border-t-transparent animate-spin" />
+                  ) : (
+                    <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                  )}
+                  <span className="hidden sm:inline">Attach document</span>
+                </button>
+
+                {/* Right: Circular Send Button (ChatGPT style ↑) */}
+                <button
+                  type="submit"
+                  disabled={busy || (!input.trim() && !attachedFile)}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+                    input.trim() || attachedFile
+                      ? "bg-neutral-900 text-white hover:bg-black scale-100 cursor-pointer"
+                      : "bg-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
+                  }`}
+                  title="Send prompt"
+                >
+                  <ArrowUpIcon className="w-4 h-4" />
+                </button>
+              </div>
             </form>
 
-            {/* Quick pills */}
-            <div className="mt-2.5 flex items-center justify-center gap-2 overflow-x-auto text-[11px] text-graphite py-0.5">
-              <span className="text-[11px] text-graphite/70 font-medium">Quick suggestions:</span>
-              {[
-                "Show my roadmap",
-                "Find courses",
-                "Interview prep",
-                "Local opportunities",
-                "Resume builder",
-              ].map((tag) => (
+            {/* Quick Suggested Prompt Pills */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {quickPills.map((pill) => (
                 <button
-                  key={tag}
+                  key={pill.label}
                   type="button"
-                  onClick={() => runPrompt(tag)}
-                  className="whitespace-nowrap rounded-md border border-line bg-white/60 px-2 py-0.5 text-graphite hover:border-ink hover:text-ink transition-colors"
+                  onClick={() => runPrompt(pill.prompt)}
+                  className="rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-xs font-medium text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 hover:bg-neutral-50 transition-all shadow-xs"
                 >
-                  {tag}
+                  {pill.label}
                 </button>
               ))}
             </div>
@@ -385,5 +799,81 @@ export function AssistantHome({
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── SVG Vector Icons ─────────────────────────────────────────────────────────
+
+function PaperclipIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+function PinIcon({
+  filled = false,
+  className = "w-3 h-3",
+}: {
+  filled?: boolean;
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9.828 1.172a2 2 0 0 1 2.828 0l2.172 2.172a2 2 0 0 1 0 2.828l-1.414 1.414-2.828-2.828 1.414-1.414zM4.172 6.828l2.828 2.828-4.242 4.242a.5.5 0 0 1-.708 0l-1.414-1.414a.5.5 0 0 1 0-.708l4.242-4.242zM7 4l5 5-2 2-5-5 2-2z" />
+    </svg>
+  );
+}
+
+function ArchiveIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
   );
 }
