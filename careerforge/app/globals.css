@@ -59,6 +59,14 @@ body {
     margin-inline: auto;
     padding-inline: max(1.5rem, 3vw);
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

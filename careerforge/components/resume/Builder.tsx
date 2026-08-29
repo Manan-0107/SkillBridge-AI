@@ -2,7 +2,7 @@
 
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
-import { atsTemplates, AtsTemplate } from "@/app/api/resume/templates/route";
+import { atsTemplates, AtsTemplate } from "@/lib/templates";
 
 interface ExperienceItem {
   id: string;
@@ -121,13 +121,21 @@ const fontOptions = [
   { id: "mono", label: "JetBrains Mono (Technical)", className: "font-mono" },
 ];
 
-export function Builder() {
+export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
   // Layout and Styling State
   const [selectedTemplate, setSelectedTemplate] = useState<AtsTemplate["id"]>("harvard");
   const [selectedColor, setSelectedColor] = useState(colorPalettes[0]);
   const [selectedFont, setSelectedFont] = useState(fontOptions[0]);
   const [density, setDensity] = useState<"compact" | "normal" | "spacious">("compact");
   const [fitToOnePage, setFitToOnePage] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3200);
+  };
 
   // Personal Info — start empty so users fill in their own details
   const [fullName, setFullName] = useState("");
@@ -140,7 +148,7 @@ export function Builder() {
   const [github, setGithub] = useState("");
 
   // Summary
-  const [summary, setSummary] = useState("");
+  const [summary, setSummary] = useState(initialSummary || "");
 
   // Experience, Education, Skills, Projects, Certs — all empty
   const [experiences, setExperiences] = useState<ExperienceItem[]>([]);
@@ -149,6 +157,14 @@ export function Builder() {
   const [tools, setTools] = useState("");
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+
+  useEffect(() => {
+    if (initialSummary) {
+      setSummary(initialSummary);
+      setActiveTab("intermediate");
+      showToast("✓ Tailored content loaded into Intermediate Editor!");
+    }
+  }, [initialSummary]);
 
   // True when the user hasn't entered any personal info yet → show demo in preview
   const isDemo = !fullName.trim() && !email.trim() && !summary.trim() && experiences.length === 0;
@@ -172,7 +188,9 @@ export function Builder() {
   
   const [copied, setCopied] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
-  const [activeTab, setActiveTab] = useState<"layout" | "personal" | "experience" | "education" | "skills" | "projects" | "certs">("layout");
+  const [activeTab, setActiveTab] = useState<
+    "layout" | "intermediate" | "personal" | "experience" | "education" | "skills" | "projects" | "certs"
+  >("layout");
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   // Current active template definition
@@ -374,9 +392,10 @@ export function Builder() {
       a.download = `${fullName.toLowerCase().replace(/\s+/g, "_")}_resume.json`;
       a.click();
       URL.revokeObjectURL(url);
+      showToast("✓ JSONResume exported successfully!");
     } catch (e) {
       console.error(e);
-      alert("Could not export JSONResume file.");
+      showToast("Could not export JSONResume file.");
     } finally {
       setExportingJson(false);
     }
@@ -437,9 +456,9 @@ export function Builder() {
             const allSkills = json.skills.map((s: { keywords?: string[] }) => (s.keywords || []).join(", ")).filter(Boolean).join(", ");
             if (allSkills) setSkills(allSkills);
           }
-          alert("✓ Successfully imported JSONResume data!");
+          showToast("✓ Successfully imported JSONResume data!");
         } catch {
-          alert("Error parsing JSONResume file. Please check file format.");
+          showToast("Error parsing JSONResume file. Please check format.");
         }
       };
       reader.readAsText(file);
@@ -487,6 +506,13 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-neutral-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Top Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
         <div>
@@ -555,6 +581,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           <div className="flex overflow-x-auto rounded-lg border border-line bg-white/70 p-1 text-xs gap-1">
             {[
               { id: "layout", label: "🎨 ATS Layout & Themes" },
+              { id: "intermediate", label: "📝 Intermediate Data Override" },
               { id: "personal", label: "1. Personal" },
               { id: "experience", label: `2. Experience (${experiences.length})` },
               { id: "education", label: `3. Education (${educations.length})` },
@@ -566,7 +593,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`whitespace-nowrap rounded-md px-3 py-1.5 font-medium transition-colors ${
+                className={`whitespace-nowrap rounded-md px-3 py-1.5 font-medium transition-colors cursor-pointer ${
                   activeTab === tab.id
                     ? "bg-ink text-paper shadow-sm"
                     : "text-graphite hover:text-ink"
@@ -576,6 +603,164 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
               </button>
             ))}
           </div>
+
+          {/* Tab: Intermediate Data Override & Review */}
+          {activeTab === "intermediate" && (
+            <div className="rounded-xl border border-emerald-300 bg-white p-5 shadow-sm space-y-5 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between border-b border-line pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                    <h3 className="text-sm font-bold text-ink">Interactive Intermediate Edit State</h3>
+                  </div>
+                  <p className="text-xs text-graphite mt-0.5">
+                    Review and manually override populated data before final document/PDF generation.
+                  </p>
+                </div>
+                <PrimaryButton
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  className="text-xs py-1.5 px-3"
+                >
+                  ✓ Approve &amp; Download PDF
+                </PrimaryButton>
+              </div>
+
+              {/* Personal Info Overrides */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-graphite">
+                  1. Contact &amp; Header Data
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">Full Name</label>
+                    <input
+                      className={inputClasses}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder={DEMO.fullName}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">Professional Headline</label>
+                    <input
+                      className={inputClasses}
+                      value={headline}
+                      onChange={(e) => setHeadline(e.target.value)}
+                      placeholder={DEMO.headline}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">Email Address</label>
+                    <input
+                      type="email"
+                      className={inputClasses}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={DEMO.email}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">Phone Number</label>
+                    <input
+                      className={inputClasses}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder={DEMO.phone}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">Location / City</label>
+                    <input
+                      className={inputClasses}
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder={DEMO.location}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-graphite">LinkedIn Profile</label>
+                    <input
+                      className={inputClasses}
+                      value={linkedIn}
+                      onChange={(e) => setLinkedIn(e.target.value)}
+                      placeholder={DEMO.linkedIn}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary Override */}
+              <div className="space-y-2 border-t border-line pt-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-graphite">
+                    2. Professional Summary (Override)
+                  </h4>
+                  <span className="text-[10px] text-emerald-700 font-semibold">Live Synced to Preview</span>
+                </div>
+                <textarea
+                  rows={4}
+                  className={inputClasses}
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  placeholder="Paste or refine your tailored professional summary here..."
+                />
+              </div>
+
+              {/* Skills & Tools Overrides */}
+              <div className="space-y-3 border-t border-line pt-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-graphite">
+                  3. Core Skills &amp; Technical Stack
+                </h4>
+                <div>
+                  <label className="text-[11px] font-semibold text-graphite">Skills (Comma-separated)</label>
+                  <input
+                    className={inputClasses}
+                    value={skills}
+                    onChange={(e) => setSkills(e.target.value)}
+                    placeholder={DEMO.skills}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-graphite">Tools &amp; Infrastructure</label>
+                  <input
+                    className={inputClasses}
+                    value={tools}
+                    onChange={(e) => setTools(e.target.value)}
+                    placeholder={DEMO.tools}
+                  />
+                </div>
+              </div>
+
+              {/* Action Bar */}
+              <div className="flex items-center justify-between border-t border-line pt-4">
+                <GhostButton
+                  type="button"
+                  onClick={loadDemo}
+                  className="text-xs"
+                >
+                  Load Sample Data Template
+                </GhostButton>
+
+                <div className="flex items-center gap-2">
+                  <GhostButton
+                    type="button"
+                    onClick={exportJsonResume}
+                    className="text-xs"
+                  >
+                    Export JSONResume
+                  </GhostButton>
+                  <PrimaryButton
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    className="text-xs"
+                  >
+                    Finalize &amp; Download PDF →
+                  </PrimaryButton>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tab 0: ATS Layout Selector & Themes */}
           {activeTab === "layout" && (
