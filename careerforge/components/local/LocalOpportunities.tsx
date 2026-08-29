@@ -14,7 +14,6 @@ import {
   SUPPORTED_LANGUAGES,
   getGlobalVoiceLanguage,
   setGlobalVoiceLanguage,
-  speakAccessibilityGuide,
 } from "@/lib/voice";
 
 interface SuggestionItem {
@@ -38,12 +37,9 @@ export function LocalOpportunities() {
   const [currentLocation, setCurrentLocation] = useState<LocationProfile | null>(null);
   const [playingJobId, setPlayingJobId] = useState<string | null>(null);
 
-  // Multi-Language Voice State
+  // Multi-Language Voice State (Embedded inline, no giant bar)
   const [selectedLanguage, setSelectedLanguage] = useState(getGlobalVoiceLanguage());
   const [listeningSearch, setListeningSearch] = useState(false);
-  const [highContrast, setHighContrast] = useState(false);
-  const [accessibilityStep, setAccessibilityStep] = useState<number>(1);
-  const [isSpeakingGuide, setIsSpeakingGuide] = useState(false);
 
   // Email Job Alert State (LinkedIn-style)
   const [alertEmail, setAlertEmail] = useState(user?.email || "");
@@ -62,7 +58,6 @@ export function LocalOpportunities() {
   // ─── 1. Real-Time Location Auto-Detection (GPS + IP Fallback) ──────────────
   const autoDetectLocation = async () => {
     setDetectingLocation(true);
-    setAccessibilityStep(2);
     try {
       if (typeof window !== "undefined" && "geolocation" in navigator) {
         try {
@@ -118,7 +113,6 @@ export function LocalOpportunities() {
       source: "GPS-ReverseGeocode",
     });
     setShowDropdown(false);
-    setAccessibilityStep(3);
     fetchLiveJobs(searchTerm, activeType, targetRole, cityName, loc.countryCode, loc.latitude, loc.longitude);
   };
 
@@ -209,7 +203,6 @@ export function LocalOpportunities() {
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     setShowDropdown(false);
-    setAccessibilityStep(3);
     fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
   };
 
@@ -250,18 +243,6 @@ export function LocalOpportunities() {
       onEnd: () => setPlayingJobId(null),
       onError: () => setPlayingJobId(null),
     });
-  };
-
-  // ─── Step-by-Step AI Accessibility Co-Pilot Audio Guide ────────────────────
-  const handlePlayAccessibilityGuide = () => {
-    if (isSpeakingGuide) {
-      stopSpeaking();
-      setIsSpeakingGuide(false);
-      return;
-    }
-    setIsSpeakingGuide(true);
-    speakAccessibilityGuide("overview", selectedLanguage);
-    setTimeout(() => setIsSpeakingGuide(false), 9000);
   };
 
   // ─── 4. Dispatch Email Alert for a specific job opening ─────────────────────
@@ -338,107 +319,8 @@ export function LocalOpportunities() {
       id="local"
       eyebrow="Real-Time Job Tracker"
       title="Live Tech Opportunities & Real-Time Alerts"
-      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, multi-language voice detection, and AI step-by-step assistance."
+      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, multi-language voice detection, and direct registration forms."
     >
-      {/* ─── AI ACCESSIBILITY CO-PILOT & MULTI-LANGUAGE AUDIO GUIDE BAR ────────── */}
-      <div className={`mb-6 rounded-2xl border p-4 sm:p-5 transition-all shadow-md ${
-        highContrast
-          ? "border-yellow-400 bg-black text-yellow-300 ring-2 ring-yellow-400"
-          : "border-indigo-200/80 bg-gradient-to-r from-indigo-50/90 via-white to-blue-50/80 shadow-indigo-500/5"
-      }`}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600/10 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700 border border-indigo-200">
-                <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
-                AI Accessibility Co-Pilot Active
-              </span>
-              <span className="text-[11px] font-semibold text-neutral-500">
-                Step-by-Step Guided Navigation for Disabled & Screen-Reader Users
-              </span>
-            </div>
-
-            {/* Interactive Visual Step Pills */}
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              {[
-                { step: 1, title: "1. Speak / Search Role" },
-                { step: 2, title: "2. Track City (GPS)" },
-                { step: 3, title: "3. Listen Aloud" },
-                { step: 4, title: "4. Direct Apply / Form" },
-              ].map((s) => (
-                <button
-                  key={s.step}
-                  type="button"
-                  onClick={() => {
-                    setAccessibilityStep(s.step);
-                    speakAccessibilityGuide(
-                      s.step === 1 ? "search" : s.step === 2 ? "location" : s.step === 3 ? "overview" : "apply",
-                      selectedLanguage
-                    );
-                  }}
-                  className={`rounded-xl px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                    accessibilityStep === s.step
-                      ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300"
-                      : "bg-white text-neutral-700 border border-neutral-200 hover:bg-indigo-50"
-                  }`}
-                  title={`Click to hear audio guidance for ${s.title}`}
-                >
-                  {s.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Voice Language Selector & High Contrast Audio Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Multi-Language Dropdown */}
-            <div className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-2.5 py-1.5 shadow-2xs">
-              <span className="text-xs">🌐</span>
-              <select
-                value={selectedLanguage}
-                onChange={(e) => {
-                  setSelectedLanguage(e.target.value);
-                  setGlobalVoiceLanguage(e.target.value);
-                  speakText("Language set to " + e.target.options[e.target.selectedIndex].text, { lang: e.target.value });
-                }}
-                className="bg-transparent text-xs font-semibold text-neutral-800 focus:outline-none cursor-pointer"
-                title="Select Voice Speech & Detection Language"
-              >
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.flag} {lang.nativeName} ({lang.name})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Audio Voice Guide Button */}
-            <button
-              type="button"
-              onClick={handlePlayAccessibilityGuide}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                isSpeakingGuide
-                  ? "bg-indigo-600 text-white animate-pulse shadow-md"
-                  : "bg-white text-indigo-700 border border-indigo-300 hover:bg-indigo-50"
-              }`}
-              title="Listen to full voice instructions for this page"
-            >
-              <span>{isSpeakingGuide ? "⏹ Stop Guide" : "🔊 Audio Guide"}</span>
-            </button>
-
-            {/* High Contrast Toggle */}
-            <button
-              type="button"
-              onClick={() => setHighContrast((prev) => !prev)}
-              className="rounded-xl border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-100"
-              title="Toggle High-Contrast Mode for Visually Impaired"
-            >
-              {highContrast ? "☀️ Normal" : "👁️ Contrast"}
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ─── LINKEDIN-STYLE REAL-TIME JOB TRACKING & EMAIL ALERTS HEADER ───────── */}
       <div className="mb-6 rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 via-white to-indigo-50/70 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -489,27 +371,48 @@ export function LocalOpportunities() {
       {/* ─── DUAL SEARCH: MULTI-LANGUAGE VOICE & UBER-STYLE GEOLOCATION ───────── */}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form onSubmit={handleSearch} className="flex flex-1 flex-col sm:flex-row gap-2 max-w-2xl">
-          {/* Role/Keyword Search with Voice Mic */}
+          {/* Role/Keyword Search with Voice Mic & Language Selector */}
           <div className="relative flex flex-1 items-center">
             <input
-              className={`${inputClasses} pr-9 w-full`}
+              className={`${inputClasses} pr-16 w-full`}
               placeholder={`Search ${targetRole || "tech"} skills or titles…`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            {/* Multi-Language Voice Mic */}
-            <button
-              type="button"
-              onClick={toggleVoiceSearch}
-              className={`absolute right-2.5 rounded-lg p-1 transition-all ${
-                listeningSearch
-                  ? "bg-red-500 text-white animate-pulse shadow-sm"
-                  : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60"
-              }`}
-              title={`Voice Dictation in ${selectedLanguage} (Click to speak)`}
-            >
-              🎙️
-            </button>
+
+            {/* Inline Language Selector & Voice Mic Buttons (Sleek & Integrated) */}
+            <div className="absolute right-2 flex items-center gap-1">
+              {/* Compact Language Selector */}
+              <select
+                value={selectedLanguage}
+                onChange={(e) => {
+                  setSelectedLanguage(e.target.value);
+                  setGlobalVoiceLanguage(e.target.value);
+                }}
+                className="bg-transparent text-[11px] font-bold text-neutral-600 focus:outline-none cursor-pointer pr-1"
+                title="Voice Language"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.nativeName}
+                  </option>
+                ))}
+              </select>
+
+              {/* Multi-Language Voice Mic */}
+              <button
+                type="button"
+                onClick={toggleVoiceSearch}
+                className={`rounded-lg p-1 transition-all ${
+                  listeningSearch
+                    ? "bg-red-500 text-white animate-pulse shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60"
+                }`}
+                title={`Voice Dictation in ${selectedLanguage} (Click to speak)`}
+              >
+                🎙️
+              </button>
+            </div>
           </div>
 
           {/* Uber-Style Predictive Geolocation Input */}
@@ -526,7 +429,7 @@ export function LocalOpportunities() {
                 type="button"
                 onClick={autoDetectLocation}
                 disabled={detectingLocation}
-                className="absolute right-2.5 rounded p-1 text-graphite hover:text-ink hover:bg-line transition-colors disabled:opacity-50"
+                className="absolute right-2.5 rounded p-1 text-graphite hover:text-ink hover:bg-line transition-colors disabled:opacity-50 cursor-pointer"
                 title="Use Current Location (GPS)"
               >
                 <span className={`inline-block ${detectingLocation ? "animate-spin" : ""}`}>
@@ -588,7 +491,7 @@ export function LocalOpportunities() {
                       setShowDropdown(false);
                       fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
                     }}
-                    className="w-full text-left px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-100 rounded-xl"
+                    className="w-full text-left px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-100 rounded-xl cursor-pointer"
                   >
                     Search jobs in &quot;<strong>{locationInput}</strong>&quot; →
                   </button>
@@ -717,7 +620,7 @@ export function LocalOpportunities() {
                       </span>
                     )}
                     {job.salary?.formatted && (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
                         💰 {job.salary.formatted}
                       </span>
                     )}
@@ -812,7 +715,7 @@ export function LocalOpportunities() {
         <p>
           Live scraping from <strong>LinkedIn</strong>, <strong>Google Jobs</strong>, <strong>Arbeitnow</strong>, <strong>Remotive</strong>, and <strong>Jobicy</strong>.
         </p>
-        <span>Multi-Language Voice Detection &bull; Universal Accessibility Assistance &bull; Zero Fees</span>
+        <span>Multi-Language Voice Detection &bull; Universal Accessibility &bull; Zero Fees</span>
       </div>
     </Section>
   );
