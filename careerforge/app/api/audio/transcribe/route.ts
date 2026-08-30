@@ -20,6 +20,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Audio file is required" }, { status: 400 });
     }
 
+    // 10MB payload size guard for serverless memory safety
+    const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_AUDIO_SIZE) {
+      return NextResponse.json(
+        { error: "Audio file exceeds maximum size limit (10MB)" },
+        { status: 413 }
+      );
+    }
+
     const groqKey = process.env.GROQ_API_KEY;
 
     // ─── 1. Try Groq Cloud Whisper-Large-v3 ──────────────────────────────────

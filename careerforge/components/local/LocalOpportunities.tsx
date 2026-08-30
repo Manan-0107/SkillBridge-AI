@@ -2,17 +2,11 @@
 
 import { FormEvent, useState, useEffect, useRef } from "react";
 import { Section } from "@/components/ui/Section";
-import { Card, Tag, inputClasses } from "@/components/ui/Primitives";
+import { Card, PrimaryButton, Tag, inputClasses } from "@/components/ui/Primitives";
 import { useApp } from "@/lib/store";
 import type { LiveJob } from "@/app/api/jobs/route";
 import type { LocationProfile } from "@/app/api/location/route";
-import {
-  speakText,
-  stopSpeaking,
-  startSpeechRecognition,
-  SpeechRecognitionController,
-  detectTextLanguage,
-} from "@/lib/voice";
+import { speakText, stopSpeaking } from "@/lib/voice";
 
 interface SuggestionItem {
   city: string;
@@ -25,7 +19,8 @@ interface SuggestionItem {
 }
 
 export function LocalOpportunities() {
-  const { targetRole, user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
+  const { user } = useApp();
+  const targetRole = user?.targetRole || "frontend";
   const [searchTerm, setSearchTerm] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [activeType, setActiveType] = useState<"all" | "remote" | "onsite" | "internship">("all");
@@ -34,7 +29,6 @@ export function LocalOpportunities() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationProfile | null>(null);
   const [playingJobId, setPlayingJobId] = useState<string | null>(null);
-  const [listeningSearch, setListeningSearch] = useState(false);
 
   // Email Job Alert State (LinkedIn-style)
   const [alertEmail, setAlertEmail] = useState(user?.email || "");
@@ -48,7 +42,6 @@ export function LocalOpportunities() {
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const speechControllerRef = useRef<SpeechRecognitionController | null>(null);
 
   // ─── 1. Real-Time Location Auto-Detection (GPS + IP Fallback) ──────────────
   const autoDetectLocation = async () => {
@@ -109,10 +102,6 @@ export function LocalOpportunities() {
     });
     setShowDropdown(false);
     fetchLiveJobs(searchTerm, activeType, targetRole, cityName, loc.countryCode, loc.latitude, loc.longitude);
-
-    if (voiceMode) {
-      speakText(`Location set to ${cityName}. Tracking live positions.`, { lang: voiceLanguage });
-    }
   };
 
   // ─── 2. Uber-Style Live Location Predictive Geolocation ────────────────────
@@ -178,12 +167,7 @@ export function LocalOpportunities() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        const loadedJobs: LiveJob[] = data.jobs || [];
-        setJobs(loadedJobs);
-
-        if (voiceMode && loadedJobs.length > 0) {
-          speakText(`Found ${loadedJobs.length} live openings in ${loc || "your area"}.`, { lang: voiceLanguage });
-        }
+        setJobs(data.jobs || []);
       }
     } catch (err) {
       console.error("[LocalOpportunities] Failed to fetch live jobs:", err);
@@ -196,7 +180,6 @@ export function LocalOpportunities() {
     autoDetectLocation();
     return () => {
       stopSpeaking();
-      speechControllerRef.current?.stop();
     };
   }, [targetRole]);
 
@@ -210,31 +193,6 @@ export function LocalOpportunities() {
     fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
   };
 
-  // ─── Automatic Multi-Language Voice Dictation Search ───────────────────────
-  const toggleVoiceSearch = () => {
-    if (listeningSearch) {
-      speechControllerRef.current?.stop();
-      setListeningSearch(false);
-      return;
-    }
-
-    const controller = startSpeechRecognition(
-      {
-        onTranscript: (transcript) => {
-          setSearchTerm(transcript);
-          const detected = detectTextLanguage(transcript);
-          setVoiceLanguage(detected);
-          fetchLiveJobs(transcript, activeType, targetRole, locationInput);
-        },
-        onListeningChange: (isList) => setListeningSearch(isList),
-        onError: () => setListeningSearch(false),
-      },
-      { lang: voiceLanguage }
-    );
-    speechControllerRef.current = controller;
-  };
-
-  // ─── Multi-Language Text-to-Speech Job Reader ──────────────────────────────
   const handleSpeakJob = (job: LiveJob) => {
     if (playingJobId === job.id) {
       stopSpeaking();
@@ -245,7 +203,6 @@ export function LocalOpportunities() {
     setPlayingJobId(job.id);
     const audioContent = `${job.title} at ${job.company}. Work arrangement: ${job.workArrangementLabel}. Location: ${job.location}. ${job.distanceKm ? `Distance: ${job.distanceKm} kilometers away.` : ""} Salary: ${job.salary?.formatted || "Competitive market compensation"}. Details: ${job.descriptionSnippet}`;
     speakText(audioContent, {
-      lang: voiceLanguage,
       onEnd: () => setPlayingJobId(null),
       onError: () => setPlayingJobId(null),
     });
@@ -281,9 +238,6 @@ export function LocalOpportunities() {
 
       if (res.ok) {
         setAlertSuccessMsg(`Opening at ${job.company} with direct registration form link sent to ${email}!`);
-        if (voiceMode) {
-          speakText(`Application form link for ${job.company} dispatched to ${email}.`, { lang: voiceLanguage });
-        }
         setTimeout(() => setAlertSuccessMsg(null), 6000);
       }
     } catch {
@@ -314,9 +268,6 @@ export function LocalOpportunities() {
 
       if (res.ok) {
         setAlertSuccessMsg(`Real-time job tracker active for ${locationInput || "your city"}! Alert with registration links sent to ${alertEmail}.`);
-        if (voiceMode) {
-          speakText(`Job tracker activated for ${locationInput || "your location"}. Alerts will be emailed to ${alertEmail}.`, { lang: voiceLanguage });
-        }
         setTimeout(() => setAlertSuccessMsg(null), 7000);
       }
     } catch {
@@ -331,13 +282,13 @@ export function LocalOpportunities() {
       id="local"
       eyebrow="Real-Time Job Tracker"
       title="Live Tech Opportunities & Real-Time Alerts"
-      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, automatic voice detection, and direct registration forms."
+      description="Directly connected to real-time job scrapers with Uber-style live geolocation tracking, explicit Remote/On-Site classification, and direct application forms."
     >
-      {/* ─── LINKEDIN-STYLE REAL-TIME JOB TRACKING & EMAIL ALERTS HEADER ───────── */}
+      {/* LinkedIn-Style Real-Time Job Tracking & Email Alerts Header */}
       <div className="mb-6 rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 via-white to-indigo-50/70 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
@@ -345,24 +296,6 @@ export function LocalOpportunities() {
               <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900">
                 LinkedIn-Style Live Location Job Tracker Active
               </span>
-
-              {/* Mode Indicator & 1-Click Toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !voiceMode;
-                  setVoiceMode(next);
-                  speakText(next ? "Voice Mode enabled." : "Text Mode enabled.", { lang: voiceLanguage });
-                }}
-                className={`ml-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                  voiceMode
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "bg-neutral-200/80 text-neutral-700 hover:bg-neutral-300"
-                }`}
-                title="Click to toggle between Voice Mode and Text Mode"
-              >
-                <span>{voiceMode ? "🎙️ Voice Mode Active" : "⌨️ Text Mode"}</span>
-              </button>
             </div>
             <h3 className="mt-1 font-display text-xl sm:text-2xl italic text-ink capitalize">
               {targetRole || "Software Engineering"} in {locationInput || currentLocation?.city || "Your Location"}
@@ -384,7 +317,7 @@ export function LocalOpportunities() {
             <button
               type="submit"
               disabled={sendingAlert || !alertEmail.trim()}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-500/20 disabled:opacity-60 cursor-pointer hover:scale-[1.02]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
             >
               <span>{sendingAlert ? "Activating…" : "🔔 Set Job Alert"}</span>
             </button>
@@ -398,39 +331,23 @@ export function LocalOpportunities() {
         )}
       </div>
 
-      {/* ─── DUAL SEARCH: CLEAN SEARCH INPUT WITH INTEGRATED VOICE MIC & GPS ───── */}
+      {/* Dual Search: Keyword & Uber-Style Geolocation Autocomplete */}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form onSubmit={handleSearch} className="flex flex-1 flex-col sm:flex-row gap-2 max-w-2xl">
-          {/* Clean Role Search with Voice Mic (Zero Overlapping Selects) */}
-          <div className="relative flex flex-1 items-center">
-            <input
-              className={`${inputClasses} pr-10 w-full`}
-              placeholder={`Search ${targetRole || "tech"} skills or titles…`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-
-            {/* Clean Voice Dictation Mic */}
-            <button
-              type="button"
-              onClick={toggleVoiceSearch}
-              className={`absolute right-2.5 rounded-lg p-1.5 transition-all cursor-pointer ${
-                listeningSearch || voiceMode
-                  ? "bg-red-500 text-white animate-pulse shadow-sm"
-                  : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60"
-              }`}
-              title="Click to speak (Voice recognition in any language)"
-            >
-              🎙️
-            </button>
-          </div>
+          {/* Role/Keyword Search */}
+          <input
+            className={`${inputClasses} flex-1`}
+            placeholder={`Search ${targetRole || "tech"} skills or titles…`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
 
           {/* Uber-Style Predictive Geolocation Input */}
           <div ref={dropdownRef} className="relative flex-1 min-w-[240px]">
             <div className="relative flex items-center">
               <input
                 className={`${inputClasses} pr-9 w-full`}
-                placeholder="Search city or district…"
+                placeholder="Search city (e.g., Mumbai, London, Berlin)…"
                 value={locationInput}
                 onChange={(e) => handleLocationInputChange(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
@@ -439,7 +356,7 @@ export function LocalOpportunities() {
                 type="button"
                 onClick={autoDetectLocation}
                 disabled={detectingLocation}
-                className="absolute right-2.5 rounded p-1 text-graphite hover:text-ink hover:bg-line transition-colors disabled:opacity-50 cursor-pointer"
+                className="absolute right-2.5 rounded p-1 text-graphite hover:text-ink hover:bg-line transition-colors disabled:opacity-50"
                 title="Use Current Location (GPS)"
               >
                 <span className={`inline-block ${detectingLocation ? "animate-spin" : ""}`}>
@@ -501,7 +418,7 @@ export function LocalOpportunities() {
                       setShowDropdown(false);
                       fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
                     }}
-                    className="w-full text-left px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-100 rounded-xl cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-100 rounded-xl"
                   >
                     Search jobs in &quot;<strong>{locationInput}</strong>&quot; →
                   </button>
@@ -510,13 +427,9 @@ export function LocalOpportunities() {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-5 py-2 text-xs font-semibold text-white hover:bg-black transition-all shadow-sm hover:scale-[1.02] cursor-pointer disabled:opacity-50"
-          >
+          <PrimaryButton type="submit" disabled={loading}>
             {loading ? "Searching…" : "Search"}
-          </button>
+          </PrimaryButton>
         </form>
 
         {/* Filter Pills with Explicit Work Arrangement (Remote vs On-Site) */}
@@ -532,10 +445,10 @@ export function LocalOpportunities() {
             <button
               key={filter.id}
               onClick={() => setActiveType(filter.id)}
-              className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                 activeType === filter.id
-                  ? "bg-neutral-900 text-white shadow-md ring-2 ring-neutral-700/20"
-                  : "bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-900 hover:text-neutral-900"
+                  ? "bg-ink text-paper shadow-sm"
+                  : "bg-mist text-graphite hover:bg-line hover:text-ink"
               }`}
             >
               {filter.label}
@@ -550,8 +463,8 @@ export function LocalOpportunities() {
           <span className="font-semibold text-ink">
             📍 {currentLocation?.formatted || locationInput || "Worldwide & Remote"}
           </span>
-          <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-            Real-Time Live City Match
+          <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+            Real-Time Tracking Active
           </span>
         </div>
 
@@ -566,16 +479,16 @@ export function LocalOpportunities() {
         </div>
       </div>
 
-      {/* ─── JOBS GRID (AI-GENERATED AESTHETIC CARDS) ─────────────────────────── */}
+      {/* Jobs Grid */}
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-56 animate-pulse rounded-2xl border border-neutral-200 bg-neutral-100/60 p-5 shadow-xs" />
+            <div key={i} className="h-52 animate-pulse rounded-xl border border-line bg-mist/50 p-5" />
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center bg-neutral-50/50">
-          <p className="text-sm font-medium text-neutral-700">No active listings found for &quot;{searchTerm || locationInput}&quot;.</p>
+        <div className="rounded-xl border border-dashed border-line p-8 text-center">
+          <p className="text-sm text-graphite">No active listings found for &quot;{searchTerm || locationInput}&quot;.</p>
           <button
             onClick={() => {
               setSearchTerm("");
@@ -583,7 +496,7 @@ export function LocalOpportunities() {
               setActiveType("all");
               fetchLiveJobs("", "all", targetRole, "", "");
             }}
-            className="mt-3 inline-flex items-center rounded-xl bg-neutral-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black transition-all cursor-pointer shadow-xs"
+            className="mt-3 text-xs font-medium text-ink underline cursor-pointer"
           >
             Reset filters to view all global listings
           </button>
@@ -593,31 +506,29 @@ export function LocalOpportunities() {
           {jobs.map((job) => (
             <Card
               key={job.id}
-              className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 hover:shadow-lg ${
-                job.isLocalMatch
-                  ? "border-blue-300 bg-gradient-to-br from-blue-50/20 via-white to-indigo-50/10 shadow-sm"
-                  : "border-neutral-200/90 bg-white hover:border-neutral-400"
+              className={`flex flex-col justify-between transition-all hover:border-ink ${
+                job.isLocalMatch ? "border-blue-400/80 bg-blue-50/10 shadow-xs" : ""
               }`}
             >
               <div>
                 {/* Header with STRICT Work Arrangement, Salary, and Voice Speaker */}
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {/* STRICT WORK ARRANGEMENT BADGE */}
                     {job.workArrangement === "worldwide_remote" ? (
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-900 border border-emerald-300 shadow-2xs">
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-900 border border-emerald-300">
                         🌐 Worldwide Remote
                       </span>
                     ) : job.workArrangement === "country_remote" ? (
-                      <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[10px] font-bold text-purple-900 border border-purple-300 shadow-2xs">
+                      <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[10px] font-bold text-purple-900 border border-purple-300">
                         {job.workArrangementLabel || "🌐 Country Remote"}
                       </span>
                     ) : job.workArrangement === "hybrid" ? (
-                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300 shadow-2xs">
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
                         {job.workArrangementLabel || "🔄 Hybrid"}
                       </span>
                     ) : (
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-800 border border-slate-300 shadow-2xs">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-800 border border-slate-300">
                         {job.workArrangementLabel || "🏢 On-Site"}
                       </span>
                     )}
@@ -625,59 +536,53 @@ export function LocalOpportunities() {
                     <Tag>{job.jobType}</Tag>
 
                     {job.distanceKm && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800 border border-blue-200">
+                      <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800 border border-blue-200">
                         📍 {job.distanceKm} km away
                       </span>
                     )}
                     {job.salary?.formatted && (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
+                      <span className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
                         💰 {job.salary.formatted}
                       </span>
                     )}
                   </div>
 
-                  {/* Multi-Language Click-to-Voice Audio Reader */}
+                  {/* Click-to-Voice Audio Reader */}
                   <button
                     type="button"
                     onClick={() => handleSpeakJob(job)}
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all cursor-pointer ${
+                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all cursor-pointer ${
                       playingJobId === job.id
-                        ? "bg-blue-600 text-white animate-pulse shadow-md shadow-blue-500/20"
-                        : "border border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                        ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300"
+                        : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
                     }`}
-                    title="Click to listen to job description aloud"
+                    title={playingJobId === job.id ? "Stop reading" : "Click-to-Voice (Listen to Job Description)"}
                   >
                     {playingJobId === job.id ? (
-                      <>
-                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
-                        <span>Playing…</span>
-                      </>
+                      <span>⏹ Stop</span>
                     ) : (
-                      <>
-                        <span>🔊</span>
-                        <span>Listen</span>
-                      </>
+                      <span>🔊 Listen</span>
                     )}
                   </button>
                 </div>
 
-                <h3 className="text-sm sm:text-base font-bold text-ink leading-snug">{job.title}</h3>
-                <p className="mt-1 text-xs font-semibold text-neutral-600">
-                  {job.company} &bull; <span className="font-bold text-neutral-900">{job.location}</span>
+                <h3 className="text-sm font-semibold text-ink leading-snug">{job.title}</h3>
+                <p className="mt-1 text-xs font-medium text-graphite">
+                  {job.company} &bull; <span className="font-semibold text-neutral-800">{job.location}</span>
                 </p>
 
-                <p className="mt-2 text-xs text-neutral-600 line-clamp-2 leading-relaxed">
+                <p className="mt-2 text-xs text-graphite/90 line-clamp-2 leading-relaxed">
                   {job.descriptionSnippet}
                 </p>
 
                 {/* Accessibility Badges */}
                 {job.accessibility?.tags && job.accessibility.tags.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-1">
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 border border-blue-200">
+                    <span className="rounded bg-blue-50 px-1.5 py-0.2 text-[9px] font-bold text-blue-700 border border-blue-200">
                       ♿ {job.accessibility.score}% Accessible
                     </span>
                     {job.accessibility.tags.slice(0, 2).map((accTag) => (
-                      <span key={accTag} className="text-[9px] text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded-full border border-neutral-200/60">
+                      <span key={accTag} className="text-[9px] text-graphite/80 bg-mist px-1.5 py-0.2 rounded">
                         {accTag}
                       </span>
                     ))}
@@ -685,23 +590,23 @@ export function LocalOpportunities() {
                 )}
               </div>
 
-              {/* Action Toolbar: AI Buttons (Email Direct Registration Form & Apply Now) */}
-              <div className="mt-4 pt-3 border-t border-neutral-200/70 flex items-center justify-between gap-2">
-                {/* 1. AI Email Form Link Pill Button */}
+              {/* Action Toolbar: Email Direct Registration Form & Apply Now */}
+              <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between gap-2">
+                {/* 1. Email Me Registration Link Button */}
                 <button
                   type="button"
                   onClick={() => handleEmailJob(job)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                     emailSentJobIds[job.id]
-                      ? "border-emerald-400 bg-emerald-50 text-emerald-800 font-bold"
-                      : "border-neutral-300 bg-neutral-50/70 text-neutral-700 hover:bg-white hover:border-neutral-400 hover:shadow-xs"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 font-semibold"
+                      : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400"
                   }`}
-                  title="Dispatches direct company registration link straight to your email"
+                  title="Send company registration form and opening details to your email"
                 >
                   <span>{emailSentJobIds[job.id] ? "✅ Form Emailed" : "✉️ Email Form Link"}</span>
                 </button>
 
-                {/* 2. Futuristic AI Gradient Apply Now Button */}
+                {/* 2. Direct Apply Now Button */}
                 <a
                   href={job.applyUrl || job.url}
                   target="_blank"
@@ -709,7 +614,7 @@ export function LocalOpportunities() {
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-neutral-900 via-neutral-800 to-black px-4 py-1.5 text-xs font-semibold text-white hover:from-black hover:to-neutral-900 transition-all shadow-md hover:shadow-lg hover:scale-[1.02] cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs"
                 >
                   <span>Apply Now</span>
                   <span>→</span>
@@ -723,9 +628,9 @@ export function LocalOpportunities() {
       {/* Attribution footer */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4 text-[11px] text-graphite">
         <p>
-          Live scraping from <strong>LinkedIn</strong>, <strong>Google Jobs</strong>, <strong>Arbeitnow</strong>, <strong>Remotive</strong>, and <strong>Jobicy</strong>.
+          Live LinkedIn-style scraping & Geolocation from <strong>Google Jobs</strong>, <strong>LinkedIn</strong>, <strong>Adzuna</strong>, <strong>Arbeitnow</strong>, and <strong>Remotive</strong>.
         </p>
-        <span>Automatic Voice Detection &bull; Universal Accessibility &bull; Zero Fees</span>
+        <span>Strict Remote/On-Site Classification · Direct Registration Forms · Zero Fees</span>
       </div>
     </Section>
   );

@@ -13,24 +13,16 @@ import { upsertUser, updateUserRole } from "./db";
 interface AppState {
   user: User | null;
   ready: boolean;
-  voiceMode: boolean;
-  voiceLanguage: string;
-  voiceChecked: boolean;
   signIn: (email: string, name?: string) => Promise<void>;
   signInWithGoogle: (name: string, email: string, picture?: string) => Promise<void>;
   signInWithGithub: (name: string, email: string, picture?: string) => Promise<void>;
   signInWithPhone: (phone: string, name?: string) => Promise<void>;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
-  setVoiceMode: (mode: boolean) => void;
-  setVoiceLanguage: (lang: string) => void;
-  setVoiceChecked: (checked: boolean) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
 const STORAGE_KEY = "careerforge.user";
-const VOICE_MODE_KEY = "careerforge.voiceMode";
-const VOICE_LANG_KEY = "careerforge.voiceLang";
 
 function extractDisplayName(email: string, name?: string): string {
   if (name && name.trim()) return name.trim();
@@ -45,20 +37,11 @@ function extractDisplayName(email: string, name?: string): string {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-  const [voiceMode, setVoiceModeState] = useState(false);
-  const [voiceLanguage, setVoiceLanguageState] = useState("en-IN");
-  const [voiceChecked, setVoiceChecked] = useState(false);
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) setUser(JSON.parse(raw));
-
-      const rawVoiceMode = window.localStorage.getItem(VOICE_MODE_KEY);
-      if (rawVoiceMode !== null) setVoiceModeState(rawVoiceMode === "true");
-
-      const rawVoiceLang = window.localStorage.getItem(VOICE_LANG_KEY);
-      if (rawVoiceLang) setVoiceLanguageState(rawVoiceLang);
     } catch {
       // localStorage unavailable — proceed unauthenticated
     }
@@ -71,35 +54,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else window.localStorage.removeItem(STORAGE_KEY);
   };
 
-  const setVoiceMode = (mode: boolean) => {
-    setVoiceModeState(mode);
-    try {
-      window.localStorage.setItem(VOICE_MODE_KEY, String(mode));
-    } catch {}
-  };
-
-  const setVoiceLanguage = (lang: string) => {
-    setVoiceLanguageState(lang);
-    try {
-      window.localStorage.setItem(VOICE_LANG_KEY, lang);
-    } catch {}
-  };
-
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
   const signIn = async (email: string, name?: string) => {
     const displayName = extractDisplayName(email, name);
+    // Immediately sign in locally so the UI responds instantly
     const localUser: User = {
       name: displayName,
       email,
+      authProvider: "email",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
 
+    // Persist to DB in the background (doesn't block the UI)
     try {
       const dbRow = await upsertUser({
         email,
         name: localUser.name,
+        authProvider: "email",
         targetRole: localUser.targetRole ?? undefined,
       });
       if (dbRow?.id) {
@@ -107,16 +80,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(updated);
       }
     } catch (e) {
+      // DB is optional — continue without it
       console.warn("[auth] DB upsert failed:", e);
     }
   };
 
-  /** Google sign-in — upserts user to DB then persists locally. */
+  /** Google sign-in — upserts Google profile to DB then persists locally. */
   const signInWithGoogle = async (name: string, email: string, picture?: string) => {
     const localUser: User = {
-      name: name || extractDisplayName(email),
+      name,
       email,
-      avatarUrl: picture,
+      picture,
       authProvider: "google",
       targetRole: user?.targetRole ?? null,
       dbId: null,
@@ -126,8 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const dbRow = await upsertUser({
         email,
-        name: localUser.name,
-        avatarUrl: picture,
+        name,
+        picture,
         authProvider: "google",
         targetRole: localUser.targetRole ?? undefined,
       });
@@ -140,12 +114,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** GitHub sign-in — upserts user to DB then persists locally. */
+  /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
   const signInWithGithub = async (name: string, email: string, picture?: string) => {
     const localUser: User = {
-      name: name || extractDisplayName(email),
+      name: name || email.split("@")[0],
       email,
-      avatarUrl: picture,
+      picture,
       authProvider: "github",
       targetRole: user?.targetRole ?? null,
       dbId: null,
@@ -156,7 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const dbRow = await upsertUser({
         email,
         name: localUser.name,
-        avatarUrl: picture,
+        picture,
         authProvider: "github",
         targetRole: localUser.targetRole ?? undefined,
       });
@@ -171,8 +145,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Phone sign-in — upserts phone user to DB then persists locally. */
   const signInWithPhone = async (phone: string, name?: string) => {
-    const cleanPhone = phone.replace(/[^0-9+]/g, "");
-    const formattedEmail = `phone_${cleanPhone.replace("+", "")}@careerforge.local`;
+    const cleanPhone = phone.trim();
+    const formattedEmail = `${cleanPhone.replace(/[^0-9]/g, "")}@phone.careerforge.io`;
     const localUser: User = {
       name: name || `User (${cleanPhone})`,
       email: formattedEmail,
@@ -206,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const updated = { ...user, targetRole: role };
     persist(updated);
+    // Sync role to DB
     if (user.dbId) {
       updateUserRole(user.dbId, role).catch((e) =>
         console.warn("[auth] updateUserRole failed:", e)
@@ -218,18 +193,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         ready,
-        voiceMode,
-        voiceLanguage,
-        voiceChecked,
         signIn,
         signInWithGoogle,
         signInWithGithub,
         signInWithPhone,
         signOut,
         setTargetRole,
-        setVoiceMode,
-        setVoiceLanguage,
-        setVoiceChecked,
       }}
     >
       {children}

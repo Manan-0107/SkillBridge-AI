@@ -6,6 +6,7 @@ import { FeatureId } from "@/lib/intent";
 const links: { id: FeatureId; label: string }[] = [
   { id: "resume", label: "Resume" },
   { id: "roadmap", label: "Roadmap" },
+  { id: "courses", label: "Courses" },
   { id: "practice", label: "Practice" },
   { id: "local", label: "Local" },
 ];
