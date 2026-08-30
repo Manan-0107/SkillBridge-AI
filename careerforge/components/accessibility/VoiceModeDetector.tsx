@@ -5,24 +5,27 @@ import { useApp } from "@/lib/store";
 import {
   startSpeechRecognition,
   SpeechRecognitionController,
-  detectTextLanguage,
+  detectLanguageFromText,
   speakText,
   stopSpeaking,
 } from "@/lib/voice";
+import { useGlobalVoice } from "@/providers/GlobalVoiceProvider";
 
 export function VoiceModeDetector() {
-  const { user, voiceMode, voiceChecked, setVoiceMode, setVoiceLanguage, setVoiceChecked } = useApp();
+  const { user } = useApp();
+  const { retryVoiceMode, switchToTextMode } = useGlobalVoice();
   const [attempt, setAttempt] = useState<number>(1);
   const [listening, setListening] = useState(false);
   const [detectedText, setDetectedText] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognitionController | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Only run the 3-check voice detection once per user session
-    if (user && !voiceChecked) {
+    if (user && !checked) {
       setModalOpen(true);
       startVoiceCheckCycle(1);
     }
@@ -32,14 +35,14 @@ export function VoiceModeDetector() {
       recognitionRef.current?.stop();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [user, voiceChecked]);
+  }, [user, checked]);
 
   const startVoiceCheckCycle = (currentAttempt: number) => {
     if (currentAttempt > 3) {
       // 3 Attempts completed with no voice -> Default to Text Mode
       setModalOpen(false);
-      setVoiceMode(false);
-      setVoiceChecked(true);
+      setChecked(true);
+      switchToTextMode();
       return;
     }
 
@@ -48,7 +51,7 @@ export function VoiceModeDetector() {
 
     try {
       recognitionRef.current = startSpeechRecognition({
-        onTranscript: (transcript, isFinal) => {
+        onTranscript: (transcript) => {
           if (transcript.trim().length > 0) {
             // VOICE DETECTED!
             setDetectedText(transcript);
@@ -80,8 +83,8 @@ export function VoiceModeDetector() {
     } else {
       // Finished 3 checks with no voice
       setModalOpen(false);
-      setVoiceMode(false);
-      setVoiceChecked(true);
+      setChecked(true);
+      switchToTextMode();
     }
   };
 
@@ -89,11 +92,10 @@ export function VoiceModeDetector() {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     recognitionRef.current?.stop();
 
-    const detectedLang = detectTextLanguage(transcript);
-    setVoiceLanguage(detectedLang);
-    setVoiceMode(true);
-    setVoiceChecked(true);
+    const detectedLang = detectLanguageFromText(transcript);
+    setChecked(true);
     setModalOpen(false);
+    retryVoiceMode();
 
     // Speak welcome guide in detected language
     const welcomeMessages: Record<string, string> = {
@@ -111,16 +113,16 @@ export function VoiceModeDetector() {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     recognitionRef.current?.stop();
     setModalOpen(false);
-    setVoiceMode(false);
-    setVoiceChecked(true);
+    setChecked(true);
+    switchToTextMode();
   };
 
   const forceVoiceMode = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     recognitionRef.current?.stop();
     setModalOpen(false);
-    setVoiceMode(true);
-    setVoiceChecked(true);
+    setChecked(true);
+    retryVoiceMode();
     speakText("AI Voice Assistance Mode activated.", { lang: "en-IN" });
   };
 
