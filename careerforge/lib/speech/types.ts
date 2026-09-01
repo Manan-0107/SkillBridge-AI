@@ -100,17 +100,37 @@ export interface SpeechConfig {
 
 export type VoiceState =
   | "IDLE"
+  | "AI_SPEAKING"
   | "LISTENING"
   | "PROCESSING"
-  | "AI_THINKING"
-  | "SPEAKING"
-  | "ERROR";
+  | "ERROR"
+  | "FALLBACK_TEXT";
+
+export type ExpectedAnswerType =
+  | "text"
+  | "yes_no"
+  | "email"
+  | "number"
+  | "choice"
+  | "free_text";
+
+export interface QuestionState {
+  id: string;
+  question: string;
+  expectedType: ExpectedAnswerType;
+  attempts: number;
+  maxAttempts: number; // 3
+  answered: boolean;
+  answer?: unknown;
+  validationPrompt?: string;
+}
 
 export interface AgentContext {
   userId?: string;
   currentPage: string;
   currentLanguage: string;
   interactionMode: "voice" | "text" | "hybrid";
+  currentQuestion?: QuestionState;
   accessibilityPreferences?: {
     interactionMode?: "voice" | "text" | "hybrid";
     speechOutput?: boolean;

@@ -3,13 +3,14 @@
 /**
  * hooks/useVoiceAssistant.ts
  *
- * Universal Voice Assistant Hook for CareerForge:
- * - State Machine: IDLE -> LISTENING -> PROCESSING -> AI_THINKING -> SPEAKING -> IDLE
- * - Multi-Provider Auto Selection (Web Speech API -> Azure AI Speech -> Google Cloud Speech)
- * - True Multilingual Speech Recognition & Synthesis (English, Hindi, Gujarati, French, Spanish, etc.)
- * - Instant Barge-In & Verbal Control Interruption ("Stop", "Wait", "Pause", "Repeat", "Continue")
- * - Real-Time Captions & Transcript Synchronization
- * - Permission Diagnostics & Accessibility Recovery
+ * Enterprise Turn-Taking Voice Assistant Engine:
+ * - Strict State Machine: IDLE -> AI_SPEAKING -> LISTENING -> PROCESSING -> FALLBACK_TEXT
+ * - Absolute Microphone Mute: Mic is strictly aborted before TTS starts and remains OFF during speech
+ * - 300ms Cooldown Gate preventing AI from hearing itself or speaker echo
+ * - Single-Instance Protection & React StrictMode Safety
+ * - Structured Question State & Answer Validation (Multilingual YES/NO, Name, Email, Career)
+ * - 3-Attempt Rule with Automated Text Fallback & Keyboard Focus
+ * - Verbal Barge-In Interruption ("Stop", "Wait", "Pause", "Repeat")
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -17,21 +18,28 @@ import {
   VoiceState,
   SpeechProviderType,
   SpeechError,
-  SpeechErrorType,
-  SupportedLanguage,
+  QuestionState,
+  ExpectedAnswerType,
 } from "@/lib/speech/types";
 import { getSpeechService } from "@/lib/speech/speechService";
 import {
   detectLanguageFromText,
   getSupportedLanguage,
-  SUPPORTED_LANGUAGES,
 } from "@/lib/speech/languages";
+import {
+  validateUserAnswer,
+  getQuestionRetryPrompt,
+  getFallbackMessage,
+  ValidationResult,
+} from "@/lib/speech/questionFlow";
 import { playAccessibleChime } from "@/lib/voice";
 
 export interface UseVoiceAssistantOptions {
   initialLanguage?: string;
   initialProvider?: SpeechProviderType;
-  autoSpeakResponses?: boolean;
+  autoListenAfterSpeech?: boolean;
+  onValidAnswer?: (question: QuestionState, validatedValue: any) => void;
+  onFallbackToText?: (activeQuestion: QuestionState | null, fallbackMessage: string) => void;
   onTranscript?: (transcript: string, isFinal: boolean) => void;
   onStateChange?: (state: VoiceState) => void;
   onError?: (error: SpeechError) => void;
@@ -41,25 +49,29 @@ export interface UseVoiceAssistantReturn {
   state: VoiceState;
   isListening: boolean;
   isSpeaking: boolean;
-  isThinking: boolean;
+  isProcessing: boolean;
+  isTextFallback: boolean;
   transcript: string;
   interimTranscript: string;
   activeLanguage: string;
   activeProvider: SpeechProviderType;
+  currentQuestion: QuestionState | null;
   lastSpokenText: string | null;
   errorMessage: string | null;
   permissionDenied: boolean;
   startListening: () => void;
   stopListening: () => void;
   toggleListening: () => void;
-  speak: (text: string, lang?: string) => Promise<void>;
+  speak: (text: string, lang?: string, options?: { isQuestion?: boolean; questionState?: QuestionState }) => Promise<void>;
   stopSpeaking: () => void;
   pauseSpeaking: () => void;
   resumeSpeaking: () => void;
   repeatLastSpoken: () => void;
   setLanguage: (lang: string) => void;
   setProvider: (provider: SpeechProviderType) => void;
-  setVoiceState: (state: VoiceState) => void;
+  setActiveQuestion: (question: QuestionState | null) => void;
+  switchToTextMode: (reason?: string) => void;
+  resetConversation: () => void;
 }
 
 export function useVoiceAssistant(
@@ -68,31 +80,44 @@ export function useVoiceAssistant(
   const {
     initialLanguage = "en",
     initialProvider = "auto",
-    autoSpeakResponses = true,
+    autoListenAfterSpeech = true,
+    onValidAnswer,
+    onFallbackToText,
     onTranscript,
     onStateChange,
     onError,
   } = options;
 
+  // React State for UI
   const [state, setState] = useState<VoiceState>("IDLE");
   const [activeLanguage, setActiveLanguage] = useState<string>(initialLanguage);
   const [activeProvider, setActiveProvider] = useState<SpeechProviderType>(initialProvider);
+  const [currentQuestion, setCurrentQuestion] = useState<QuestionState | null>(null);
   const [transcript, setTranscript] = useState<string>("");
   const [interimTranscript, setInterimTranscript] = useState<string>("");
   const [lastSpokenText, setLastSpokenText] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState<boolean>(false);
 
-  const recognitionRef = useRef<any>(null);
+  // Real-Time Audio Synchronization Refs
+  const isAISpeakingRef = useRef(false);
   const isListeningRef = useRef(false);
+  const shouldListenRef = useRef(false);
+  const voiceStateRef = useRef<VoiceState>("IDLE");
+  const currentQuestionRef = useRef<QuestionState | null>(null);
+  const lastProcessedTranscriptRef = useRef<string>("");
+  const lastTranscriptTimeRef = useRef<number>(0);
+
+  const recognitionRef = useRef<any>(null);
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const speechService = useRef(getSpeechService(initialProvider));
-  const lastSpokenTextRef = useRef<string | null>(null);
   const activeLanguageRef = useRef(activeLanguage);
   activeLanguageRef.current = activeLanguage;
 
   const updateState = useCallback(
     (nextState: VoiceState) => {
+      console.log(`[VOICE STATE] ${voiceStateRef.current} -> ${nextState}`);
+      voiceStateRef.current = nextState;
       setState(nextState);
       onStateChange?.(nextState);
     },
@@ -100,9 +125,31 @@ export function useVoiceAssistant(
   );
 
   /**
-   * Immediately halt any ongoing audio playback or speech synthesis (Barge-In)
+   * Stop speech recognition immediately (Microphone OFF)
+   */
+  const stopListening = useCallback(() => {
+    isListeningRef.current = false;
+    shouldListenRef.current = false;
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
+
+    setInterimTranscript("");
+    if (voiceStateRef.current === "LISTENING") {
+      updateState("IDLE");
+    }
+  }, [updateState]);
+
+  /**
+   * Stop any playing TTS audio or speech synthesis immediately
    */
   const stopSpeaking = useCallback(() => {
+    isAISpeakingRef.current = false;
+
     if (typeof window !== "undefined") {
       if ("speechSynthesis" in window) {
         try {
@@ -110,151 +157,55 @@ export function useVoiceAssistant(
         } catch {}
       }
       if (currentAudioElementRef.current) {
-        currentAudioElementRef.current.pause();
-        currentAudioElementRef.current.currentTime = 0;
+        try {
+          currentAudioElementRef.current.pause();
+          currentAudioElementRef.current.currentTime = 0;
+        } catch {}
         currentAudioElementRef.current = null;
       }
     }
-    if (state === "SPEAKING") {
+
+    if (voiceStateRef.current === "AI_SPEAKING") {
       updateState("IDLE");
     }
-  }, [state, updateState]);
-
-  const pauseSpeaking = useCallback(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.pause();
-    }
-    if (currentAudioElementRef.current) {
-      currentAudioElementRef.current.pause();
-    }
-  }, []);
-
-  const resumeSpeaking = useCallback(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.resume();
-    }
-    if (currentAudioElementRef.current) {
-      currentAudioElementRef.current.play().catch(() => {});
-    }
-  }, []);
+  }, [updateState]);
 
   /**
-   * Synthesize and Speak Text using unified Multi-Provider Cascade
+   * Gracefully switch to Text Fallback Mode after 3 failed attempts
    */
-  const speak = useCallback(
-    async (text: string, langOverride?: string): Promise<void> => {
-      if (!text || !text.trim()) return;
+  const switchToTextMode = useCallback(
+    (reason = "Three failed attempts") => {
+      console.log(`[VOICE FALLBACK] Switching to text mode. Reason: ${reason}`);
+
       stopSpeaking();
+      stopListening();
 
-      const cleanText = text
-        .replace(/\[ACTION:.*?\]/g, "")
-        .replace(/```[\s\S]*?```/g, "Code block.")
-        .replace(/`([^`]+)`/g, "$1")
-        .replace(/\*\*([^*]+)\*\*/g, "$1")
-        .replace(/\*([^*]+)\*/g, "$1")
-        .trim();
+      isAISpeakingRef.current = false;
+      isListeningRef.current = false;
+      shouldListenRef.current = false;
 
-      if (!cleanText) return;
+      updateState("FALLBACK_TEXT");
 
-      const detectedLang = langOverride || detectLanguageFromText(cleanText) || activeLanguageRef.current;
-      setActiveLanguage(detectedLang);
-      setLastSpokenText(cleanText);
-      lastSpokenTextRef.current = cleanText;
-      updateState("SPEAKING");
-
-      try {
-        const audioResult = await speechService.current.textToSpeech(cleanText, {
-          language: detectedLang,
-        });
-
-        if (audioResult.useNativeSynthesis) {
-          // Fallback to browser SpeechSynthesis
-          if (typeof window !== "undefined" && "speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-            const langObj = getSupportedLanguage(detectedLang);
-            utterance.lang = langObj.speechSynthesisLocale;
-
-            const voices = window.speechSynthesis.getVoices();
-            const prefix = langObj.speechSynthesisLocale.split("-")[0];
-            const voice =
-              voices.find((v) => v.lang.toLowerCase() === langObj.speechSynthesisLocale.toLowerCase()) ||
-              voices.find((v) => v.lang.toLowerCase().startsWith(prefix)) ||
-              voices[0];
-            if (voice) utterance.voice = voice;
-
-            utterance.onend = () => {
-              updateState("IDLE");
-            };
-            utterance.onerror = () => {
-              updateState("IDLE");
-            };
-
-            window.speechSynthesis.speak(utterance);
-          } else {
-            updateState("IDLE");
-          }
-        } else if (audioResult.audioBuffer) {
-          // Playback cloud MP3 audio buffer
-          const blob =
-            audioResult.audioBuffer instanceof Blob
-              ? audioResult.audioBuffer
-              : new Blob([audioResult.audioBuffer], { type: audioResult.mimeType || "audio/mpeg" });
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          currentAudioElementRef.current = audio;
-
-          audio.onended = () => {
-            URL.revokeObjectURL(url);
-            currentAudioElementRef.current = null;
-            updateState("IDLE");
-          };
-          audio.onerror = () => {
-            URL.revokeObjectURL(url);
-            currentAudioElementRef.current = null;
-            updateState("IDLE");
-          };
-
-          await audio.play();
-        }
-      } catch (err: any) {
-        console.warn("[useVoiceAssistant] TTS playback error:", err);
-        updateState("IDLE");
-      }
+      const fallbackMsg = getFallbackMessage(activeLanguageRef.current);
+      onFallbackToText?.(currentQuestionRef.current, fallbackMsg);
     },
-    [stopSpeaking, updateState]
+    [onFallbackToText, stopListening, stopSpeaking, updateState]
   );
 
-  const repeatLastSpoken = useCallback(() => {
-    if (lastSpokenTextRef.current) {
-      speak(lastSpokenTextRef.current, activeLanguageRef.current);
-    }
-  }, [speak]);
-
   /**
-   * Stop speech recognition
-   */
-  const stopListening = useCallback(() => {
-    isListeningRef.current = false;
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-    }
-    setInterimTranscript("");
-    if (state === "LISTENING") {
-      updateState("IDLE");
-    }
-  }, [state, updateState]);
-
-  /**
-   * Start Speech Recognition with Verbal Barge-In & Language Detection
+   * Start Microphone Listening (Microphone ON)
+   * ONLY called when AI is NOT speaking and cooldown has passed
    */
   const startListening = useCallback(() => {
     if (typeof window === "undefined") return;
-    setErrorMessage(null);
 
+    // Safeguard: NEVER listen if AI is speaking or if in text fallback
+    if (isAISpeakingRef.current || voiceStateRef.current === "AI_SPEAKING" || voiceStateRef.current === "FALLBACK_TEXT") {
+      console.warn("[VOICE GUARD] Cannot start listening while AI is speaking or in fallback mode.");
+      return;
+    }
+
+    setErrorMessage(null);
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRec) {
@@ -265,20 +216,22 @@ export function useVoiceAssistant(
       };
       setErrorMessage(err.message);
       onError?.(err);
+      switchToTextMode("Browser unsupported");
       return;
     }
 
-    // Stop ongoing recognition if any
+    // Singleton Protection: Abort any previous instance before creating a new one
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop();
+        recognitionRef.current.abort();
       } catch {}
+      recognitionRef.current = null;
     }
 
     try {
       const recognition = new SpeechRec();
       recognitionRef.current = recognition;
-      recognition.continuous = true;
+      recognition.continuous = false; // Turn-based: finish each turn cleanly
       recognition.interimResults = true;
 
       const langObj = getSupportedLanguage(activeLanguageRef.current);
@@ -286,17 +239,17 @@ export function useVoiceAssistant(
 
       recognition.onstart = () => {
         isListeningRef.current = true;
+        shouldListenRef.current = true;
         updateState("LISTENING");
         playAccessibleChime("start");
       };
 
-      // ── Instant Barge-In on voice activity ──
-      recognition.onspeechstart = () => {
-        stopSpeaking();
-      };
-
       recognition.onresult = (event: any) => {
-        stopSpeaking();
+        // Safeguard 3: If AI started speaking while a late event arrived, DISCARD IMMEDIATELY
+        if (isAISpeakingRef.current || voiceStateRef.current === "AI_SPEAKING") {
+          console.warn("[VOICE GUARD] Dropping incoming recognition result because AI is speaking.");
+          return;
+        }
 
         let interim = "";
         let final = "";
@@ -316,10 +269,25 @@ export function useVoiceAssistant(
 
         if (final) {
           const cleanFinal = final.trim();
+          if (!cleanFinal) return;
+
+          // Deduplication: ignore identical transcripts within 1500ms
+          const now = Date.now();
+          if (
+            cleanFinal.toLowerCase() === lastProcessedTranscriptRef.current.toLowerCase() &&
+            now - lastTranscriptTimeRef.current < 1500
+          ) {
+            console.log("[VOICE] Ignoring duplicate transcript:", cleanFinal);
+            return;
+          }
+
+          lastProcessedTranscriptRef.current = cleanFinal;
+          lastTranscriptTimeRef.current = now;
+
           setTranscript(cleanFinal);
           setInterimTranscript("");
 
-          // ── Verbal Interruption Command Interceptor ──
+          // ── Verbal Barge-In Interruption Command Check ──
           const lower = cleanFinal.toLowerCase();
           if (
             lower === "stop" ||
@@ -327,33 +295,59 @@ export function useVoiceAssistant(
             lower === "pause" ||
             lower === "રોકો" ||
             lower === "रुको" ||
-            lower === "arrête" ||
-            lower === "stop speaking"
+            lower === "arrête"
           ) {
             stopSpeaking();
+            stopListening();
             playAccessibleChime("stop");
             return;
           }
 
-          if (
-            lower === "repeat" ||
-            lower === "say that again" ||
-            lower === "ફરીથી કહો" ||
-            lower === "दोहराएं" ||
-            lower === "répéter"
-          ) {
-            repeatLastSpoken();
-            return;
-          }
-
-          // Detect spoken language from final transcript
+          // Detect spoken language and sync if changed
           const detected = detectLanguageFromText(cleanFinal);
           if (detected && detected !== activeLanguageRef.current) {
             setActiveLanguage(detected);
             activeLanguageRef.current = detected;
           }
 
+          // Immediately stop mic while processing user answer
+          stopListening();
+          updateState("PROCESSING");
           onTranscript?.(cleanFinal, true);
+
+          // ── Question Validation & Turn-Taking ──
+          const activeQ = currentQuestionRef.current;
+          if (activeQ && !activeQ.answered) {
+            const validation: ValidationResult = validateUserAnswer(
+              cleanFinal,
+              activeQ.expectedType,
+              activeLanguageRef.current
+            );
+
+            if (validation.valid) {
+              console.log("[VOICE] Valid answer received for question:", activeQ.id, validation.value);
+              activeQ.answered = true;
+              activeQ.answer = validation.value;
+              activeQ.attempts = 0;
+              setCurrentQuestion({ ...activeQ });
+              currentQuestionRef.current = { ...activeQ };
+              onValidAnswer?.(activeQ, validation.value);
+            } else {
+              // Invalid / Unrelated Answer $\rightarrow$ Increment Attempt
+              activeQ.attempts += 1;
+              console.warn(`[VOICE] Invalid answer for question: ${activeQ.id}. Attempt ${activeQ.attempts}/3.`);
+              setCurrentQuestion({ ...activeQ });
+              currentQuestionRef.current = { ...activeQ };
+
+              if (activeQ.attempts >= 3) {
+                switchToTextMode(`3 failed attempts on question ${activeQ.id}`);
+              } else {
+                const retryPrompt = getQuestionRetryPrompt(activeQ, activeLanguageRef.current);
+                // Speak the retry question and wait for next attempt
+                speak(retryPrompt, activeLanguageRef.current, { isQuestion: true, questionState: activeQ });
+              }
+            }
+          }
         }
       };
 
@@ -368,55 +362,210 @@ export function useVoiceAssistant(
           };
           setErrorMessage(err.message);
           onError?.(err);
+          switchToTextMode("Microphone permission denied");
         } else if (rawErr !== "no-speech" && rawErr !== "aborted") {
-          const err: SpeechError = {
-            type: "recognition_failed",
-            message: `Recognition error: ${rawErr}`,
-            provider: "web",
-          };
-          setErrorMessage(err.message);
-          onError?.(err);
+          console.warn("[VOICE ERROR] Recognition error:", rawErr);
         }
         isListeningRef.current = false;
-        updateState("IDLE");
+        if (voiceStateRef.current === "LISTENING") {
+          updateState("IDLE");
+        }
       };
 
       recognition.onend = () => {
-        if (isListeningRef.current) {
-          // Restart if still marked as listening
+        isListeningRef.current = false;
+        // Safeguard 5: NEVER blindly restart if AI is speaking or listening was stopped
+        if (
+          shouldListenRef.current &&
+          !isAISpeakingRef.current &&
+          voiceStateRef.current === "LISTENING"
+        ) {
           try {
             recognition.start();
           } catch {
             isListeningRef.current = false;
             updateState("IDLE");
           }
-        } else {
+        } else if (voiceStateRef.current === "LISTENING") {
           updateState("IDLE");
         }
       };
 
       recognition.start();
     } catch (err: any) {
-      console.error("[useVoiceAssistant] Speech init failed:", err);
-      const errorObj: SpeechError = {
-        type: "recognition_failed",
-        message: "Microphone initialization failed. Please check permissions.",
-        provider: "web",
-        originalError: err,
-      };
-      setErrorMessage(errorObj.message);
-      onError?.(errorObj);
+      console.error("[VOICE] Recognition start error:", err);
+      isListeningRef.current = false;
       updateState("IDLE");
     }
-  }, [onError, onTranscript, repeatLastSpoken, stopSpeaking, updateState]);
+  }, [onError, onTranscript, onValidAnswer, stopListening, stopSpeaking, switchToTextMode, updateState]);
+
+  /**
+   * Synthesize and Speak Text using unified Multi-Provider Cascade
+   * Microphone is GUARANTEED OFF before speech begins.
+   */
+  const speak = useCallback(
+    async (
+      text: string,
+      langOverride?: string,
+      opts?: { isQuestion?: boolean; questionState?: QuestionState }
+    ): Promise<void> => {
+      if (!text || !text.trim()) return;
+
+      // ── Step 1: ABSOLUTE MICROPHONE SHUTDOWN BEFORE TTS ──
+      stopListening();
+      isAISpeakingRef.current = true;
+      shouldListenRef.current = opts?.isQuestion || autoListenAfterSpeech;
+
+      const cleanText = text
+        .replace(/\[ACTION:.*?\]/g, "")
+        .replace(/```[\s\S]*?```/g, "Code block.")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/\*([^*]+)\*/g, "$1")
+        .trim();
+
+      if (!cleanText) {
+        isAISpeakingRef.current = false;
+        return;
+      }
+
+      if (opts?.questionState) {
+        currentQuestionRef.current = opts.questionState;
+        setCurrentQuestion(opts.questionState);
+      }
+
+      const detectedLang = langOverride || detectLanguageFromText(cleanText) || activeLanguageRef.current;
+      setActiveLanguage(detectedLang);
+      setLastSpokenText(cleanText);
+      updateState("AI_SPEAKING");
+
+      const onTTSFinished = () => {
+        console.log("[VOICE] TTS Finished.");
+        isAISpeakingRef.current = false;
+        updateState("IDLE");
+
+        // ── Step 2: 300ms Cooldown Gate before Microphone Starts ──
+        if (shouldListenRef.current && voiceStateRef.current !== "FALLBACK_TEXT") {
+          setTimeout(() => {
+            if (shouldListenRef.current && !isAISpeakingRef.current) {
+              startListening();
+            }
+          }, 300);
+        }
+      };
+
+      try {
+        const audioResult = await speechService.current.textToSpeech(cleanText, {
+          language: detectedLang,
+        });
+
+        if (audioResult.useNativeSynthesis) {
+          if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            const langObj = getSupportedLanguage(detectedLang);
+            utterance.lang = langObj.speechSynthesisLocale;
+
+            const voices = window.speechSynthesis.getVoices();
+            const prefix = langObj.speechSynthesisLocale.split("-")[0];
+            const voice =
+              voices.find((v) => v.lang.toLowerCase() === langObj.speechSynthesisLocale.toLowerCase()) ||
+              voices.find((v) => v.lang.toLowerCase().startsWith(prefix)) ||
+              voices[0];
+            if (voice) utterance.voice = voice;
+
+            utterance.onstart = () => {
+              isAISpeakingRef.current = true;
+              stopListening();
+            };
+
+            utterance.onend = () => {
+              onTTSFinished();
+            };
+
+            utterance.onerror = () => {
+              onTTSFinished();
+            };
+
+            window.speechSynthesis.speak(utterance);
+          } else {
+            onTTSFinished();
+          }
+        } else if (audioResult.audioBuffer) {
+          const blob =
+            audioResult.audioBuffer instanceof Blob
+              ? audioResult.audioBuffer
+              : new Blob([audioResult.audioBuffer], { type: audioResult.mimeType || "audio/mpeg" });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          currentAudioElementRef.current = audio;
+
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
+            currentAudioElementRef.current = null;
+            onTTSFinished();
+          };
+
+          audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            currentAudioElementRef.current = null;
+            onTTSFinished();
+          };
+
+          await audio.play();
+        } else {
+          onTTSFinished();
+        }
+      } catch (err: any) {
+        console.warn("[useVoiceAssistant] TTS error:", err);
+        onTTSFinished();
+      }
+    },
+    [autoListenAfterSpeech, startListening, stopListening, updateState]
+  );
+
+  const pauseSpeaking = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.pause();
+      } catch {}
+    }
+    if (currentAudioElementRef.current) {
+      try {
+        currentAudioElementRef.current.pause();
+      } catch {}
+    }
+  }, []);
+
+  const resumeSpeaking = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.resume();
+      } catch {}
+    }
+    if (currentAudioElementRef.current) {
+      try {
+        currentAudioElementRef.current.play().catch(() => {});
+      } catch {}
+    }
+  }, []);
+
+  const repeatLastSpoken = useCallback(() => {
+    if (lastSpokenText) {
+      speak(lastSpokenText, activeLanguageRef.current, {
+        isQuestion: Boolean(currentQuestionRef.current && !currentQuestionRef.current.answered),
+        questionState: currentQuestionRef.current || undefined,
+      });
+    }
+  }, [lastSpokenText, speak]);
 
   const toggleListening = useCallback(() => {
-    if (isListeningRef.current || state === "LISTENING") {
+    if (isListeningRef.current || voiceStateRef.current === "LISTENING") {
       stopListening();
     } else {
       startListening();
     }
-  }, [startListening, stopListening, state]);
+  }, [startListening, stopListening]);
 
   const setLanguage = useCallback((lang: string) => {
     setActiveLanguage(lang);
@@ -428,27 +577,40 @@ export function useVoiceAssistant(
     speechService.current.setProvider(provider);
   }, []);
 
-  // Cleanup on unmount
+  const setActiveQuestion = useCallback((q: QuestionState | null) => {
+    currentQuestionRef.current = q;
+    setCurrentQuestion(q);
+  }, []);
+
+  const resetConversation = useCallback(() => {
+    stopSpeaking();
+    stopListening();
+    currentQuestionRef.current = null;
+    setCurrentQuestion(null);
+    lastProcessedTranscriptRef.current = "";
+    lastTranscriptTimeRef.current = 0;
+    updateState("IDLE");
+  }, [stopListening, stopSpeaking, updateState]);
+
+  // Clean up on component unmount
   useEffect(() => {
     return () => {
       stopSpeaking();
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
+      stopListening();
     };
-  }, [stopSpeaking]);
+  }, [stopListening, stopSpeaking]);
 
   return {
     state,
     isListening: state === "LISTENING",
-    isSpeaking: state === "SPEAKING",
-    isThinking: state === "AI_THINKING",
+    isSpeaking: state === "AI_SPEAKING",
+    isProcessing: state === "PROCESSING",
+    isTextFallback: state === "FALLBACK_TEXT",
     transcript,
     interimTranscript,
     activeLanguage,
     activeProvider,
+    currentQuestion,
     lastSpokenText,
     errorMessage,
     permissionDenied,
@@ -462,6 +624,8 @@ export function useVoiceAssistant(
     repeatLastSpoken,
     setLanguage,
     setProvider,
-    setVoiceState: updateState,
+    setActiveQuestion,
+    switchToTextMode,
+    resetConversation,
   };
 }

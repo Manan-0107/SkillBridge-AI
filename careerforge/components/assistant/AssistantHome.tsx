@@ -13,7 +13,12 @@ import {
   detectTextLanguage,
 } from "@/lib/voice";
 import { LANGUAGE_LIST, getSupportedLanguage } from "@/lib/speech/languages";
-import { SpeechProviderType } from "@/lib/speech/types";
+import { SpeechProviderType, QuestionState, ExpectedAnswerType, VoiceState } from "@/lib/speech/types";
+import {
+  validateUserAnswer,
+  getQuestionRetryPrompt,
+  getFallbackMessage,
+} from "@/lib/speech/questionFlow";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 
@@ -96,6 +101,8 @@ export function AssistantHome({
   const [lastAssistantReply, setLastAssistantReply] = useState<string | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
+  const [activeQuestion, setActiveQuestion] = useState<QuestionState | null>(null);
+  const [textFallbackActive, setTextFallbackActive] = useState(false);
 
   // Share & Toast State
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -105,7 +112,10 @@ export function AssistantHome({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // Refs
+  // Refs for Real-Time Audio Synchronization & Guarding
+  const isAISpeakingRef = useRef(false);
+  const activeQuestionRef = useRef<QuestionState | null>(null);
+  activeQuestionRef.current = activeQuestion;
   const speechControllerRef = useRef<SpeechRecognitionController | null>(null);
   const speechBaseTextRef = useRef<string>("");
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -522,7 +532,7 @@ export function AssistantHome({
     onRedirect(feature, tab);
   };
 
-  // ─── 7. Send Prompt via Backend ─────────────────────────────────────────────
+  // ─── 7. Send Prompt via Backend & Question Turn Engine ─────────────────────
   const runPrompt = async (prompt: string) => {
     if ((!prompt.trim() && !attachedFile) || busy || !activeConversation) return;
     clearSilenceTimers();
@@ -532,6 +542,186 @@ export function AssistantHome({
     const userMsgId = `user-${Date.now()}`;
     const userMsgText = prompt.trim();
     const docInfo = attachedFile;
+
+    // ── Turn-Taking Question Validation & 3-Attempt Fallback ──
+    const currentQ = activeQuestionRef.current;
+    if (currentQ && !currentQ.answered && userMsgText) {
+      const valResult = validateUserAnswer(
+        userMsgText,
+        currentQ.expectedType,
+        voiceLanguage !== "auto" ? voiceLanguage : "en"
+      );
+
+      if (!valResult.valid) {
+        currentQ.attempts += 1;
+        setActiveQuestion({ ...currentQ });
+        activeQuestionRef.current = { ...currentQ };
+
+        if (currentQ.attempts >= 3) {
+          // ── 3-ATTEMPT RULE: AUTOMATIC TEXT FALLBACK ──
+          console.log(`[VOICE FALLBACK] 3 failed attempts on question ${currentQ.id}. Switching to text.`);
+          setTextFallbackActive(true);
+          setVoiceMode(false);
+          setAccessibilityPrefs({ interactionMode: "text" });
+          stopAllVoice();
+
+          const fallbackText = getFallbackMessage(voiceLanguage !== "auto" ? voiceLanguage : "en");
+          const fallbackMessages: Msg[] = [
+            ...messages,
+            {
+              id: userMsgId,
+              role: "user",
+              text: userMsgText,
+              time: now,
+            },
+            {
+              id: `fallback-${Date.now()}`,
+              role: "assistant",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              text: `🎤 Voice assistant paused.\n\n${fallbackText}`,
+              engine: "CareerForge AI",
+            },
+          ];
+
+          saveConversations(
+            conversations.map((c) =>
+              c.id === activeConversation.id ? { ...activeConversation, messages: fallbackMessages } : c
+            )
+          );
+          setBusy(false);
+          scrollToBottom();
+
+          // Auto-focus keyboard input immediately
+          requestAnimationFrame(() => {
+            textareaRef.current?.focus();
+          });
+          return;
+        } else {
+          // ── REPEAT / RETRY QUESTION WITH EMPATHETIC GUIDANCE ──
+          const retryText = getQuestionRetryPrompt(currentQ, voiceLanguage !== "auto" ? voiceLanguage : "en");
+          const retryMessages: Msg[] = [
+            ...messages,
+            {
+              id: userMsgId,
+              role: "user",
+              text: userMsgText,
+              time: now,
+            },
+            {
+              id: `ai-retry-${Date.now()}`,
+              role: "assistant",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              text: retryText,
+              engine: "CareerForge AI",
+            },
+          ];
+
+          saveConversations(
+            conversations.map((c) =>
+              c.id === activeConversation.id ? { ...activeConversation, messages: retryMessages } : c
+            )
+          );
+          setBusy(false);
+          scrollToBottom();
+
+          if (voiceMode && accessibilityPrefs?.speechOutput !== false) {
+            setSpeakingMsgId(`ai-retry-${Date.now()}`);
+            setLiveSpokenText(retryText);
+            isAISpeakingRef.current = true;
+            stopListening();
+            speakText(retryText, {
+              lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(retryText),
+              onStart: () => {
+                isAISpeakingRef.current = true;
+                stopListening();
+              },
+              onEnd: () => {
+                isAISpeakingRef.current = false;
+                setSpeakingMsgId(null);
+                setLiveSpokenText(null);
+                if (voiceMode && !textFallbackActive) {
+                  setTimeout(() => {
+                    if (!isAISpeakingRef.current) startListening();
+                  }, 300);
+                }
+              },
+              onError: () => {
+                isAISpeakingRef.current = false;
+                setSpeakingMsgId(null);
+                setLiveSpokenText(null);
+              },
+            });
+          }
+          return;
+        }
+      } else {
+        // ── VALID ANSWER RECEIVED: SAVE ANSWER & TRANSITION TO NEXT QUESTION ──
+        currentQ.answered = true;
+        currentQ.answer = valResult.value;
+        currentQ.attempts = 0;
+        setActiveQuestion({ ...currentQ });
+        activeQuestionRef.current = { ...currentQ };
+
+        if (currentQ.id === "onboarding_name") {
+          setActiveQuestion({
+            id: "onboarding_career",
+            question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
+            expectedType: "free_text",
+            attempts: 0,
+            maxAttempts: 3,
+            answered: false,
+          });
+          activeQuestionRef.current = {
+            id: "onboarding_career",
+            question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
+            expectedType: "free_text",
+            attempts: 0,
+            maxAttempts: 3,
+            answered: false,
+          };
+        } else if (currentQ.id === "onboarding_career") {
+          setTargetRole(valResult.value);
+          setActiveQuestion({
+            id: "onboarding_has_resume",
+            question: "Do you already have a resume?",
+            expectedType: "yes_no",
+            attempts: 0,
+            maxAttempts: 3,
+            answered: false,
+          });
+          activeQuestionRef.current = {
+            id: "onboarding_has_resume",
+            question: "Do you already have a resume?",
+            expectedType: "yes_no",
+            attempts: 0,
+            maxAttempts: 3,
+            answered: false,
+          };
+        } else if (currentQ.id === "onboarding_has_resume") {
+          if (valResult.value === true) {
+            setActiveQuestion(null);
+            activeQuestionRef.current = null;
+          } else {
+            setActiveQuestion({
+              id: "resume_step_1",
+              question: "Let's build your resume together! What is your full name?",
+              expectedType: "text",
+              attempts: 0,
+              maxAttempts: 3,
+              answered: false,
+            });
+            activeQuestionRef.current = {
+              id: "resume_step_1",
+              question: "Let's build your resume together! What is your full name?",
+              expectedType: "text",
+              attempts: 0,
+              maxAttempts: 3,
+              answered: false,
+            };
+          }
+        }
+      }
+    }
 
     let fullPromptForLlm = userMsgText;
     if (docInfo) {
@@ -657,19 +847,29 @@ export function AssistantHome({
       scrollToBottom();
 
       // Automatically speak the question and auto-listen for user's voice reply
-      if (voiceMode && accessibilityPrefs?.speechOutput !== false) {
+      if (voiceMode && accessibilityPrefs?.speechOutput !== false && !textFallbackActive) {
         setSpeakingMsgId(finalMessages[finalMessages.length - 1].id);
         setLiveSpokenText(replyText);
+        isAISpeakingRef.current = true;
+        stopListening();
         speakText(replyText, {
           lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(replyText),
+          onStart: () => {
+            isAISpeakingRef.current = true;
+            stopListening();
+          },
           onEnd: () => {
+            isAISpeakingRef.current = false;
             setSpeakingMsgId(null);
             setLiveSpokenText(null);
-            if (voiceMode) {
-              startListening();
+            if (voiceMode && !textFallbackActive) {
+              setTimeout(() => {
+                if (!isAISpeakingRef.current) startListening();
+              }, 300);
             }
           },
           onError: () => {
+            isAISpeakingRef.current = false;
             setSpeakingMsgId(null);
             setLiveSpokenText(null);
           },
@@ -680,7 +880,7 @@ export function AssistantHome({
       if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
         setRedirectCountdown(3);
         const timer = setTimeout(() => {
-          executeRedirect(data.feature, data.resumeTab);
+          executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
         }, 3200);
         setActiveTimer(timer);
       }
@@ -914,6 +1114,32 @@ export function AssistantHome({
             <span className="text-xs font-semibold text-neutral-800 truncate max-w-[140px] sm:max-w-xs">
               {activeConversation?.title || "Career Copilot"}
             </span>
+
+            {/* Dynamic Real-Time Voice State Status Badge */}
+            {speakingMsgId && (
+              <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700 animate-pulse flex items-center gap-1">
+                <span>🔊</span>
+                <span>AI is speaking...</span>
+              </span>
+            )}
+            {!speakingMsgId && listening && (
+              <span className="rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[11px] font-semibold text-red-700 animate-pulse flex items-center gap-1">
+                <span>🎤</span>
+                <span>Listening...</span>
+              </span>
+            )}
+            {!speakingMsgId && !listening && busy && (
+              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700 animate-pulse flex items-center gap-1">
+                <span>⏳</span>
+                <span>Processing...</span>
+              </span>
+            )}
+            {textFallbackActive && !listening && !speakingMsgId && (
+              <span className="rounded-full bg-neutral-100 border border-neutral-300 px-2 py-0.5 text-[11px] font-semibold text-neutral-700 flex items-center gap-1">
+                <span>⌨️</span>
+                <span>Text mode</span>
+              </span>
+            )}
           </div>
 
           {/* Voice Toolbar: Provider, Language, Repeat, Stop, Mute */}
@@ -1031,9 +1257,39 @@ export function AssistantHome({
                   <button
                     type="button"
                     onClick={() => {
+                      const initialQ: QuestionState = {
+                        id: "onboarding_name",
+                        question: "Hi! I'm your career assistant. What would you like me to call you?",
+                        expectedType: "text",
+                        attempts: 0,
+                        maxAttempts: 3,
+                        answered: false,
+                      };
+                      setActiveQuestion(initialQ);
+                      activeQuestionRef.current = initialQ;
                       setVoiceMode(true);
-                      toggleListening();
-                      speakText("Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. How can I help you today?");
+                      setTextFallbackActive(false);
+                      stopListening();
+                      isAISpeakingRef.current = true;
+                      speakText(
+                        "Hi! I'm your career assistant. I'll guide you step by step. You can speak naturally, and you can interrupt me anytime. What would you like me to call you?",
+                        {
+                          lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+                          onStart: () => {
+                            isAISpeakingRef.current = true;
+                            stopListening();
+                          },
+                          onEnd: () => {
+                            isAISpeakingRef.current = false;
+                            setTimeout(() => {
+                              if (!isAISpeakingRef.current) startListening();
+                            }, 300);
+                          },
+                          onError: () => {
+                            isAISpeakingRef.current = false;
+                          },
+                        }
+                      );
                     }}
                     className="flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-xs font-semibold shadow-md transition-all cursor-pointer transform hover:-translate-y-0.5"
                   >
