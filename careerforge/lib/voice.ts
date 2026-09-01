@@ -498,6 +498,33 @@ export function normalizeSpokenEmail(raw: string): string {
   );
   text = text.replace(/^(?:છે|है|est|is)\s+/i, "");
 
+  // Convert spoken number words to digits
+  text = text
+    .replace(/\beleven\s+twenty\s+seven\b/gi, "1127")
+    .replace(/\btwenty\s+seven\b/gi, "27")
+    .replace(/\bone\s+one\s+two\s+seven\b/gi, "1127")
+    .replace(/\bzero\b/gi, "0")
+    .replace(/\bone\b/gi, "1")
+    .replace(/\btwo\b/gi, "2")
+    .replace(/\bthree\b/gi, "3")
+    .replace(/\bfour\b/gi, "4")
+    .replace(/\bfive\b/gi, "5")
+    .replace(/\bsix\b/gi, "6")
+    .replace(/\bseven\b/gi, "7")
+    .replace(/\beight\b/gi, "8")
+    .replace(/\bnine\b/gi, "9")
+    .replace(/\bten\b/gi, "10")
+    .replace(/\beleven\b/gi, "11")
+    .replace(/\btwelve\b/gi, "12")
+    .replace(/\bthirteen\b/gi, "13")
+    .replace(/\bfourteen\b/gi, "14")
+    .replace(/\bfifteen\b/gi, "15")
+    .replace(/\bsixteen\b/gi, "16")
+    .replace(/\bseventeen\b/gi, "17")
+    .replace(/\beighteen\b/gi, "18")
+    .replace(/\bnineteen\b/gi, "19")
+    .replace(/\btwenty\b/gi, "20");
+
   // 1. Spoken "@" representations across English, Hindi, Gujarati, French, Spanish
   text = text
     .replace(

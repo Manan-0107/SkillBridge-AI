@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
+import { normalizeSpokenEmail } from "@/lib/voice";
 
 export const runtime = "nodejs";
 
@@ -826,6 +827,28 @@ function generateCognitiveAgentResponse(
     } else {
       return {
         reply: "I'd be glad to notify you! What email address should I send your job alerts to?",
+      };
+    }
+  }
+
+  // ─── F2. Direct Email Input Recognition (e.g. mananshah1127@gmail.com) ───
+  if (lower.includes("@") || lower.includes("gmail") || lower.includes(".com") || lower.includes("at the rate")) {
+    const rawEmail = normalizeSpokenEmail(query);
+    if (rawEmail && rawEmail.includes("@")) {
+      const reply = isFrench
+        ? `J'ai bien enregistré votre adresse e-mail : **${rawEmail}**. Quel poste ou domaine souhaitez-vous explorer ?`
+        : isGujarati
+        ? `મેં તમારું ઈમેઇલ **${rawEmail}** સેવ કરી લીધું છે. તમે કયા રોલ અથવા કરિયર ટ્રેક માટે તૈયારી કરી રહ્યા છો?`
+        : isHindi
+        ? `मैंने आपका ईमेल **${rawEmail}** सहेज लिया है। आप किस पद या रोल के लिए तैयारी कर रहे हैं?`
+        : `I've saved your email as **${rawEmail}**! What target role or career track are you aiming for?`;
+
+      return {
+        reply,
+        toolCall: {
+          tool: "updateUserProfile",
+          parameters: { email: rawEmail },
+        },
       };
     }
   }

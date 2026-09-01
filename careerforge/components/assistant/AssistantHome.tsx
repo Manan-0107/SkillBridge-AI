@@ -9,6 +9,7 @@ import {
   startSpeechRecognition,
   SpeechRecognitionController,
   isSpeechRecognitionSupported,
+  normalizeSpokenEmail,
 } from "@/lib/voice";
 import { ShareModal } from "./ShareModal";
 
@@ -191,14 +192,13 @@ export function AssistantHome({
     }, 3500);
   };
 
-  const toggleListening = () => {
-    if (listening) {
-      clearSilenceTimers();
-      speechControllerRef.current?.stop();
-      setListening(false);
-      return;
-    }
+  const stopListening = () => {
+    clearSilenceTimers();
+    speechControllerRef.current?.stop();
+    setListening(false);
+  };
 
+  const startListening = () => {
     setMicError(null);
     clearSilenceTimers();
     speechBaseTextRef.current = input.trim();
@@ -207,8 +207,18 @@ export function AssistantHome({
       lang: voiceLang,
       onTranscript: (transcript: string) => {
         if (transcript) {
+          let processed = transcript;
+          if (
+            transcript.includes("@") ||
+            transcript.toLowerCase().includes("at the rate") ||
+            transcript.toLowerCase().includes("at rate") ||
+            transcript.toLowerCase().includes("gmail") ||
+            transcript.toLowerCase().includes(".com")
+          ) {
+            processed = normalizeSpokenEmail(transcript);
+          }
           const base = speechBaseTextRef.current;
-          const combined = base ? `${base} ${transcript}` : transcript;
+          const combined = base ? `${base} ${processed}` : processed;
           setInput(combined);
           inputRef.current = combined;
           startSilenceAutoSendCountdown();
@@ -226,6 +236,14 @@ export function AssistantHome({
     });
 
     speechControllerRef.current = controller;
+  };
+
+  const toggleListening = () => {
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const toggleSpeech = (msgId: string, text: string) => {
@@ -542,9 +560,15 @@ export function AssistantHome({
       );
       scrollToBottom();
 
-      // Automatically speak the response if speech output is active
+      // Automatically speak the question and auto-listen for user's voice reply
       if (voiceMode && accessibilityPrefs?.speechOutput !== false) {
-        speakText(replyText);
+        speakText(replyText, {
+          onEnd: () => {
+            if (voiceMode) {
+              startListening();
+            }
+          },
+        });
       }
 
       setBusy(false);

@@ -90,7 +90,14 @@ export function GlobalVoiceDictator() {
         showStatus("🎙️ " + prompt, 4000);
         playAccessibleChime("focus");
         if (accessibilityPrefs?.speechOutput !== false) {
-          speakText(prompt, { lang: currentLangRef.current });
+          speakText(prompt, {
+            lang: currentLangRef.current,
+            onEnd: () => {
+              if (!active) {
+                toggleVoiceDictation();
+              }
+            },
+          });
         }
       }
     };
