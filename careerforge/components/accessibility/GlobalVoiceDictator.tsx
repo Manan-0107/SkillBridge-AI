@@ -15,6 +15,8 @@ import {
   SUPPORTED_LANGUAGES,
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
+  normalizeSpokenEmail,
+  getFieldPromptMessage,
 } from "@/lib/voice";
 
 export function GlobalVoiceDictator() {
@@ -60,7 +62,7 @@ export function GlobalVoiceDictator() {
     }, duration);
   }, []);
 
-  // ─── 1. Track Active Focused Input / Textarea ───────────────────────────────
+  // ─── 1. Track Active Focused Input / Textarea & Prompt User to Speak ─────────
   useEffect(() => {
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement | null;
@@ -81,6 +83,15 @@ export function GlobalVoiceDictator() {
           target.id ||
           (target instanceof HTMLTextAreaElement ? "Text Area" : `${target.type || "text"} field`);
         setFocusedFieldLabel(label);
+
+        // Whenever a field is live/focused, ask the user to speak for that field!
+        const prompt = getFieldPromptMessage(label, target.type, currentLangRef.current);
+        setAiSpeechPrompt(prompt);
+        showStatus("🎙️ " + prompt, 4000);
+        playAccessibleChime("focus");
+        if (accessibilityPrefs?.speechOutput !== false) {
+          speakText(prompt, { lang: currentLangRef.current });
+        }
       }
     };
 
@@ -292,35 +303,41 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // ── Command E: Answering Pending AI Prompt (e.g. Email / Name / Password / Search)
-      if (pendingFieldTarget === "email" || (!user && (lower.includes("@") || lower.includes("gmail") || lower.includes(".com")))) {
-        const rawEmail = clean
-          .replace(/^(?:મારું ઈમેલ|મારું ઈમેઈલ|ઈમેલ|ईमेल|email|my email is)\s+/i, "")
-          .replace(/\s+at\s+/gi, "@")
-          .replace(/\s+dot\s+/gi, ".")
-          .replace(/\s+/g, "")
-          .toLowerCase();
+      // ── Command E: Live Focused Field Filling or Pending AI Prompt ──────────
+      if (focusedElementRef.current) {
+        const target = focusedElementRef.current;
+        const isEmailField =
+          target.type === "email" ||
+          (target.name && target.name.toLowerCase().includes("email")) ||
+          (target.id && target.id.toLowerCase().includes("email")) ||
+          (target.placeholder && target.placeholder.toLowerCase().includes("email")) ||
+          lower.includes("@") ||
+          lower.includes("at the rate") ||
+          lower.includes("at rate") ||
+          lower.includes("એટ ધ રેટ") ||
+          lower.includes("एट द रेट") ||
+          lower.includes("gmail") ||
+          lower.includes(".com");
 
-        const emailInput = document.querySelector<HTMLInputElement>(
-          'input[type="email"], input[name*="email" i], input[id*="email" i], input[placeholder*="email" i]'
-        );
-        if (emailInput) {
-          emailInput.focus();
-          setNativeInputValue(emailInput, rawEmail);
+        if (isEmailField) {
+          const rawEmail = normalizeSpokenEmail(clean);
+          setNativeInputValue(target, rawEmail);
           playAccessibleChime("success");
-          setPendingFieldTarget("password");
-
           const ack = isGujarati
-            ? `ઈમેઇલ ${rawEmail} ભરી દીધું છે. હવે તમારો પાસવર્ડ જણાવો.`
+            ? `ઈમેઇલ ${rawEmail} ભરાઈ ગયું છે.`
             : isHindi
-            ? `ईमेल ${rawEmail} दर्ज कर दिया गया है। अब अपना पासवर्ड बताएं।`
-            : `Email filled: ${rawEmail}. Now what is your password?`;
-
-          setAiSpeechPrompt(ack);
-          speakText(ack, { lang: detectedLang });
-          showStatus(`✅ ${ack}`, 4500);
+            ? `ईमेल ${rawEmail} दर्ज कर दिया गया है।`
+            : `Email entered: ${rawEmail}`;
+          showStatus(`✅ ${ack}`, 4000);
           return;
         }
+
+        // Generic text / number / search / role input field
+        setNativeInputValue(target, clean);
+        playAccessibleChime("success");
+        const ack = isGujarati ? `ભરાઈ ગયું: ${clean}` : isHindi ? `दर्ज हुआ: ${clean}` : `Entered: ${clean}`;
+        showStatus(`✅ ${ack}`, 3500);
+        return;
       }
 
       // ── Command F: Targeted Voice Commands (Email / Password / Name / Search)
@@ -329,8 +346,8 @@ export function GlobalVoiceDictator() {
       const nameMatch = clean.match(/^(?:name|fill name|my name is|મારું નામ|नाम)\s+(.+)$/i);
       const searchMatch = clean.match(/^(?:search|find|શોધો|ખોજો|खोजो)\s+(.+)$/i);
 
-      if (emailMatch) {
-        const rawEmail = emailMatch[1].replace(/\s+at\s+/gi, "@").replace(/\s+dot\s+/gi, ".").replace(/\s+/g, "").toLowerCase();
+      if (emailMatch || lower.includes("@") || lower.includes("at the rate") || lower.includes("gmail") || lower.includes(".com")) {
+        const rawEmail = normalizeSpokenEmail(emailMatch ? emailMatch[1] : clean);
         const emailInput = document.querySelector<HTMLInputElement>(
           'input[type="email"], input[name*="email" i], input[id*="email" i], input[placeholder*="email" i]'
         );
@@ -338,7 +355,8 @@ export function GlobalVoiceDictator() {
           emailInput.focus();
           setNativeInputValue(emailInput, rawEmail);
           playAccessibleChime("success");
-          showStatus(isGujarati ? `ઈમેઇલ ભરાઈ ગયું: ${rawEmail}` : `Filled Email: ${rawEmail}`);
+          const ack = isGujarati ? `ઈમેઇલ ભરાઈ ગયું: ${rawEmail}` : `Email filled: ${rawEmail}`;
+          showStatus(`✅ ${ack}`, 4000);
           return;
         }
       }
@@ -380,7 +398,7 @@ export function GlobalVoiceDictator() {
           searchInput.focus();
           setNativeInputValue(searchInput, searchVal);
           playAccessibleChime("success");
-          showStatus(isGujarati ? `શોધી રહ્યું છે: ${searchVal}` : `Searching: ${searchVal}`);
+          showStatus(isGujarati ? `શોધી રહ્યા છીએ: ${searchVal}` : `Searching: ${searchVal}`);
           return;
         }
       }

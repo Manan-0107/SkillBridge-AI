@@ -8,6 +8,8 @@
  * - Requires confirmation for critical fields (e.g. Email / Phone)
  */
 
+import { normalizeSpokenEmail } from "@/lib/voice";
+
 export interface ResumeDraftState {
   step: number;
   fullName?: string;
@@ -169,9 +171,6 @@ export function processResumeStepInput(
 
   // Step 2 Confirmation check (for Email)
   if (currentStep === 2 && !currentState.emailConfirmed && !isSkip) {
-    const emailMatch = clean.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    const emailCandidate = emailMatch ? emailMatch[0] : clean.replace(/\s+/g, "");
-    
     // If user says "yes" / "correct" to confirm
     if (lower === "yes" || lower === "correct" || lower === "હા" || lower === "हाँ" || lower === "oui") {
       updatedState.emailConfirmed = true;
@@ -182,6 +181,8 @@ export function processResumeStepInput(
         isComplete: false,
       };
     }
+
+    const emailCandidate = normalizeSpokenEmail(clean);
 
     // Save candidate email and ask for confirmation
     updatedState.email = emailCandidate;
