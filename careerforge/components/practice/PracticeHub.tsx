@@ -4,8 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Section } from "@/components/ui/Section";
 import { Card, PrimaryButton, GhostButton, Tag } from "@/components/ui/Primitives";
-import { useApp } from "@/lib/store";
-import { startSpeechRecognition, SpeechRecognitionController } from "@/lib/voice";
+import { startSpeechRecognition, SpeechRecognitionController, speakText, stopSpeaking } from "@/lib/voice";
 
 export interface PracticeQuestion {
   id: string;
@@ -418,60 +417,40 @@ export function PracticeHub() {
 
   // Vocalize Question Text
   const handleReadQuestion = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      alert("Speech synthesis is not supported in this browser.");
-      return;
-    }
-
     if (speakingQuestion) {
-      window.speechSynthesis.cancel();
+      stopSpeaking();
       setSpeakingQuestion(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
     const cleanText = activeQuestion.question;
-    const utterance = new SpeechSynthesisUtterance(`Question: ${cleanText}`);
-    utterance.lang = "en-US";
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setSpeakingQuestion(true);
-    utterance.onend = () => setSpeakingQuestion(false);
-    utterance.onerror = () => setSpeakingQuestion(false);
-
-    window.speechSynthesis.speak(utterance);
+    speakText(`Question: ${cleanText}`, {
+      lang: "en-US",
+      onStart: () => setSpeakingQuestion(true),
+      onEnd: () => setSpeakingQuestion(false),
+      onError: () => setSpeakingQuestion(false),
+    });
   };
 
   // Vocalize Explanation Text (SpeechSynthesisUtterance)
   const handleReadExplanation = (textToRead: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      alert("Speech synthesis is not supported in this browser.");
-      return;
-    }
-
     if (vocalizingExplanation) {
-      window.speechSynthesis.cancel();
+      stopSpeaking();
       setVocalizingExplanation(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
     const cleanText = textToRead
       .replace(/\*\*/g, "")
       .replace(/#{1,6}\s/g, "")
       .replace(/[•\-\*]\s/g, "");
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "en-US";
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setVocalizingExplanation(true);
-    utterance.onend = () => setVocalizingExplanation(false);
-    utterance.onerror = () => setVocalizingExplanation(false);
-
-    window.speechSynthesis.speak(utterance);
+    speakText(cleanText, {
+      lang: "en-US",
+      onStart: () => setVocalizingExplanation(true),
+      onEnd: () => setVocalizingExplanation(false),
+      onError: () => setVocalizingExplanation(false),
+    });
   };
 
   // Toggle Voice Dictation without duplicate transcript echo

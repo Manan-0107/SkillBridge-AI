@@ -14,6 +14,7 @@ import {
   stopSpeaking,
   SUPPORTED_LANGUAGES,
   setGlobalVoiceLanguage,
+  isAIAudioPlaying,
 } from "@/lib/voice";
 
 export function GlobalVoiceDictator() {
@@ -151,6 +152,11 @@ export function GlobalVoiceDictator() {
   // ─── 4. Voice Command Parser & Multilingual Form Filler ─────────────────────
   const processSpokenText = useCallback(
     (text: string, isFinal: boolean) => {
+      // ── Acoustic Echo Cancellation Guard: Discard all audio while AI is speaking
+      if (isAIAudioPlaying()) {
+        return;
+      }
+
       const clean = text.trim();
       if (!clean) return;
 
@@ -418,6 +424,7 @@ export function GlobalVoiceDictator() {
     const controller = startSpeechRecognition(
       {
         onTranscript: (transcript: string, isFinal?: boolean) => {
+          if (isAIAudioPlaying()) return;
           processSpokenText(transcript, !!isFinal);
         },
         onListeningChange: (isList: boolean) => {

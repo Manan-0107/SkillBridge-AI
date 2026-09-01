@@ -34,6 +34,13 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentLanguage = "en-US";
+let isSelfSpeaking = false;
+let speechCooldownUntil = 0;
+
+export function isAIAudioPlaying(): boolean {
+  if (typeof window === "undefined") return false;
+  return isSelfSpeaking || (window.speechSynthesis && window.speechSynthesis.speaking) || Date.now() < speechCooldownUntil;
+}
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
 export function detectTextLanguage(text: string): string {
@@ -235,6 +242,8 @@ export function stopSpeaking() {
   if (isSpeechSynthesisSupported()) {
     window.speechSynthesis.cancel();
     activeUtterance = null;
+    isSelfSpeaking = false;
+    speechCooldownUntil = 0;
   }
 }
 
@@ -252,7 +261,7 @@ export function resumeSpeaking() {
 
 export function isSpeaking(): boolean {
   if (!isSpeechSynthesisSupported()) return false;
-  return window.speechSynthesis.speaking;
+  return isSelfSpeaking || window.speechSynthesis.speaking;
 }
 
 export function speakText(
@@ -298,6 +307,7 @@ export function speakText(
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   activeUtterance = utterance;
+  isSelfSpeaking = true;
 
   utterance.lang = targetLang;
   utterance.rate = options?.rate || 0.98;
@@ -319,17 +329,24 @@ export function speakText(
     utterance.voice = matchingVoice;
   }
 
+  const finalizeSpeech = () => {
+    isSelfSpeaking = false;
+    speechCooldownUntil = Date.now() + 800; // 800ms cooldown buffer
+    activeUtterance = null;
+  };
+
   utterance.onstart = () => {
+    isSelfSpeaking = true;
     options?.onStart?.();
   };
 
   utterance.onend = () => {
-    activeUtterance = null;
+    finalizeSpeech();
     options?.onEnd?.();
   };
 
   utterance.onerror = (e) => {
-    activeUtterance = null;
+    finalizeSpeech();
     options?.onError?.(e);
   };
 
@@ -402,6 +419,11 @@ export function startSpeechRecognition(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
+      // ── Acoustic Echo Cancellation: Discard any mic input while AI is speaking
+      if (isAIAudioPlaying()) {
+        return;
+      }
+
       let interim = "";
       let final = "";
 
