@@ -20,6 +20,20 @@ export default function Home() {
     if (!user) setView({ kind: "assistant" });
   }, [user]);
 
+  useEffect(() => {
+    const handleNav = (e: CustomEvent<{ feature: FeatureId | "assistant"; resumeTab?: ResumeTab }>) => {
+      const { feature, resumeTab } = e.detail || {};
+      if (feature === "assistant") {
+        setView({ kind: "assistant" });
+      } else if (feature) {
+        setView({ kind: "feature", feature, resumeTab });
+      }
+    };
+
+    window.addEventListener("careerforge:navigate" as any, handleNav);
+    return () => window.removeEventListener("careerforge:navigate" as any, handleNav);
+  }, []);
+
   if (!ready) return null;
   if (!user) return <AuthGate />;
 

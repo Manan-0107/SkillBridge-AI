@@ -83,7 +83,7 @@ function extractDisplayName(email: string, name?: string): string {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-  const [voiceMode, setVoiceModeState] = useState(false);
+  const [voiceMode, setVoiceModeState] = useState(true);
   const [voiceLanguage, setVoiceLanguageState] = useState("auto");
   const [voiceChecked, setVoiceCheckedState] = useState(false);
   const [accessibilityPrefs, setAccessibilityPrefsState] = useState<AccessibilityPreferences>(

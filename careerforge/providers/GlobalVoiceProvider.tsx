@@ -134,9 +134,9 @@ export function useGlobalVoice(): GlobalVoiceContextValue {
 }
 
 export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const [isPreferenceLoading, setIsPreferenceLoading] = useState(true);
-  const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(true);
+  const [isPreferenceLoading, setIsPreferenceLoading] = useState(false);
+  const [hasRequestedPermission, setHasRequestedPermission] = useState(true);
   const [syncError, setSyncError] = useState(false);
 
   const supabaseRef = useRef(createSupabaseBrowserClient());

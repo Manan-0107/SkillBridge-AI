@@ -190,6 +190,13 @@ export function setNativeInputValue(
   value: string
 ) {
   if (!element) return;
+
+  // Clean value: for single-line inputs (name, email, password, search, etc.), strip trailing speech punctuation (.)
+  let cleanValue = value;
+  if (element instanceof HTMLInputElement || element.tagName.toLowerCase() === "input") {
+    cleanValue = cleanValue.trim().replace(/[.,;?!]+$/, "");
+  }
+
   const prototype =
     element instanceof HTMLTextAreaElement
       ? window.HTMLTextAreaElement.prototype
@@ -198,9 +205,9 @@ export function setNativeInputValue(
   const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
 
   if (valueSetter) {
-    valueSetter.call(element, value);
+    valueSetter.call(element, cleanValue);
   } else {
-    element.value = value;
+    element.value = cleanValue;
   }
 
   element.dispatchEvent(new Event("input", { bubbles: true }));
@@ -261,7 +268,7 @@ export function resumeSpeaking() {
 
 export function isSpeaking(): boolean {
   if (!isSpeechSynthesisSupported()) return false;
-  return isSelfSpeaking || window.speechSynthesis.speaking;
+  return isSelfSpeaking || window.speechSynthesis.speaking || Date.now() < speechCooldownUntil;
 }
 
 export function speakText(
@@ -491,12 +498,24 @@ export function normalizeSpokenEmail(raw: string): string {
   if (!raw) return "";
   let text = raw.trim();
 
-  // Strip conversational prefixes and linking verbs
+  // 1. Direct Regex extraction if standard email format is already present in sentence
+  const directMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (directMatch) {
+    return directMatch[0].toLowerCase();
+  }
+
+  // 2. Strip conversational prefixes and linking verbs
   text = text.replace(
-    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
+    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|if i said|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
     ""
   );
   text = text.replace(/^(?:છે|है|est|is)\s+/i, "");
+
+  // Strip conversational suffixes
+  text = text.replace(
+    /\s*(?:as my email address|as my email id|as my email|is my email address|is my email|is my id|છે|હશે|લખી લો|है)$/i,
+    ""
+  );
 
   // Convert spoken number words to digits
   text = text
@@ -562,6 +581,42 @@ export function normalizeSpokenEmail(raw: string): string {
     .replace(/\.n\s*et/i, ".net");
 
   return text.toLowerCase();
+}
+
+// ─── 6b. Spoken Name Normalization (Resolves phonetic errors like "Sha" -> "Shah") ──
+export function normalizeSpokenName(raw: string): string {
+  if (!raw) return "";
+  let text = raw.trim();
+
+  // Strip conversational prefixes
+  text = text.replace(
+    /^(?:my name is|my name|name is|i am|this is|મારું નામ છે|મારું નામ|નામ છે|નામ|मेरा नाम है|मेरा नाम|नाम है|नाम|je m'appelle|mon nom est|me llamo)\s*/i,
+    ""
+  );
+
+  // Strip conversational suffixes
+  text = text.replace(
+    /\s*(?:is my name|is my full name|છે|હશે|લખી લો|है)$/i,
+    ""
+  );
+
+  // Common phonetic corrections (Sha -> Shah, etc.)
+  text = text
+    .replace(/\bmanan\s+sha\b/gi, "Manan Shah")
+    .replace(/\bmannan\s+sha\b/gi, "Manan Shah")
+    .replace(/\bmananshah\b/gi, "Manan Shah")
+    .replace(/\bmanansha\b/gi, "Manan Shah")
+    .replace(/\bsha\b/gi, "Shah")
+    .replace(/\bpatle\b/gi, "Patel");
+
+  // Strip trailing punctuation
+  text = text.replace(/[.,;?!]+$/, "").trim();
+
+  // Title Case words
+  return text
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 // ─── 7. Live Focused Field Prompt Generator ───────────────────────────────────

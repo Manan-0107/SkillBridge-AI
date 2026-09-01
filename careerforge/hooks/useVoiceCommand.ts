@@ -324,6 +324,31 @@ export function useVoiceCommand(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pause voice detection on tab switch / minimize and resume when tab is active
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        intentionalStopRef.current = true;
+        recognitionRef.current?.stop();
+        setIsListening(false);
+      } else {
+        if (enabled && !fallbackFiredRef.current) {
+          intentionalStopRef.current = false;
+          try {
+            recognitionRef.current?.start();
+          } catch {
+            // ignore if already started
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [enabled]);
+
   return {
     isSupported,
     isListening,

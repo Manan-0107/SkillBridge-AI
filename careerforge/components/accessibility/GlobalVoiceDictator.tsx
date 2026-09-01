@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/store";
+import { FeatureId, ResumeTab } from "@/lib/intent";
 import {
   startSpeechRecognition,
   SpeechRecognitionController,
@@ -16,6 +17,7 @@ import {
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
   normalizeSpokenEmail,
+  normalizeSpokenName,
   getFieldPromptMessage,
 } from "@/lib/voice";
 
@@ -51,6 +53,8 @@ export function GlobalVoiceDictator() {
   const focusedElementRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialAnnouncedRef = useRef(false);
+  const wasActiveBeforeBlurRef = useRef(false);
+  const pendingNameVerificationRef = useRef<string | null>(null);
   const currentLangRef = useRef(voiceLanguage);
   currentLangRef.current = voiceLanguage;
 
@@ -226,6 +230,153 @@ export function GlobalVoiceDictator() {
       const isGujarati = detectedLang === "gu-IN" || /[\u0A80-\u0AFF]/.test(clean);
       const isHindi = detectedLang === "hi-IN" || /[\u0900-\u097F]/.test(clean);
 
+      // ── Strict Background Audio Guard: Discard all audio if tab is hidden / in background
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+
+      // ── Command 0A: "Go Back" / "Previous" / "Go to previous section"
+      const isGoBack =
+        lower === "go back" ||
+        lower === "back" ||
+        lower === "previous" ||
+        lower === "previous section" ||
+        lower === "go to previous section" ||
+        lower === "go to previous" ||
+        lower.includes("go back") ||
+        lower.includes("previous section") ||
+        lower === "પાછળ જાઓ" ||
+        lower === "પાછળ" ||
+        lower === "પીછે જાઓ" ||
+        lower === "પીછે" ||
+        lower === "retour";
+
+      if (isGoBack) {
+        playAccessibleChime("navigate");
+
+        // If on AuthGate step:
+        const passInput = document.querySelector<HTMLInputElement>('#auth-password-input');
+        const emailInput = document.querySelector<HTMLInputElement>('#auth-email-input');
+        const nameInput = document.querySelector<HTMLInputElement>('#auth-name-input');
+
+        if (focusedElementRef.current === passInput || pendingFieldTarget === "password") {
+          if (emailInput) {
+            emailInput.focus();
+            focusedElementRef.current = emailInput;
+            setPendingFieldTarget("email");
+            const msg = isGujarati ? "પાછળ ગયા: ઈમેઇલ સરનામું. કૃપા કરીને તમારું ઈમેઇલ બોલો." : isHindi ? "पीछे गए: ईमेल पता। कृपया अपना ईमेल बोलें।" : "Going back to Email Address. Please speak your email address.";
+            setAiSpeechPrompt(msg);
+            speakText(msg, { lang: currentLangRef.current });
+            showStatus(`🎙️ ${msg}`, 3500);
+            return;
+          }
+        } else if (focusedElementRef.current === emailInput || pendingFieldTarget === "email") {
+          if (nameInput) {
+            nameInput.focus();
+            focusedElementRef.current = nameInput;
+            setPendingFieldTarget("name");
+            const msg = isGujarati ? "પાછળ ગયા: પૂરું નામ. કૃપા કરીને તમારું નામ બોલો." : isHindi ? "पीछे गए: पूरा नाम। कृपया अपना नाम बोलें।" : "Going back to Full Name. Please speak your full name.";
+            setAiSpeechPrompt(msg);
+            speakText(msg, { lang: currentLangRef.current });
+            showStatus(`🎙️ ${msg}`, 3500);
+            return;
+          }
+        }
+
+        // If on Workspace -> Navigate back to Assistant
+        window.dispatchEvent(new CustomEvent("careerforge:navigate", { detail: { feature: "assistant" } }));
+        const backMsg = isGujarati ? "પાછળ મુખ્ય પેજ પર આવ્યા." : isHindi ? "पीछे मुख्य पेज पर वापस आए।" : "Navigated back to Assistant.";
+        setAiSpeechPrompt(backMsg);
+        speakText(backMsg, { lang: currentLangRef.current });
+        showStatus(`🚀 ${backMsg}`, 3500);
+        return;
+      }
+
+      // ── Command 0B: Step Rewind / Jump ("go to full name again", "change email", "go to pin again")
+      const isJumpName =
+        lower.includes("go to full name") ||
+        lower.includes("full name section") ||
+        lower.includes("change full name") ||
+        lower.includes("change name") ||
+        lower.includes("full name again") ||
+        lower.includes("નામ બદલવું") ||
+        lower.includes("નામ પર જાઓ") ||
+        lower.includes("नाम बदलना") ||
+        lower.includes("नाम पर जाओ");
+
+      const isJumpEmail =
+        lower.includes("go to email") ||
+        lower.includes("email section") ||
+        lower.includes("change email") ||
+        lower.includes("email again") ||
+        lower.includes("ઈમેઇલ બદલવું") ||
+        lower.includes("ઈમેઇલ પર જાઓ") ||
+        lower.includes("ईमेल बदलना") ||
+        lower.includes("ईमेल पर जाओ");
+
+      const isJumpPin =
+        lower.includes("go to pin") ||
+        lower.includes("go to password") ||
+        lower.includes("change pin") ||
+        lower.includes("change password") ||
+        lower.includes("pin again") ||
+        lower.includes("password again") ||
+        lower.includes("પાસવર્ડ બદલવો") ||
+        lower.includes("પાસવર્ડ પર જાઓ") ||
+        lower.includes("पासवर्ड बदलना") ||
+        lower.includes("पासवर्ड पर जाओ");
+
+      if (isJumpName) {
+        const nameInput = document.querySelector<HTMLInputElement>(
+          '#auth-name-input, input[name*="name" i], input[id*="name" i], input[placeholder*="name" i]'
+        );
+        if (nameInput) {
+          nameInput.focus();
+          focusedElementRef.current = nameInput;
+          setPendingFieldTarget("name");
+          playAccessibleChime("focus");
+          const msg = isGujarati ? "પૂરા નામ પર પાછા આવ્યા. કૃપા કરીને તમારું નામ બોલો." : isHindi ? "पूरे नाम पर वापस आए। कृपया अपना नाम बोलें।" : "Heading back to Full Name. Please speak your name.";
+          setAiSpeechPrompt(msg);
+          speakText(msg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${msg}`, 3500);
+          return;
+        }
+      }
+
+      if (isJumpEmail) {
+        const emailInput = document.querySelector<HTMLInputElement>(
+          '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
+        );
+        if (emailInput) {
+          emailInput.focus();
+          focusedElementRef.current = emailInput;
+          setPendingFieldTarget("email");
+          playAccessibleChime("focus");
+          const msg = isGujarati ? "ઈમેઇલ સરનામા પર પાછા આવ્યા. કૃપા કરીને તમારું ઈમેઇલ બોલો." : isHindi ? "ईमेल पते पर वापस आए। कृपया अपना ईमेल बोलें।" : "Heading back to Email Address. Please speak your email address.";
+          setAiSpeechPrompt(msg);
+          speakText(msg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${msg}`, 3500);
+          return;
+        }
+      }
+
+      if (isJumpPin) {
+        const pinInput = document.querySelector<HTMLInputElement>(
+          '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]'
+        );
+        if (pinInput) {
+          pinInput.focus();
+          focusedElementRef.current = pinInput;
+          setPendingFieldTarget("password");
+          playAccessibleChime("focus");
+          const msg = isGujarati ? "પાસવર્ડ/પિન પર પાછા આવ્યા. કૃપા કરીને તમારો પાસવર્ડ બોલો." : isHindi ? "पासवर्ड/पिन पर वापस आए। कृपया अपना पासवर्ड बोलें।" : "Heading back to Password / PIN. Please speak your PIN or password.";
+          setAiSpeechPrompt(msg);
+          speakText(msg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${msg}`, 3500);
+          return;
+        }
+      }
+
       // ── Command A: "Clear" / "Erase" / "Reset" / "સાફ કરો"
       if (
         lower === "clear" ||
@@ -298,6 +449,80 @@ export function GlobalVoiceDictator() {
         return;
       }
 
+      // ── Command D0: Voice Section Navigation ("go to {section}" / "open {section}" / "go to full section")
+      const isNavResume =
+        lower.includes("go to resume") ||
+        lower.includes("open resume") ||
+        lower.includes("resume section") ||
+        lower.includes("go to full section") ||
+        lower.includes("full section") ||
+        lower.includes("resume studio") ||
+        lower.includes("રેઝ્યૂમે") ||
+        lower.includes("रेज़्यूमे");
+
+      const isNavRoadmap =
+        lower.includes("go to roadmap") ||
+        lower.includes("open roadmap") ||
+        lower.includes("career roadmap") ||
+        lower.includes("રોડમેપ") ||
+        lower.includes("रोडमैप");
+
+      const isNavCourses =
+        lower.includes("go to courses") ||
+        lower.includes("open courses") ||
+        lower.includes("course section") ||
+        lower.includes("કોર્સ") ||
+        lower.includes("कोर्स");
+
+      const isNavPractice =
+        lower.includes("go to practice") ||
+        lower.includes("open practice") ||
+        lower.includes("practice hub") ||
+        lower.includes("પ્રેક્ટિસ") ||
+        lower.includes("प्रैक्टिस");
+
+      const isNavLocal =
+        lower.includes("go to jobs") ||
+        lower.includes("open jobs") ||
+        lower.includes("go to local") ||
+        lower.includes("local opportunities") ||
+        lower.includes("નોકરી") ||
+        lower.includes("नौकरी");
+
+      const isNavAssistant =
+        lower.includes("go to assistant") ||
+        lower.includes("open assistant") ||
+        lower.includes("go to home") ||
+        lower.includes("career assistant") ||
+        lower.includes("સહાયક") ||
+        lower.includes("सहायक");
+
+      if (isNavResume || isNavRoadmap || isNavCourses || isNavPractice || isNavLocal || isNavAssistant) {
+        let dest: FeatureId | "assistant" = "assistant";
+        let title = "Assistant";
+        if (isNavResume) { dest = "resume"; title = "Resume Studio"; }
+        else if (isNavRoadmap) { dest = "roadmap"; title = "Career Roadmap"; }
+        else if (isNavCourses) { dest = "courses"; title = "Courses"; }
+        else if (isNavPractice) { dest = "practice"; title = "Practice Hub"; }
+        else if (isNavLocal) { dest = "local"; title = "Local Jobs"; }
+
+        playAccessibleChime("navigate");
+        window.dispatchEvent(new CustomEvent("careerforge:navigate", { detail: { feature: dest } }));
+        showStatus(`🚀 Navigated to ${title}. Speak now to write or ask questions!`, 4000);
+
+        // After navigation, focus the primary editable input/textarea so subsequent speech is written directly
+        setTimeout(() => {
+          const primaryInput = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            'textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="search"]:not([disabled]), input[type="email"]:not([disabled])'
+          );
+          if (primaryInput) {
+            primaryInput.focus();
+            focusedElementRef.current = primaryInput;
+          }
+        }, 350);
+        return;
+      }
+
       // ── Command D: Scroll Down / Scroll Up (Accessibility aid)
       if (lower.includes("scroll down") || lower.includes("નીચે સ્ક્રોલ") || lower.includes("नीचे स्क्रॉल")) {
         window.scrollBy({ top: 400, behavior: "smooth" });
@@ -310,9 +535,15 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // ── Command E: Live Focused Field Filling or Pending AI Prompt ──────────
+      // ── Command E: Live Focused Field Filling with Step Auto-Progression ─────
       if (focusedElementRef.current) {
         const target = focusedElementRef.current;
+        const isNameField =
+          target.name?.toLowerCase().includes("name") ||
+          target.id?.toLowerCase().includes("name") ||
+          target.placeholder?.toLowerCase().includes("name") ||
+          target.getAttribute("aria-label")?.toLowerCase().includes("name");
+
         const isEmailField =
           target.type === "email" ||
           (target.name && target.name.toLowerCase().includes("email")) ||
@@ -326,16 +557,116 @@ export function GlobalVoiceDictator() {
           lower.includes("gmail") ||
           lower.includes(".com");
 
+        const isPasswordField =
+          target.type === "password" ||
+          target.name?.toLowerCase().includes("pass") ||
+          target.id?.toLowerCase().includes("pass") ||
+          target.name?.toLowerCase().includes("pin") ||
+          target.id?.toLowerCase().includes("pin");
+
+        // If awaiting Name Confirmation:
+        if (pendingNameVerificationRef.current) {
+          const isYes =
+            lower === "yes" ||
+            lower === "correct" ||
+            lower === "yeah" ||
+            lower === "yep" ||
+            lower === "sure" ||
+            lower === "right" ||
+            lower === "ok" ||
+            lower === "okay" ||
+            lower === "હા" ||
+            lower === "સાચું" ||
+            lower === "બરાબર" ||
+            lower === "हाँ" ||
+            lower === "सही" ||
+            lower === "oui";
+
+          if (isYes) {
+            const confirmedName = pendingNameVerificationRef.current;
+            pendingNameVerificationRef.current = null;
+            playAccessibleChime("success");
+
+            // Advance to Email!
+            const nextEmail = document.querySelector<HTMLInputElement>(
+              '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
+            );
+            if (nextEmail) {
+              nextEmail.focus();
+              focusedElementRef.current = nextEmail;
+              setPendingFieldTarget("email");
+              const nextMsg = isGujarati
+                ? `નામ ${confirmedName} કન્ફર્મ થયું! સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.`
+                : isHindi
+                ? `नाम ${confirmedName} की पुष्टि हुई! स्टेप २: कृपया अपना ईमेल पता बोलें।`
+                : `Name confirmed! Step 2 of 3: Please speak your email address.`;
+              setAiSpeechPrompt(nextMsg);
+              speakText(nextMsg, { lang: currentLangRef.current });
+              showStatus(`🎙️ ${nextMsg}`, 4500);
+            }
+            return;
+          }
+          // If not yes, treat as name correction
+        }
+
+        if (isNameField) {
+          const cleanName = normalizeSpokenName(clean);
+          setNativeInputValue(target, cleanName);
+          pendingNameVerificationRef.current = cleanName;
+          playAccessibleChime("success");
+          showStatus(isGujarati ? `નામ: ${cleanName}` : `Name: ${cleanName}`);
+
+          const verifyMsg = isGujarati
+            ? `મેં તમારું નામ "${cleanName}" નોંધ્યું છે. શું આ સાચું છે? આગળ વધવા માટે 'હા' બોલો અથવા ફરીથી નામ બોલો.`
+            : isHindi
+            ? `मैंने आपका नाम "${cleanName}" दर्ज किया है। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें या दोबारा बोलें।`
+            : `I recorded your name as "${cleanName}". Is that correct? Say 'Yes' to continue or speak your name again.`;
+          
+          setAiSpeechPrompt(verifyMsg);
+          speakText(verifyMsg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${verifyMsg}`, 5000);
+          return;
+        }
+
         if (isEmailField) {
           const rawEmail = normalizeSpokenEmail(clean);
           setNativeInputValue(target, rawEmail);
           playAccessibleChime("success");
-          const ack = isGujarati
-            ? `ઈમેઇલ ${rawEmail} ભરાઈ ગયું છે.`
+          showStatus(isGujarati ? `ઈમેઇલ: ${rawEmail}` : `Email: ${rawEmail}`);
+
+          // Auto-progress to Password / PIN!
+          const nextPass = document.querySelector<HTMLInputElement>(
+            '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]'
+          );
+          if (nextPass) {
+            setTimeout(() => {
+              nextPass.focus();
+              focusedElementRef.current = nextPass;
+              setPendingFieldTarget("password");
+              const nextMsg = isGujarati
+                ? `ઈમેઇલ ${rawEmail} સેવ થયું. સ્ટેપ ૩: કૃપા કરીને તમારો પાસવર્ડ અથવા પિન બોલો.`
+                : isHindi
+                ? `ईमेल ${rawEmail} सहेज लिया गया। स्टेप ३: कृपया अपना पासवर्ड या पिन बोलें।`
+                : `Email recorded as ${rawEmail}. Step 3: Please speak your password or PIN.`;
+              setAiSpeechPrompt(nextMsg);
+              speakText(nextMsg, { lang: currentLangRef.current });
+              showStatus(`🎙️ ${nextMsg}`, 4500);
+            }, 500);
+          }
+          return;
+        }
+
+        if (isPasswordField) {
+          setNativeInputValue(target, clean);
+          playAccessibleChime("success");
+          const doneMsg = isGujarati
+            ? `પાસવર્ડ ભરાઈ ગયો છે! લૉગિન કરવા માટે 'સબમિટ' બોલો અથવા ફેરફાર કરવા માટે 'નામ બદલવું છે' બોલો.`
             : isHindi
-            ? `ईमेल ${rawEmail} दर्ज कर दिया गया है।`
-            : `Email entered: ${rawEmail}`;
-          showStatus(`✅ ${ack}`, 4000);
+            ? `पासवर्ड दर्ज कर दिया गया है! लॉगिन करने के लिए 'सबमिट' बोलें या बदलाव के लिए 'नाम बदलना है' बोलें।`
+            : `Password filled! Say 'Submit' to sign in or say 'Change Name' to edit.`;
+          setAiSpeechPrompt(doneMsg);
+          speakText(doneMsg, { lang: currentLangRef.current });
+          showStatus(`✅ ${doneMsg}`, 5000);
           return;
         }
 
@@ -499,12 +830,20 @@ export function GlobalVoiceDictator() {
       const isGu = currentLangRef.current === "gu-IN";
       const isHi = currentLangRef.current === "hi-IN";
       const welcome = isGu
-        ? "કરિયરફોર્જ AI સક્રિય છે. તમારું ઈમેઇલ અથવા નામ જણાવો, હું આપમેળે ભરી દઈશ."
+        ? "કરિયરફોર્જમાં સ્વાગત છે! સ્ટેપ ૧: કૃપા કરીને તમારું પૂરું નામ બોલો."
         : isHi
-        ? "करियरफोर्ज AI सक्रिय है। अपना ईमेल या नाम बताएं, मैं स्वतः भर दूँगा।"
-        : "CareerForge AI is active. Speak your email or name, and I will fill it in for you.";
+        ? "करियरफोर्ज में स्वागत है! स्टेप १: कृपया अपना पूरा नाम बोलें।"
+        : "Welcome to CareerForge! Step 1 of 3: Please speak your full name.";
+      
+      const nameInput = document.querySelector<HTMLInputElement>(
+        '#auth-name-input, input[name*="name" i], input[id*="name" i], input[placeholder*="name" i]'
+      );
+      if (nameInput) {
+        nameInput.focus();
+        focusedElementRef.current = nameInput;
+      }
       setAiSpeechPrompt(welcome);
-      setPendingFieldTarget("email");
+      setPendingFieldTarget("name");
       speakText(welcome, { lang: currentLangRef.current || "en-US" });
     }
 
@@ -532,16 +871,81 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── 6. Auto-Engage Voice Mode if Enabled ───────────────────────────────────
+  // ─── 6. Auto-Start Voice Dictation IMMEDIATELY on Site Open ─────────────────
   useEffect(() => {
-    if (voiceMode && !active && isSpeechRecognitionSupported()) {
+    if (isSpeechRecognitionSupported()) {
       const t = setTimeout(() => {
         startVoiceDictation();
-      }, 1000);
+      }, 300);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode]);
+  }, []);
+
+  // ─── 7. Tab-Switch & Minimize Auto-Pause with Direct Question on Return ─────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab hidden or browser minimized: pause voice detection temporarily
+        if (active || listening) {
+          wasActiveBeforeBlurRef.current = true;
+          controllerRef.current?.stop();
+          controllerRef.current = null;
+          setListening(false);
+          stopSpeaking();
+          showStatus("⏸️ Voice paused (tab minimized)", 2500);
+        }
+      } else {
+        // Tab restored/active: resume voice detection & directly ask a question
+        if (wasActiveBeforeBlurRef.current || voiceMode) {
+          wasActiveBeforeBlurRef.current = false;
+
+          let questionPrompt = "";
+          const isGu = currentLangRef.current.startsWith("gu");
+          const isHi = currentLangRef.current.startsWith("hi");
+          const isFr = currentLangRef.current.startsWith("fr");
+
+          if (focusedElementRef.current) {
+            questionPrompt = getFieldPromptMessage(
+              focusedFieldLabel || "field",
+              focusedElementRef.current.type,
+              currentLangRef.current
+            );
+          } else {
+            if (isGu) {
+              questionPrompt = "પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે શું કરવા માંગો છો?";
+            } else if (isHi) {
+              questionPrompt = "वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप क्या करना चाहेंगे?";
+            } else if (isFr) {
+              questionPrompt = "Bon retour ! Je vous écoute. Que souhaitez-vous faire maintenant ?";
+            } else {
+              questionPrompt = "Welcome back! I am listening. What would you like to explore next?";
+            }
+          }
+
+          setAiSpeechPrompt(questionPrompt);
+          showStatus("🎙️ " + questionPrompt, 4000);
+          playAccessibleChime("focus");
+
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(questionPrompt, {
+              lang: currentLangRef.current,
+              onEnd: () => {
+                startVoiceDictation();
+              },
+            });
+          } else {
+            startVoiceDictation();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [active, listening, voiceMode, accessibilityPrefs, focusedFieldLabel, startVoiceDictation, showStatus]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -634,11 +1038,11 @@ export function GlobalVoiceDictator() {
                 ? "bg-rose-600 text-white shadow-md hover:bg-rose-700 animate-pulse"
                 : "bg-neutral-900 text-white shadow-sm hover:bg-neutral-800"
             }`}
-            title="Toggle Voice Dictation & AI Assistant (Alt + V)"
+            title="Voice Dictation & AI Assistant (Active)"
             aria-pressed={active}
           >
             <span className="text-sm">{active ? "🛑" : "🎙️"}</span>
-            <span>{active ? "Listening (Alt+V)" : "Voice Start"}</span>
+            <span>{active ? "Listening..." : "Voice Start"}</span>
           </button>
 
           {/* Quick Help Button */}
