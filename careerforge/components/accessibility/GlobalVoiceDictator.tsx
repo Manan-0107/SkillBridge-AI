@@ -17,7 +17,7 @@ import {
 } from "@/lib/voice";
 
 export function GlobalVoiceDictator() {
-  const { voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
+  const { user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
 
   const [active, setActive] = useState(false);
   const [listening, setListening] = useState(false);
@@ -28,12 +28,19 @@ export function GlobalVoiceDictator() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [voiceBannerOpen, setVoiceBannerOpen] = useState(true);
 
+  // ─── Interactive AI Voice Agent Dialogue State ──────────────────────────────
+  const [aiSpeechPrompt, setAiSpeechPrompt] = useState<string | null>(null);
+  const [pendingFieldTarget, setPendingFieldTarget] = useState<"email" | "name" | "password" | "search" | "general" | null>(null);
+  const [isAiAnswering, setIsAiAnswering] = useState(false);
+
   const controllerRef = useRef<SpeechRecognitionController | null>(null);
   const focusedElementRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialAnnouncedRef = useRef(false);
+  const currentLangRef = useRef(voiceLanguage);
+  currentLangRef.current = voiceLanguage;
 
-  const showStatus = useCallback((msg: string, duration = 3000) => {
+  const showStatus = useCallback((msg: string, duration = 3500) => {
     setStatusMessage(msg);
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
     statusTimerRef.current = setTimeout(() => {
@@ -66,7 +73,6 @@ export function GlobalVoiceDictator() {
     };
 
     const handleFocusOut = () => {
-      // Small timeout so clicking between inputs doesn't cause a flicker
       setTimeout(() => {
         const activeEl = document.activeElement;
         if (
@@ -91,12 +97,10 @@ export function GlobalVoiceDictator() {
   // ─── 2. Keyboard Shortcut (Alt + V) to Toggle Voice Anywhere ────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Alt + V to toggle voice dictation
       if (e.altKey && (e.key === "v" || e.key === "V")) {
         e.preventDefault();
         toggleVoiceDictation();
       }
-      // Esc to silence speech / stop recognition
       if (e.key === "Escape" && active) {
         stopVoiceDictation();
       }
@@ -104,9 +108,47 @@ export function GlobalVoiceDictator() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // ─── 3. Voice Command Parser & Smart Field Filler ───────────────────────────
+  // ─── 3. Ask AI Agent for Dynamic Assistance in the User's Language ──────────
+  const askAiAssistant = useCallback(
+    async (userQuestion: string, detectedLang: string) => {
+      setIsAiAnswering(true);
+      try {
+        const res = await fetch("/api/assistant/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", text: userQuestion }],
+            userProfile: { name: user?.name, email: user?.email, targetRole: user?.targetRole || undefined },
+            targetRole: user?.targetRole || "Software Engineer",
+            voiceMode: true,
+          }),
+        });
+        const data = await res.json();
+        const replyText = data.reply || "";
+
+        if (replyText) {
+          setAiSpeechPrompt(replyText);
+          showStatus(`🤖 ${replyText.slice(0, 50)}...`, 5000);
+          speakText(replyText, {
+            lang: detectedLang,
+            onEnd: () => {
+              setIsAiAnswering(false);
+            },
+          });
+        }
+      } catch (err) {
+        console.warn("[VoiceAgent] AI query error:", err);
+      } finally {
+        setIsAiAnswering(false);
+      }
+    },
+    [user, showStatus]
+  );
+
+  // ─── 4. Voice Command Parser & Multilingual Form Filler ─────────────────────
   const processSpokenText = useCallback(
     (text: string, isFinal: boolean) => {
       const clean = text.trim();
@@ -120,48 +162,54 @@ export function GlobalVoiceDictator() {
       setInterimTranscript("");
       setLiveTranscript(clean);
 
-      // Auto-detect language
+      // Auto-detect spoken language (Gujarati, Hindi, Spanish, English, etc.)
       const detectedLang = detectTextLanguage(clean);
-      if (detectedLang && detectedLang !== voiceLanguage) {
+      if (detectedLang && detectedLang !== currentLangRef.current) {
         setVoiceLanguage(detectedLang);
         setGlobalVoiceLanguage(detectedLang);
+        currentLangRef.current = detectedLang;
       }
 
       const lower = clean.toLowerCase();
+      const isGujarati = detectedLang === "gu-IN" || /[\u0A80-\u0AFF]/.test(clean);
+      const isHindi = detectedLang === "hi-IN" || /[\u0900-\u097F]/.test(clean);
 
-      // ── Command A: "Clear" / "Erase" / "Reset"
+      // ── Command A: "Clear" / "Erase" / "Reset" / "સાફ કરો"
       if (
         lower === "clear" ||
         lower === "clear input" ||
         lower === "erase" ||
         lower === "delete text" ||
         lower === "સાફ કરો" ||
-        lower === "हटाओ"
+        lower === "દૂર કરો" ||
+        lower === "हटाओ" ||
+        lower === "साफ़ करो"
       ) {
         if (focusedElementRef.current) {
           setNativeInputValue(focusedElementRef.current, "");
           playAccessibleChime("clear");
-          showStatus("Field cleared");
+          showStatus(isGujarati ? "ખાનું સાફ કર્યું" : isHindi ? "साफ़ किया गया" : "Field cleared");
         }
         return;
       }
 
-      // ── Command B: "Submit" / "Login" / "Sign in" / "Save"
+      // ── Command B: "Submit" / "Login" / "Sign in" / "Save" / "લૉગિન કરો"
       if (
         lower === "submit" ||
         lower === "login" ||
         lower === "sign in" ||
         lower === "press enter" ||
         lower === "લૉગિન કરો" ||
-        lower === "लॉगिन"
+        lower === "સબમિટ કરો" ||
+        lower === "लॉगिन" ||
+        lower === "सबमिट"
       ) {
         playAccessibleChime("success");
-        // Try submitting closest form or active submit button
         if (focusedElementRef.current) {
           const form = focusedElementRef.current.form;
           if (form) {
             form.requestSubmit ? form.requestSubmit() : form.submit();
-            showStatus("Form submitted");
+            showStatus(isGujarati ? "સબમિટ કર્યું" : "Form submitted");
             return;
           }
         }
@@ -170,29 +218,82 @@ export function GlobalVoiceDictator() {
         );
         if (submitBtn) {
           submitBtn.click();
-          showStatus("Submitted");
+          showStatus(isGujarati ? "સબમિટ કર્યું" : "Submitted");
           return;
         }
       }
 
-      // ── Command C: "Scroll Down" / "Scroll Up" (Accessibility aid)
-      if (lower.includes("scroll down") || lower.includes("નીચે સ્ક્રોલ")) {
+      // ── Command C: "Help" / "મદદ" / "મારે શું કરવું?" / "What should I do?"
+      if (
+        lower === "help" ||
+        lower === "help me" ||
+        lower.includes("મદદ") ||
+        lower.includes("શું કરવું") ||
+        lower.includes("કેવી રીતે") ||
+        lower.includes("सहायता") ||
+        lower.includes("मदद") ||
+        lower.includes("क्या करूँ")
+      ) {
+        let helpPrompt = "I am CareerForge AI. Tell me your name, email, or any question, and I will guide you.";
+        if (isGujarati) {
+          helpPrompt = "નમસ્તે! હું કરિયરફોર્જ AI સહાયક છું. તમારું નામ, ઈમેઇલ અથવા કોઈ પ્રશ્ન પૂછો, હું તરત મદદ કરીશ.";
+        } else if (isHindi) {
+          helpPrompt = "नमस्ते! मैं करियरफोर्ज AI सहायक हूँ। अपना नाम, ईमेल या कोई भी प्रश्न पूछें, मैं तुरंत सहायता करूँगा।";
+        }
+        setAiSpeechPrompt(helpPrompt);
+        speakText(helpPrompt, { lang: detectedLang });
+        showStatus(helpPrompt, 6000);
+        return;
+      }
+
+      // ── Command D: Scroll Down / Scroll Up (Accessibility aid)
+      if (lower.includes("scroll down") || lower.includes("નીચે સ્ક્રોલ") || lower.includes("नीचे स्क्रॉल")) {
         window.scrollBy({ top: 400, behavior: "smooth" });
         playAccessibleChime("navigate");
         return;
       }
-      if (lower.includes("scroll up") || lower.includes("ઉપર સ્ક્રોલ")) {
+      if (lower.includes("scroll up") || lower.includes("ઉપર સ્ક્રોલ") || lower.includes("ऊपर स्क्रॉल")) {
         window.scrollBy({ top: -400, behavior: "smooth" });
         playAccessibleChime("navigate");
         return;
       }
 
-      // ── Command D: Smart Target Filling (When no element is focused, or user explicitly specifies field)
-      // e.g. "email john@example.com" or "name Alex Smith" or "password ..."
-      const emailMatch = clean.match(/^(?:email|fill email|my email is|મારું ઈમેલ|ईमेल)\s+(.+)$/i);
+      // ── Command E: Answering Pending AI Prompt (e.g. Email / Name / Password / Search)
+      if (pendingFieldTarget === "email" || (!user && (lower.includes("@") || lower.includes("gmail") || lower.includes(".com")))) {
+        const rawEmail = clean
+          .replace(/^(?:મારું ઈમેલ|મારું ઈમેઈલ|ઈમેલ|ईमेल|email|my email is)\s+/i, "")
+          .replace(/\s+at\s+/gi, "@")
+          .replace(/\s+dot\s+/gi, ".")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+
+        const emailInput = document.querySelector<HTMLInputElement>(
+          'input[type="email"], input[name*="email" i], input[id*="email" i], input[placeholder*="email" i]'
+        );
+        if (emailInput) {
+          emailInput.focus();
+          setNativeInputValue(emailInput, rawEmail);
+          playAccessibleChime("success");
+          setPendingFieldTarget("password");
+
+          const ack = isGujarati
+            ? `ઈમેઇલ ${rawEmail} ભરી દીધું છે. હવે તમારો પાસવર્ડ જણાવો.`
+            : isHindi
+            ? `ईमेल ${rawEmail} दर्ज कर दिया गया है। अब अपना पासवर्ड बताएं।`
+            : `Email filled: ${rawEmail}. Now what is your password?`;
+
+          setAiSpeechPrompt(ack);
+          speakText(ack, { lang: detectedLang });
+          showStatus(`✅ ${ack}`, 4500);
+          return;
+        }
+      }
+
+      // ── Command F: Targeted Voice Commands (Email / Password / Name / Search)
+      const emailMatch = clean.match(/^(?:email|fill email|my email is|મારું ઈમેલ|મારું ઈમેઈલ|ઈમેલ|ईमेल)\s+(.+)$/i);
       const passMatch = clean.match(/^(?:password|fill password|my password is|પાસવર્ડ|पासवर्ड)\s+(.+)$/i);
       const nameMatch = clean.match(/^(?:name|fill name|my name is|મારું નામ|नाम)\s+(.+)$/i);
-      const searchMatch = clean.match(/^(?:search|find|શોધો|खोजो)\s+(.+)$/i);
+      const searchMatch = clean.match(/^(?:search|find|શોધો|ખોજો|खोजो)\s+(.+)$/i);
 
       if (emailMatch) {
         const rawEmail = emailMatch[1].replace(/\s+at\s+/gi, "@").replace(/\s+dot\s+/gi, ".").replace(/\s+/g, "").toLowerCase();
@@ -203,7 +304,7 @@ export function GlobalVoiceDictator() {
           emailInput.focus();
           setNativeInputValue(emailInput, rawEmail);
           playAccessibleChime("success");
-          showStatus(`Filled Email: ${rawEmail}`);
+          showStatus(isGujarati ? `ઈમેઇલ ભરાઈ ગયું: ${rawEmail}` : `Filled Email: ${rawEmail}`);
           return;
         }
       }
@@ -217,7 +318,7 @@ export function GlobalVoiceDictator() {
           passInput.focus();
           setNativeInputValue(passInput, passVal);
           playAccessibleChime("success");
-          showStatus("Filled Password");
+          showStatus(isGujarati ? "પાસવર્ડ ભરાઈ ગયો" : "Filled Password");
           return;
         }
       }
@@ -231,7 +332,7 @@ export function GlobalVoiceDictator() {
           nameInput.focus();
           setNativeInputValue(nameInput, nameVal);
           playAccessibleChime("success");
-          showStatus(`Filled Name: ${nameVal}`);
+          showStatus(isGujarati ? `નામ ભરાઈ ગયું: ${nameVal}` : `Filled Name: ${nameVal}`);
           return;
         }
       }
@@ -245,20 +346,39 @@ export function GlobalVoiceDictator() {
           searchInput.focus();
           setNativeInputValue(searchInput, searchVal);
           playAccessibleChime("success");
-          showStatus(`Searching: ${searchVal}`);
+          showStatus(isGujarati ? `શોધી રહ્યું છે: ${searchVal}` : `Searching: ${searchVal}`);
           return;
         }
       }
 
-      // ── Standard Action: Fill into whatever input/textarea is currently focused
+      // ── Command G: If User is Asking a Question to the AI (Conversational Guidance)
+      const isQuestion =
+        lower.endsWith("?") ||
+        lower.startsWith("what") ||
+        lower.startsWith("how") ||
+        lower.startsWith("why") ||
+        lower.startsWith("can you") ||
+        lower.startsWith("explain") ||
+        lower.startsWith("tell me") ||
+        lower.includes("શું") ||
+        lower.includes("કેવી રીતે") ||
+        lower.includes("સમજાવો") ||
+        lower.includes("બતાવો") ||
+        lower.includes("कैसे") ||
+        lower.includes("क्या");
+
+      if (isQuestion && !focusedElementRef.current) {
+        askAiAssistant(clean, detectedLang);
+        return;
+      }
+
+      // ── Standard Action: Type directly into focused element or primary screen input
       let targetEl = focusedElementRef.current;
       if (!targetEl) {
-        // If nothing explicitly focused, fallback to activeElement or the primary input on screen (like login email)
         const active = document.activeElement;
         if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
           targetEl = active;
         } else {
-          // Check for any visible text input on screen
           targetEl = document.querySelector<HTMLInputElement>(
             'input[type="text"]:not([disabled]), input[type="email"]:not([disabled]), textarea:not([disabled])'
           );
@@ -275,12 +395,15 @@ export function GlobalVoiceDictator() {
           targetEl.name ||
           "Active Field";
         showStatus(`Filled: "${clean.slice(0, 24)}${clean.length > 24 ? "…" : ""}" into ${label}`);
+      } else {
+        // If no field found and not answered above, treat as conversational guidance
+        askAiAssistant(clean, detectedLang);
       }
     },
-    [voiceLanguage, setVoiceLanguage, showStatus]
+    [user, pendingFieldTarget, askAiAssistant, setVoiceLanguage, showStatus]
   );
 
-  // ─── 4. Start & Stop Voice Engine ───────────────────────────────────────────
+  // ─── 5. Start & Stop Voice Engine ───────────────────────────────────────────
   const startVoiceDictation = useCallback(() => {
     if (!isSpeechRecognitionSupported()) {
       showStatus("Speech recognition is not supported in this browser. Please use Chrome/Edge.", 5000);
@@ -305,12 +428,28 @@ export function GlobalVoiceDictator() {
           setListening(false);
         },
       },
-      { lang: voiceLanguage, continuous: true }
+      { lang: currentLangRef.current || "en-US", continuous: true }
     );
 
     controllerRef.current = controller;
-    showStatus("🎙️ Voice Dictation Active — Speak into any box", 3500);
-  }, [voiceLanguage, setVoiceMode, processSpokenText, showStatus]);
+
+    // Speak initial welcome guidance prompt if on login
+    if (!user && !initialAnnouncedRef.current) {
+      initialAnnouncedRef.current = true;
+      const isGu = currentLangRef.current === "gu-IN";
+      const isHi = currentLangRef.current === "hi-IN";
+      const welcome = isGu
+        ? "કરિયરફોર્જ AI સક્રિય છે. તમારું ઈમેઇલ અથવા નામ જણાવો, હું આપમેળે ભરી દઈશ."
+        : isHi
+        ? "करियरफोर्ज AI सक्रिय है। अपना ईमेल या नाम बताएं, मैं स्वतः भर दूँगा।"
+        : "CareerForge AI is active. Speak your email or name, and I will fill it in for you.";
+      setAiSpeechPrompt(welcome);
+      setPendingFieldTarget("email");
+      speakText(welcome, { lang: currentLangRef.current || "en-US" });
+    }
+
+    showStatus("🎙️ Voice Dictation Active — Speak in any language", 3500);
+  }, [user, setVoiceMode, processSpokenText, showStatus]);
 
   const stopVoiceDictation = useCallback(() => {
     playAccessibleChime("stop");
@@ -320,6 +459,7 @@ export function GlobalVoiceDictator() {
     setListening(false);
     setLiveTranscript("");
     setInterimTranscript("");
+    setAiSpeechPrompt(null);
     stopSpeaking();
     showStatus("Voice dictation paused", 2000);
   }, [showStatus]);
@@ -332,19 +472,16 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── 5. Initial Load Accessibility Audio Cue for Disabled / Blind Users ─────
+  // ─── 6. Auto-Engage Voice Mode if Enabled ───────────────────────────────────
   useEffect(() => {
-    if (!initialAnnouncedRef.current && isSpeechRecognitionSupported()) {
-      initialAnnouncedRef.current = true;
-      // If voiceMode was previously enabled or first session, auto-engage
-      if (voiceMode) {
-        const t = setTimeout(() => {
-          startVoiceDictation();
-        }, 1200);
-        return () => clearTimeout(t);
-      }
+    if (voiceMode && !active && isSpeechRecognitionSupported()) {
+      const t = setTimeout(() => {
+        startVoiceDictation();
+      }, 1000);
+      return () => clearTimeout(t);
     }
-  }, [voiceMode, startVoiceDictation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceMode]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -353,6 +490,9 @@ export function GlobalVoiceDictator() {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
     };
   }, []);
+
+  const currentLangObj =
+    SUPPORTED_LANGUAGES.find((l) => l.code === voiceLanguage) || SUPPORTED_LANGUAGES[0];
 
   return (
     <>
@@ -367,47 +507,118 @@ export function GlobalVoiceDictator() {
         aria-label="Universal Voice Input and Accessibility Controls"
         className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 pointer-events-auto select-none"
       >
-        {/* Live Transcript / Feedback Popover */}
-        {(active || statusMessage || interimTranscript || liveTranscript) && voiceBannerOpen && (
-          <div
-            className={`max-w-sm rounded-2xl border p-3.5 shadow-xl backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2 ${
-              active
-                ? "border-indigo-300/80 bg-white/95 text-neutral-900 shadow-indigo-500/10 ring-1 ring-indigo-500/20"
-                : "border-neutral-200 bg-white/95 text-neutral-800"
-            }`}
-          >
+        {/* Live Transcript / AI Prompt Popover */}
+        {(active || liveTranscript || interimTranscript || aiSpeechPrompt) && voiceBannerOpen && (
+          <div className="mb-2 max-w-sm rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between gap-2 border-b border-neutral-100 pb-2 mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`} />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700">
-                  {active ? "🎙️ Universal Voice Fill Active" : "Voice Assistant"}
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                  {isAiAnswering ? "AI Answering..." : listening ? "Listening..." : "Voice Ready"}
+                </span>
+                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 border border-neutral-200">
+                  {currentLangObj.flag} {currentLangObj.nativeName}
                 </span>
               </div>
-
-              <div className="flex items-center gap-1">
-                {/* Language Picker Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowLanguagePicker(!showLanguagePicker)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors cursor-pointer"
-                  title="Change voice recognition language"
-                >
-                  🌐 {SUPPORTED_LANGUAGES.find((l) => l.code === voiceLanguage)?.flag || "🇮🇳"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVoiceBannerOpen(false)}
-                  className="text-neutral-400 hover:text-neutral-600 text-xs px-1"
-                  aria-label="Minimize voice banner"
-                >
-                  ✕
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setVoiceBannerOpen(false)}
+                className="text-neutral-400 hover:text-neutral-700 text-xs px-1"
+                aria-label="Minimize Voice HUD"
+              >
+                ✕
+              </button>
             </div>
 
-            {/* Language Selection Dropdown */}
+            {/* AI Assistant Guidance Prompt */}
+            {aiSpeechPrompt && (
+              <div className="mb-2 rounded-xl bg-neutral-900 p-2.5 text-xs text-white shadow-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-[11px] text-emerald-400 mb-1">
+                  <span>🤖 AI Assistant Guide:</span>
+                </div>
+                <p className="leading-relaxed">{aiSpeechPrompt}</p>
+              </div>
+            )}
+
+            {/* Live Spoken Transcript */}
+            <div className="text-xs text-neutral-800 font-medium leading-relaxed min-h-[20px]">
+              {liveTranscript && <p className="text-neutral-900 font-semibold">{liveTranscript}</p>}
+              {interimTranscript && (
+                <p className="text-neutral-500 italic animate-pulse">{interimTranscript} ...</p>
+              )}
+              {!liveTranscript && !interimTranscript && !aiSpeechPrompt && (
+                <p className="text-neutral-400 italic">Speak in Gujarati, Hindi, English, etc. to fill any field or ask questions...</p>
+              )}
+            </div>
+
+            {/* Focused Target Field Indicator */}
+            {focusedFieldLabel && (
+              <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-200/60">
+                <span>🎯 Target:</span>
+                <span className="font-semibold text-neutral-900 truncate max-w-[180px]">
+                  {focusedFieldLabel}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Floating Action Bar */}
+        <div className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white/95 px-3.5 py-2 shadow-xl backdrop-blur-md">
+          {/* Main Microphone Button */}
+          <button
+            type="button"
+            onClick={toggleVoiceDictation}
+            className={`group flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              active
+                ? "bg-rose-600 text-white shadow-md hover:bg-rose-700 animate-pulse"
+                : "bg-neutral-900 text-white shadow-sm hover:bg-neutral-800"
+            }`}
+            title="Toggle Voice Dictation & AI Assistant (Alt + V)"
+            aria-pressed={active}
+          >
+            <span className="text-sm">{active ? "🛑" : "🎙️"}</span>
+            <span>{active ? "Listening (Alt+V)" : "Voice Start"}</span>
+          </button>
+
+          {/* Quick Help Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!active) startVoiceDictation();
+              const isGu = voiceLanguage === "gu-IN";
+              const msg = isGu
+                ? "હું તમારી શું મદદ કરી શકું? તમારો પ્રશ્ન પૂછો અથવા ફોર્મ ભરવા માટે બોલો."
+                : "How can I help you? Ask any question or speak to fill forms.";
+              setAiSpeechPrompt(msg);
+              speakText(msg, { lang: voiceLanguage });
+            }}
+            className="flex items-center gap-1 rounded-full bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-800 border border-neutral-200 cursor-pointer transition-colors"
+            title="Ask AI Assistant for Help (મદદ)"
+          >
+            <span>💡</span>
+            <span>Help</span>
+          </button>
+
+          {/* Language Selector Dropdown Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowLanguagePicker(!showLanguagePicker)}
+              className="flex items-center gap-1 rounded-full bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-800 border border-neutral-200 cursor-pointer transition-colors"
+              title="Change Voice Recognition Language"
+            >
+              <span>{currentLangObj.flag}</span>
+              <span className="hidden sm:inline font-semibold">{currentLangObj.nativeName}</span>
+              <span className="text-[10px] text-neutral-500">▼</span>
+            </button>
+
+            {/* Language Selector Menu */}
             {showLanguagePicker && (
-              <div className="mb-2 max-h-36 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 p-1 text-xs space-y-0.5">
+              <div className="absolute bottom-full right-0 mb-2 w-52 max-h-64 overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1.5 shadow-2xl z-50">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500 border-b border-neutral-100 mb-1">
+                  Select Language (ભાષા)
+                </div>
                 {SUPPORTED_LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}
@@ -415,102 +626,41 @@ export function GlobalVoiceDictator() {
                     onClick={() => {
                       setVoiceLanguage(lang.code);
                       setGlobalVoiceLanguage(lang.code);
+                      currentLangRef.current = lang.code;
                       setShowLanguagePicker(false);
-                      showStatus(`Language set to ${lang.nativeName}`);
+                      showStatus(`Language switched to ${lang.nativeName}`, 3000);
                       if (active) {
-                        startVoiceDictation();
+                        // Restart recognition with new language
+                        controllerRef.current?.stop();
+                        const controller = startSpeechRecognition(
+                          {
+                            onTranscript: (transcript: string, isFinal?: boolean) => {
+                              processSpokenText(transcript, !!isFinal);
+                            },
+                            onListeningChange: (isList: boolean) => setListening(isList),
+                            onError: (err: string) => console.warn(err),
+                          },
+                          { lang: lang.code, continuous: true }
+                        );
+                        controllerRef.current = controller;
                       }
                     }}
-                    className={`flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors cursor-pointer ${
+                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors ${
                       voiceLanguage === lang.code
-                        ? "bg-indigo-600 font-bold text-white"
-                        : "text-neutral-700 hover:bg-neutral-200"
+                        ? "bg-neutral-900 text-white font-semibold"
+                        : "text-neutral-700 hover:bg-neutral-100"
                     }`}
                   >
-                    <span>{lang.flag} {lang.nativeName}</span>
-                    <span className="text-[10px] opacity-75">{lang.name}</span>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.nativeName}</span>
+                    </span>
+                    <span className="text-[10px] text-neutral-400">{lang.name}</span>
                   </button>
                 ))}
               </div>
             )}
-
-            {/* Active Target Field Info */}
-            {focusedFieldLabel ? (
-              <p className="text-[11px] font-semibold text-indigo-700 bg-indigo-50/80 px-2 py-1 rounded-md mb-1.5 flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
-                Target Box: <span className="underline font-bold">{focusedFieldLabel}</span>
-              </p>
-            ) : (
-              <p className="text-[11px] text-neutral-500 mb-1.5">
-                💡 Click any input or say <em>&quot;email ...&quot;</em> / <em>&quot;name ...&quot;</em>
-              </p>
-            )}
-
-            {/* Live Audio Transcript Preview */}
-            <div className="min-h-[24px] rounded-lg bg-neutral-50 border border-neutral-100 p-2 text-xs">
-              {interimTranscript ? (
-                <p className="text-neutral-500 italic flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                  &quot;{interimTranscript}&quot;
-                </p>
-              ) : liveTranscript ? (
-                <p className="font-medium text-emerald-800">
-                  🗣️ &quot;{liveTranscript}&quot;
-                </p>
-              ) : statusMessage ? (
-                <p className="text-neutral-700 font-medium">{statusMessage}</p>
-              ) : (
-                <p className="text-neutral-400 italic">Listening for your speech across the screen...</p>
-              )}
-            </div>
-
-            {/* Audio Wave Visualizer while actively listening */}
-            {active && listening && (
-              <div className="mt-2 flex items-center justify-center gap-1 h-3">
-                <span className="h-2 w-1 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="h-3.5 w-1 rounded-full bg-indigo-600 animate-pulse delay-75" />
-                <span className="h-2.5 w-1 rounded-full bg-indigo-500 animate-pulse delay-150" />
-                <span className="h-1.5 w-1 rounded-full bg-indigo-400 animate-pulse" />
-              </div>
-            )}
           </div>
-        )}
-
-        {/* Master Microphone Floating Toggle Button */}
-        <div className="flex items-center gap-2">
-          {!voiceBannerOpen && (
-            <button
-              type="button"
-              onClick={() => setVoiceBannerOpen(true)}
-              className="rounded-full bg-white border border-neutral-200 px-2.5 py-1 text-xs font-semibold text-neutral-700 shadow-md hover:bg-neutral-50 cursor-pointer"
-            >
-              Show Voice HUD
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={toggleVoiceDictation}
-            aria-label={active ? "Deactivate voice dictation (Alt+V)" : "Activate universal voice dictation (Alt+V)"}
-            title={active ? "Voice Fill Active (Click or Alt+V to Pause)" : "Enable Universal Voice Fill (Alt+V)"}
-            className={`group relative flex h-13 w-13 items-center justify-center rounded-full shadow-2xl transition-all transform active:scale-95 cursor-pointer ${
-              active
-                ? "bg-gradient-to-tr from-indigo-600 to-violet-600 text-white ring-4 ring-indigo-500/30 scale-105 shadow-indigo-500/40"
-                : "bg-white border-2 border-neutral-300 text-neutral-700 hover:border-indigo-500 hover:text-indigo-600 shadow-lg"
-            }`}
-          >
-            {active ? (
-              <>
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white" />
-                </span>
-                <span className="text-2xl animate-pulse">🎙️</span>
-              </>
-            ) : (
-              <span className="text-xl group-hover:scale-110 transition-transform">🎤</span>
-            )}
-          </button>
         </div>
       </aside>
     </>

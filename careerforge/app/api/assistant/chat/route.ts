@@ -406,9 +406,19 @@ function generateCognitiveAgentResponse(
   const lower = query.toLowerCase();
 
   // Language Detection
-  const isGujarati = /[\u0A80-\u0AFF]/.test(query) || lower.includes("કેમ છો") || lower.includes("નમસ્તે") || lower.includes("શું");
-  const isHindi = /[\u0900-\u097F]/.test(query) || lower.includes("कैसे") || lower.includes("नमस्ते") || lower.includes("क्या");
-  const isSpanish = /[\u00C0-\u00FF]/.test(query) || lower.includes("hola") || lower.includes("como") || lower.includes("que");
+  const isGujarati =
+    /[\u0A80-\u0AFF]/.test(query) ||
+    /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|shikhvu|kevi rite|karvi|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub|banavva|madad karo|કેમ છો|નમસ્તે|શું|રેઝ્યૂમે|રોડમેપ)\b/i.test(
+      lower
+    );
+  const isHindi =
+    /[\u0900-\u097F]/.test(query) ||
+    /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek|नमस्ते|कैसे|क्या|सहायता)\b/i.test(
+      lower
+    );
+  const isSpanish =
+    /[\u00C0-\u00FF]/.test(query) ||
+    /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes)\b/i.test(lower);
 
   // Feature Intent Parsing
   const intent = parseIntent(query);
@@ -496,10 +506,37 @@ function generateCognitiveAgentResponse(
     else if (lower.includes("docker") || lower.includes("kubernetes")) topicSummary = "Containerization & Cloud Deployments";
 
     if (voiceMode) {
+      if (isGujarati) {
+        return {
+          reply: `${topicSummary} વિશે: સરળતા અને કાર્યક્ષમતા પર ધ્યાન કેન્દ્રિત કરો. મોડ્યુલર કોડ, ટાઈપ સેફ્ટી અને સ્કેલેબિલિટી ખૂબ મહત્વપૂર્ણ છે. શું તમે આ વિષય પર ઇન્ટરવ્યુ પ્રશ્નોની પ્રેક્ટિસ કરવા માંગો છો?`,
+          feature: intent.feature || "practice",
+          featureTitle: "ઇન્ટરવ્યુ પ્રેક્ટિસ",
+        };
+      }
+      if (isHindi) {
+        return {
+          reply: `${topicSummary} के बारे में: सरलता और स्केलेबिलिटी पर ध्यान दें। मॉड्यूलर कोड, टाइप सुरक्षा और प्रदर्शन अत्यंत महत्वपूर्ण हैं। क्या आप इस विषय पर अभ्यास करना चाहते हैं?`,
+          feature: intent.feature || "practice",
+          featureTitle: "इंटरव्यू अभ्यास",
+        };
+      }
       return {
         reply: `Regarding ${topicSummary}: prioritize simplicity and scalability. Focus on clean separation of concerns, strong type contracts, and observability. Would you like to practice interview questions on this topic?`,
         feature: intent.feature || "practice",
         featureTitle: intent.featureTitle || "Interview Practice",
+      };
+    }
+
+    if (isGujarati) {
+      return {
+        reply: `અહીં **${topicSummary}** માટે તમારા ${role} ના રોલ માટે ઊંડાણપૂર્વકનું વિશ્લેષણ છે, ${userName}:\n\n` +
+          `### ૧. મુખ્ય એન્જિનિયરિંગ સિદ્ધાંતો\n` +
+          `• **Separation of Concerns**: બિઝનેસ લોજિક અને યુઆઈને અલગ રાખો.\n` +
+          `• **Performance & Caching**: રિસ્પોન્સ ટાઈમ ઘટાડવા માટે Redis અને CDN કેશિંગનો ઉપયોગ કરો.\n` +
+          `• **Scalability**: સિસ્ટમ ડિઝાઇન કરતી વખતે માઇક્રોસર્વિસિસ અથવા મોડ્યુલર મોનોલિથનો યોગ્ય ઉપયોગ કરો.\n\n` +
+          `શું તમે આના પર મોક ઇન્ટરવ્યુ પ્રેક્ટિસ કરવા માંગો છો?`,
+        feature: intent.feature || "practice",
+        featureTitle: "ઇન્ટરવ્યુ પ્રેક્ટિસ",
       };
     }
 
@@ -518,7 +555,21 @@ function generateCognitiveAgentResponse(
   }
 
   // 3. Resume & Interview Questions
-  if (lower.includes("resume") || lower.includes("cv") || lower.includes("bullet point") || lower.includes("ats")) {
+  if (lower.includes("resume") || lower.includes("cv") || lower.includes("bullet point") || lower.includes("ats") || lower.includes("રેઝ્યૂમે") || lower.includes("સીવી")) {
+    if (isGujarati) {
+      return {
+        reply: voiceMode
+          ? `મજબૂત રેઝ્યૂમે બનાવવા માટે Google ની XYZ ફોર્મ્યુલા વાપરો: Accomplished X, measured by Y, by doing Z. ચાલો Resume Builder ખોલીએ.`
+          : `અહીં એન્જિનિયરિંગ રેઝ્યૂમે માટે Google ની સુવર્ણ **XYZ Formula** છે, ${userName}:\n\n` +
+            `> **&ldquo;Accomplished [X], as measured by [Y], by doing [Z]&rdquo;**\n\n` +
+            `**ઉદાહરણ:**\n` +
+            `• ✅ *અસરકારક*: "Redis કેશિંગ લેયર બનાવીને 1.2M યુઝર્સ માટે API લેટન્સી 450ms થી ઘટાડીને 42ms (90% સુધારો) કરી."\n\n` +
+            `તમારા રેઝ્યૂમેને અપગ્રેડ કરવા માટે ચાલો **Resume Builder** ખોલીએ!`,
+        feature: "resume",
+        resumeTab: "builder",
+        featureTitle: "Resume Builder",
+      };
+    }
     return {
       reply: voiceMode
         ? `To create strong resume bullets, use Google's XYZ formula: Accomplished X, measured by Y, by doing Z. Let's open the Resume Builder to optimize yours.`
@@ -535,7 +586,16 @@ function generateCognitiveAgentResponse(
   }
 
   // 4. Roadmap & Learning Path
-  if (lower.includes("roadmap") || lower.includes("learn") || lower.includes("career path") || lower.includes("skills")) {
+  if (lower.includes("roadmap") || lower.includes("learn") || lower.includes("career path") || lower.includes("skills") || lower.includes("રોડમેપ") || lower.includes("શીખવું")) {
+    if (isGujarati) {
+      return {
+        reply: voiceMode
+          ? `તમારા માટે ${role} નો વિગતવાર કરિયર રોડમેપ તૈયાર છે. તેમાં ઓડિયોબુક ફીચર પણ સામેલ છે જેથી તમે સાંભળી શકો!`
+          : `તમારા **${role}** રોડમેપમાં સ્ટેજ-બાય-સ્ટેજ સ્કિલ્સ, ભલામણ કરેલ પુસ્તકો અને સાંભળવા માટે નવું **Roadmap Audiobook Player** 🎧 ઉપલબ્ધ છે.\n\nશું તમે અત્યારે કરિયર રોડમેપ ખોલવા માંગો છો?`,
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+      };
+    }
     return {
       reply: voiceMode
         ? `I have your structured Career Roadmap ready for ${role}. It includes step-by-step milestones and an Audiobook feature for listening on the go!`

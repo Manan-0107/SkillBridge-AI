@@ -39,10 +39,15 @@ let currentLanguage = "en-US";
 export function detectTextLanguage(text: string): string {
   if (!text) return currentLanguage || "en-US";
   const clean = text.trim();
+  const lower = clean.toLowerCase();
 
   // 1. Non-Latin scripts (High Precision)
   if (/[\u0A80-\u0AFF]/.test(clean)) return "gu-IN"; // Gujarati (ગુજરાતી)
-  if (/[\u0900-\u097F]/.test(clean)) return "hi-IN"; // Hindi / Marathi (हिन्दी)
+  if (/[\u0900-\u097F]/.test(clean)) {
+    // Check Marathi specific words if needed, default to Hindi
+    if (/\b(कसे|माझे|नाव|मदत|करा|आहे|नाही)\b/.test(clean)) return "mr-IN";
+    return "hi-IN"; // Hindi (हिन्दी)
+  }
   if (/[\u0B80-\u0BFF]/.test(clean)) return "ta-IN"; // Tamil (தமிழ்)
   if (/[\u0C00-\u0C7F]/.test(clean)) return "te-IN"; // Telugu (తెలుగు)
   if (/[\u0980-\u09FF]/.test(clean)) return "bn-IN"; // Bengali (বাংলা)
@@ -50,12 +55,50 @@ export function detectTextLanguage(text: string): string {
   if (/[\u3040-\u309F\u30A0-\u30FF]/.test(clean)) return "ja-JP"; // Japanese (日本語)
   if (/[\u4E00-\u9FFF]/.test(clean)) return "zh-CN"; // Chinese (中文)
 
-  // 2. Specific European characters
-  if (/[ñáéíóú¿¡]/i.test(clean) && !/\b(the|is|in|at|to|for|and|jobs|developer|engineer|software|resume)\b/i.test(clean)) return "es-ES";
-  if (/[äöüß]/i.test(clean) && !/\b(the|is|in|at|to|for|and)\b/i.test(clean)) return "de-DE";
-  if (/[éèêëàâîïôûùç]/i.test(clean) && !/\b(the|is|in|at|to|for|and|resume)\b/i.test(clean)) return "fr-FR";
+  // 2. Transliterated / Spoken terms in Latin script
+  // Gujarati Transliteration
+  if (
+    /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub)\b/i.test(
+      lower
+    )
+  ) {
+    return "gu-IN";
+  }
 
-  // 3. Default to English for Latin text
+  // Hindi Transliteration
+  if (
+    /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek)\b/i.test(
+      lower
+    )
+  ) {
+    return "hi-IN";
+  }
+
+  // Spanish
+  if (
+    /[ñáéíóú¿¡]/i.test(clean) ||
+    /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes)\b/i.test(lower)
+  ) {
+    return "es-ES";
+  }
+
+  // French
+  if (
+    /[éèêëàâîïôûùç]/i.test(clean) ||
+    /\b(bonjour|comment|aide|merci|s'il vous plait|mon nom)\b/i.test(lower)
+  ) {
+    return "fr-FR";
+  }
+
+  // German
+  if (
+    /[äöüß]/i.test(clean) ||
+    /\b(hallo|hilfe|danke|bitte|mein name|guten tag)\b/i.test(lower)
+  ) {
+    return "de-DE";
+  }
+
+  // 3. Default to current language or English
   return currentLanguage || "en-US";
 }
 
