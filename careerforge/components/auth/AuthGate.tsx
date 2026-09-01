@@ -201,11 +201,23 @@ export function AuthGate() {
             </button>
           </div>
 
+          {/* Voice Input Assistance Tip for Disabled Users */}
+          <div className="mb-4 flex items-center justify-between rounded-xl bg-indigo-50/70 border border-indigo-200/70 px-3.5 py-2 text-xs text-indigo-900">
+            <div className="flex items-center gap-2">
+              <span className="text-base animate-pulse">🎙️</span>
+              <span><strong>Voice Ready:</strong> Speak into any box or say <em>&quot;email ...&quot;</em> / <em>&quot;submit&quot;</em></span>
+            </div>
+            <span className="text-[10px] font-bold bg-indigo-200/80 px-2 py-0.5 rounded text-indigo-800">Alt+V</span>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
               <div>
                 <FieldLabel>Full Name</FieldLabel>
                 <input
+                  id="auth-name-input"
+                  name="name"
+                  aria-label="Full Name"
                   className={inputClasses}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -217,7 +229,10 @@ export function AuthGate() {
             <div>
               <FieldLabel>Email Address</FieldLabel>
               <input
+                id="auth-email-input"
+                name="email"
                 type="email"
+                aria-label="Email Address"
                 className={inputClasses}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -228,7 +243,10 @@ export function AuthGate() {
             <div>
               <FieldLabel>Password</FieldLabel>
               <input
+                id="auth-password-input"
+                name="password"
                 type="password"
+                aria-label="Password"
                 className={inputClasses}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -241,7 +259,7 @@ export function AuthGate() {
               <p className="text-sm text-red-700">{error}</p>
             )}
 
-            <PrimaryButton type="submit" className="w-full">
+            <PrimaryButton type="submit" id="submit-btn" className="w-full">
               {mode === "signup" ? "Create account" : "Sign in"}
             </PrimaryButton>
           </form>

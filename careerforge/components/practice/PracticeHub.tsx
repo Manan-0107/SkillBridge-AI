@@ -101,8 +101,8 @@ const tools = [
 ];
 
 export function PracticeHub() {
-  const { targetRole, user } = useApp();
-  const role = targetRole || "frontend";
+  const { user } = useApp();
+  const role = user?.targetRole || "frontend";
   const questions = PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend;
 
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);

@@ -17,7 +17,8 @@ export interface User {
   email: string;
   phone?: string;
   picture?: string;
-  authProvider: "email" | "google" | "github" | "phone";
+  avatarUrl?: string;
+  authProvider?: "email" | "google" | "github" | "phone";
   targetRole: RoleId | null;
   /** Supabase DB row id — null when DB is not configured */
   dbId?: string | null;

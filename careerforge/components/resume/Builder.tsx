@@ -2,7 +2,7 @@
 
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
-import { atsTemplates, AtsTemplate } from "@/app/api/resume/templates/route";
+import { atsTemplates, AtsTemplate } from "@/lib/templates";
 
 interface ExperienceItem {
   id: string;

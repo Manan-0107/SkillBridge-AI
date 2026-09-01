@@ -5,6 +5,7 @@ import { Section } from "@/components/ui/Section";
 import { roadmaps, roleOptions, courseCatalog } from "@/lib/data";
 import { RoleId, Course } from "@/lib/types";
 import { Card, Tag } from "@/components/ui/Primitives";
+import { RoadmapAudiobook } from "./RoadmapAudiobook";
 
 // Comprehensive topic research resources (Blogs, Books, Video Playlists)
 interface StepResource {
@@ -469,6 +470,16 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
       title={`Your Path to ${roleLabel}`}
       description="Interactive stages, recommended technical books, blogs, and course playlists."
     >
+      {/* Accessibility Audiobook Narration Player */}
+      <RoadmapAudiobook
+        role={role}
+        roleLabel={roleLabel}
+        steps={steps}
+        stepResources={stepResourcesByRole[role]}
+        selectedStepIndex={selectedStepIndex ?? 0}
+        onSelectStep={(idx) => setSelectedStepIndex(idx)}
+      />
+
       {/* Sub-Navigation: Milestones Path vs Full Course Catalog */}
       <div className="mb-8 flex items-center gap-2 border-b border-neutral-200 pb-3">
         <button

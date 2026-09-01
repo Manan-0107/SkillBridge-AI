@@ -25,7 +25,8 @@ interface SuggestionItem {
 }
 
 export function LocalOpportunities() {
-  const { targetRole, user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
+  const { user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
+  const targetRole = user?.targetRole || "frontend";
   const [searchTerm, setSearchTerm] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [activeType, setActiveType] = useState<"all" | "remote" | "onsite" | "internship">("all");

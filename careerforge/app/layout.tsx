@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { Newsreader, Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
+import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 
 const display = Newsreader({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
   variable: "--font-display",
+  display: "swap",
+  adjustFontFallback: false,
 });
 
 const body = Inter({
@@ -30,7 +33,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body className="font-body antialiased">
-        <AppProvider>{children}</AppProvider>
+        <AppProvider>
+          {children}
+          <GlobalVoiceDictator />
+        </AppProvider>
       </body>
     </html>
   );

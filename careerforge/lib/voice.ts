@@ -3,6 +3,8 @@
  * - Automatic Language-Matching: If user speaks English, replies in English. If Hindi, replies in Hindi, etc.
  * - Multi-Language Speech Recognition (STT): All Indian, European, Asian & Global languages
  * - High-Quality Speech Synthesis (TTS): Detects language & speaks with matching native voice
+ * - React Native Input Event Synchronizer: Dispatches synthetic events to update form states seamlessly
+ * - Accessible Audio Chimes: Web Audio API tones for blind and motor-impaired users
  */
 
 export interface SupportedLanguage {
@@ -54,7 +56,7 @@ export function detectTextLanguage(text: string): string {
   if (/[éèêëàâîïôûùç]/i.test(clean) && !/\b(the|is|in|at|to|for|and|resume)\b/i.test(clean)) return "fr-FR";
 
   // 3. Default to English for Latin text
-  return "en-US";
+  return currentLanguage || "en-US";
 }
 
 export function setGlobalVoiceLanguage(langCode: string) {
@@ -65,7 +67,120 @@ export function getGlobalVoiceLanguage(): string {
   return currentLanguage || "en-US";
 }
 
-// ─── 2. Multi-Language Text-to-Speech (TTS) ───────────────────────────────────
+// ─── 2. Accessible Web Audio Chimes for Blind & Disabled Users ─────────────────
+export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate") {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.08, now);
+
+    if (type === "start") {
+      // Friendly ascending two-tone chime
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } else if (type === "success") {
+      // Pleasant triad
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+      osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } else if (type === "clear") {
+      // Quick descending sweep
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } else if (type === "stop") {
+      // Soft single tone
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(320, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } else {
+      // Navigate beep
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    }
+  } catch {
+    // Web audio muted or blocked — graceful no-op
+  }
+}
+
+// ─── 3. React Synthetic Form Input Value Synchronizer ──────────────────────────
+/**
+ * Programmatically updates an HTMLInputElement or HTMLTextAreaElement in a way
+ * that triggers React's internal onChange/onInput listeners.
+ */
+export function setNativeInputValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string
+) {
+  if (!element) return;
+  const prototype =
+    element instanceof HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (valueSetter) {
+    valueSetter.call(element, value);
+  } else {
+    element.value = value;
+  }
+
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/**
+ * Appends spoken text to an input/textarea with intelligent spacing and punctuation.
+ */
+export function appendNativeInputValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  newText: string,
+  mode: "append" | "replace" = "append"
+) {
+  if (!element) return;
+  const current = element.value || "";
+  let finalVal = newText.trim();
+
+  if (mode === "append" && current.trim()) {
+    finalVal = `${current.trim()} ${newText.trim()}`;
+  }
+
+  setNativeInputValue(element, finalVal);
+
+  // Place cursor at the end
+  try {
+    const len = finalVal.length;
+    element.setSelectionRange(len, len);
+  } catch {}
+}
+
+// ─── 4. Multi-Language Text-to-Speech (TTS) ───────────────────────────────────
 
 export function isSpeechSynthesisSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
@@ -75,6 +190,18 @@ export function stopSpeaking() {
   if (isSpeechSynthesisSupported()) {
     window.speechSynthesis.cancel();
     activeUtterance = null;
+  }
+}
+
+export function pauseSpeaking() {
+  if (isSpeechSynthesisSupported()) {
+    window.speechSynthesis.pause();
+  }
+}
+
+export function resumeSpeaking() {
+  if (isSpeechSynthesisSupported()) {
+    window.speechSynthesis.resume();
   }
 }
 
@@ -89,6 +216,7 @@ export function speakText(
     lang?: string;
     rate?: number;
     pitch?: number;
+    volume?: number;
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (err: unknown) => void;
@@ -112,6 +240,7 @@ export function speakText(
     .replace(/#+\s/g, "")
     .replace(/>\s/g, "")
     .replace(/[•\-\*]\s/g, "")
+    .replace(/https?:\/\/[^\s]+/g, "")
     .trim();
 
   if (!cleanText) {
@@ -126,9 +255,9 @@ export function speakText(
   activeUtterance = utterance;
 
   utterance.lang = targetLang;
-  utterance.rate = options?.rate || 0.96;
+  utterance.rate = options?.rate || 0.98;
   utterance.pitch = options?.pitch || 1.0;
-  utterance.volume = 1.0;
+  utterance.volume = typeof options?.volume === "number" ? options.volume : 1.0;
 
   // Find the highest quality native voice matching the language exactly
   const voices = window.speechSynthesis.getVoices();
@@ -162,7 +291,7 @@ export function speakText(
   window.speechSynthesis.speak(utterance);
 }
 
-// ─── 3. Multi-Language Speech-to-Text (STT) ───────────────────────────────────
+// ─── 5. Multi-Language Speech-to-Text (STT) ───────────────────────────────────
 
 export function isSpeechRecognitionSupported(): boolean {
   if (typeof window === "undefined") return false;
@@ -171,6 +300,7 @@ export function isSpeechRecognitionSupported(): boolean {
 
 export type SpeechRecognitionController = {
   stop: () => void;
+  isActive: () => boolean;
 };
 
 export function startSpeechRecognition(
@@ -181,6 +311,7 @@ export function startSpeechRecognition(
   },
   options?: {
     lang?: string;
+    continuous?: boolean;
   }
 ): SpeechRecognitionController | null {
   if (!isSpeechRecognitionSupported()) {
@@ -189,12 +320,14 @@ export function startSpeechRecognition(
     return null;
   }
 
+  let running = true;
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognitionClass();
 
-    recognition.continuous = true;
+    recognition.continuous = options?.continuous !== undefined ? options.continuous : true;
     recognition.interimResults = true;
     recognition.lang = options?.lang || currentLanguage || "en-US";
 
@@ -234,12 +367,21 @@ export function startSpeechRecognition(
 
     recognition.onend = () => {
       callbacks.onListeningChange(false);
+      // Auto restart if continuous was requested and not stopped manually
+      if (running && options?.continuous) {
+        try {
+          recognition.start();
+        } catch {
+          // ignore
+        }
+      }
     };
 
     recognition.start();
 
     return {
       stop: () => {
+        running = false;
         try {
           recognition.stop();
         } catch {
@@ -247,6 +389,7 @@ export function startSpeechRecognition(
         }
         callbacks.onListeningChange(false);
       },
+      isActive: () => running,
     };
   } catch (err) {
     console.error("[Voice] Speech recognition init failed:", err);

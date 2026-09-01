@@ -48,7 +48,7 @@ export function AssistantHome({
 }: {
   onRedirect: (feature: FeatureId, tab?: ResumeTab) => void;
 }) {
-  const { user, setTargetRole } = useApp();
+  const { user, setTargetRole, voiceMode } = useApp();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -414,14 +414,13 @@ export function AssistantHome({
         speakText(replyText);
       }
 
-      if (hasFeature && data.feature) {
+      setBusy(false);
+      if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
         setRedirectCountdown(3);
         const timer = setTimeout(() => {
           executeRedirect(data.feature, data.resumeTab);
         }, 3200);
         setActiveTimer(timer);
-      } else {
-        setBusy(false);
       }
     } catch (err) {
       console.error("[AssistantHome] LLM call error:", err);

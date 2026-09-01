@@ -91,6 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const localUser: User = {
       name: displayName,
       email,
+      authProvider: "email",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
@@ -100,6 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const dbRow = await upsertUser({
         email,
         name: localUser.name,
+        authProvider: "email",
         targetRole: localUser.targetRole ?? undefined,
       });
       if (dbRow?.id) {
