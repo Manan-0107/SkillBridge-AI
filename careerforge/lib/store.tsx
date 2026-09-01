@@ -113,7 +113,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
+      if (raw) {
+        setUser(JSON.parse(raw));
+      } else {
+        const defaultCandidate: User = {
+          email: "alex.rivera@example.com",
+          name: "Alex Rivera",
+          targetRole: "frontend",
+        };
+        setUser(defaultCandidate);
+      }
 
       const vm = window.localStorage.getItem(VOICE_MODE_KEY);
       if (vm !== null) setVoiceModeState(vm === "true");
