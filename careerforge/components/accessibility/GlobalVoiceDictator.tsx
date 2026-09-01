@@ -902,15 +902,11 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── 6. Auto-Start Voice Dictation IMMEDIATELY on Site Open ─────────────────
+  // ─── 6. Clean Voice Dictation Lifecycle ────────────────────────────────────
   useEffect(() => {
-    if (isSpeechRecognitionSupported()) {
-      const t = setTimeout(() => {
-        startVoiceDictation();
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      controllerRef.current?.stop();
+    };
   }, []);
 
   // ─── 7. Tab-Switch & Minimize Auto-Pause with Direct Question on Return ─────

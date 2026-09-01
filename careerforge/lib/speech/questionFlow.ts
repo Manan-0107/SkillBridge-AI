@@ -161,15 +161,30 @@ export function validateUserAnswer(
   expectedType: ExpectedAnswerType,
   language = "en"
 ): ValidationResult {
+  if (!rawInput || !rawInput.trim()) {
+    return { valid: false, reason: "empty" };
+  }
+
   switch (expectedType) {
+    case "name":
+      return validateName(rawInput);
     case "yes_no":
       return validateYesNo(rawInput, language);
     case "email":
       return validateEmail(rawInput);
+    case "phone": {
+      const digits = rawInput.replace(/[^0-9]/g, "");
+      return digits.length >= 7 ? { valid: true, value: digits } : { valid: false, reason: "invalid_format" };
+    }
+    case "location":
+    case "job_role":
+      return validateFreeText(rawInput);
     case "number": {
       const num = parseInt(rawInput.replace(/[^0-9]/g, ""), 10);
       return !isNaN(num) ? { valid: true, value: num } : { valid: false, reason: "invalid_format" };
     }
+    case "long_text":
+    case "short_text":
     case "text":
     case "free_text":
     case "choice":
