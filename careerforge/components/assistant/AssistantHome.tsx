@@ -111,98 +111,6 @@ export function AssistantHome({
   const [voiceLang, setVoiceLang] = useState<string>("auto");
   const wasVoiceActiveOnHideRef = useRef(false);
 
-  // Cleanup timers & speech on unmount
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-      speechControllerRef.current?.stop();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
-    };
-  }, []);
-
-  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab switched / minimized: pause voice detection temporarily
-        if (listening || voiceMode) {
-          wasVoiceActiveOnHideRef.current = true;
-          stopListening();
-          stopSpeaking();
-        }
-      } else {
-        // Tab restored / visible: resume voice detection & directly ask question
-        if (wasVoiceActiveOnHideRef.current || voiceMode) {
-          wasVoiceActiveOnHideRef.current = false;
-
-          let promptToSpeak = "";
-          const isGu = voiceLang.startsWith("gu");
-          const isHi = voiceLang.startsWith("hi");
-          const isFr = voiceLang.startsWith("fr");
-
-          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
-            const stepQ = getResumeStepPrompt(resumeDraftState.step, voiceLang);
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! ચાલો આગળ વધીએ. ${stepQ}`
-              : isHi
-              ? `वापसी पर स्वागत है! आइए आगे बढ़ें। ${stepQ}`
-              : isFr
-              ? `Bon retour ! Continuons. ${stepQ}`
-              : `Welcome back! Let's continue. ${stepQ}`;
-          } else {
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે ક્યાંથી શરૂ કરવા માંગો છો?`
-              : isHi
-              ? `वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
-              : isFr
-              ? `Bon retour ! Je vous écoute. Comment puis-je vous aider aujourd'hui ?`
-              : `Welcome back! I am listening. How can I help you continue?`;
-          }
-
-          if (accessibilityPrefs?.speechOutput !== false) {
-            speakText(promptToSpeak, {
-              lang: voiceLang !== "auto" ? voiceLang : "en-US",
-              onEnd: () => {
-                startListening();
-              },
-            });
-          } else {
-            startListening();
-          }
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
-
-  // Update horizontal prompt scroll buttons
-  const checkPromptScroll = () => {
-    if (promptScrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = promptScrollRef.current;
-      setCanScrollLeft(scrollLeft > 4);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
-    }
-  };
-
-  useEffect(() => {
-    checkPromptScroll();
-    window.addEventListener("resize", checkPromptScroll);
-    return () => window.removeEventListener("resize", checkPromptScroll);
-  }, []);
-
-  const scrollPrompts = (direction: "left" | "right") => {
-    if (promptScrollRef.current) {
-      const offset = direction === "left" ? -280 : 280;
-      promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
-      setTimeout(checkPromptScroll, 320);
-    }
-  };
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -320,6 +228,98 @@ export function AssistantHome({
       onEnd: () => setSpeakingMsgId(null),
       onError: () => setSpeakingMsgId(null),
     });
+  };
+
+  // Cleanup timers & speech on unmount
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      speechControllerRef.current?.stop();
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
+    };
+  }, []);
+
+  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab switched / minimized: pause voice detection temporarily
+        if (listening || voiceMode) {
+          wasVoiceActiveOnHideRef.current = true;
+          stopListening();
+          stopSpeaking();
+        }
+      } else {
+        // Tab restored / visible: resume voice detection & directly ask question
+        if (wasVoiceActiveOnHideRef.current || voiceMode) {
+          wasVoiceActiveOnHideRef.current = false;
+
+          let promptToSpeak = "";
+          const isGu = voiceLang.startsWith("gu");
+          const isHi = voiceLang.startsWith("hi");
+          const isFr = voiceLang.startsWith("fr");
+
+          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
+            const stepQ = getResumeStepPrompt(resumeDraftState.step, voiceLang);
+            promptToSpeak = isGu
+              ? `પાછા સ્વાગત છે! ચાલો આગળ વધીએ. ${stepQ}`
+              : isHi
+              ? `वापसी पर स्वागत है! आइए आगे बढ़ें। ${stepQ}`
+              : isFr
+              ? `Bon retour ! Continuons. ${stepQ}`
+              : `Welcome back! Let's continue. ${stepQ}`;
+          } else {
+            promptToSpeak = isGu
+              ? `પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે ક્યાંથી શરૂ કરવા માંગો છો?`
+              : isHi
+              ? `वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+              : isFr
+              ? `Bon retour ! Je vous écoute. Comment puis-je vous aider aujourd'hui ?`
+              : `Welcome back! I am listening. How can I help you continue?`;
+          }
+
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(promptToSpeak, {
+              lang: voiceLang !== "auto" ? voiceLang : "en-US",
+              onEnd: () => {
+                startListening();
+              },
+            });
+          } else {
+            startListening();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
+
+  // Update horizontal prompt scroll buttons
+  const checkPromptScroll = () => {
+    if (promptScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = promptScrollRef.current;
+      setCanScrollLeft(scrollLeft > 4);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+    }
+  };
+
+  useEffect(() => {
+    checkPromptScroll();
+    window.addEventListener("resize", checkPromptScroll);
+    return () => window.removeEventListener("resize", checkPromptScroll);
+  }, []);
+
+  const scrollPrompts = (direction: "left" | "right") => {
+    if (promptScrollRef.current) {
+      const offset = direction === "left" ? -280 : 280;
+      promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+      setTimeout(checkPromptScroll, 320);
+    }
   };
 
   const userDisplayName = user?.name
