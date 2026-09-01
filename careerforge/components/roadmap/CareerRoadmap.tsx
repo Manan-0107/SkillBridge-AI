@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Section } from "@/components/ui/Section";
-import { roadmaps, roleOptions, courseCatalog } from "@/lib/data";
-import { RoleId, Course } from "@/lib/types";
+import { roadmaps, roleOptions, courseCatalog, roleGitHubProjects } from "@/lib/data";
+import { RoleId, Course, GitHubProject } from "@/lib/types";
 import { Card, Tag } from "@/components/ui/Primitives";
 import { RoadmapAudiobook } from "./RoadmapAudiobook";
 
@@ -454,10 +454,38 @@ const stepResourcesByRole: Record<RoleId, Record<number, StepResource>> = {
 export function CareerRoadmap({ role }: { role: RoleId }) {
   const steps = roadmaps[role];
   const courses = courseCatalog[role];
+  const githubProjects = roleGitHubProjects[role] || [];
   const roleLabel = roleOptions.find((r) => r.id === role)?.label ?? "";
 
-  const [activeTab, setActiveTab] = useState<"milestones" | "courses">("milestones");
+  const [activeTab, setActiveTab] = useState<"milestones" | "courses" | "projects">("milestones");
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(0);
+  const [completedStages, setCompletedStages] = useState<Record<number, boolean>>({});
+
+  // Load completed stages from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`careerforge.roadmap_progress.${role}`);
+      if (raw) setCompletedStages(JSON.parse(raw));
+      else setCompletedStages({});
+    } catch {
+      // ignore
+    }
+  }, [role]);
+
+  const toggleStageCompleted = (idx: number) => {
+    const next = { ...completedStages, [idx]: !completedStages[idx] };
+    setCompletedStages(next);
+    try {
+      localStorage.setItem(`careerforge.roadmap_progress.${role}`, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  const completedCount = Object.keys(completedStages).filter(
+    (k) => completedStages[Number(k)] && Number(k) < steps.length
+  ).length;
+  const progressPercent = Math.round((completedCount / steps.length) * 100);
 
   const selectedStep = selectedStepIndex !== null ? steps[selectedStepIndex] : null;
   const selectedResource =
@@ -468,7 +496,7 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
       id="roadmap"
       eyebrow="Career Progression &amp; Learning Hub"
       title={`Your Path to ${roleLabel}`}
-      description="Interactive stages, recommended technical books, blogs, and course playlists."
+      description="Interactive milestone progression, recommended technical books, architecture guides, and open-source GitHub projects."
     >
       {/* Accessibility Audiobook Narration Player */}
       <RoadmapAudiobook
@@ -480,12 +508,41 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
         onSelectStep={(idx) => setSelectedStepIndex(idx)}
       />
 
-      {/* Sub-Navigation: Milestones Path vs Full Course Catalog */}
-      <div className="mb-8 flex items-center gap-2 border-b border-neutral-200 pb-3">
+      {/* Overall Progress Tracker Bar */}
+      <div className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-graphite">Career Track Milestone Progress</span>
+              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-800 border border-neutral-200">
+                {completedCount} of {steps.length} Stages Complete
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-graphite">
+              Track your journey toward becoming a production-grade {roleLabel}.
+            </p>
+          </div>
+          <div className="text-right">
+            <span className="font-display text-2xl italic text-ink font-bold">{progressPercent}%</span>
+            <span className="text-xs text-graphite ml-1">Overall</span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100 border border-line/60">
+          <div
+            className="h-full bg-neutral-900 transition-all duration-500 rounded-full"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Sub-Navigation: Milestones Path vs Full Course Catalog vs GitHub Repos */}
+      <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
         <button
           type="button"
           onClick={() => setActiveTab("milestones")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "milestones"
               ? "bg-neutral-900 text-white shadow-xs"
               : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
@@ -497,13 +554,25 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
         <button
           type="button"
           onClick={() => setActiveTab("courses")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "courses"
               ? "bg-neutral-900 text-white shadow-xs"
               : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
           }`}
         >
           <span>📚 Curated Course Catalog ({courses.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("projects")}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "projects"
+              ? "bg-neutral-900 text-white shadow-xs"
+              : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+          }`}
+        >
+          <span>⭐ Open-Source GitHub Repositories ({githubProjects.length})</span>
         </button>
       </div>
 
@@ -514,12 +583,13 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
           {/* Left Column: Interactive Roadmap Steps List */}
           <div className="lg:col-span-5 space-y-3">
             <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
-              Select a stage to research
+              Select a stage to view learning materials
             </p>
 
             <ol className="relative space-y-3">
               {steps.map((step, i) => {
                 const isSelected = selectedStepIndex === i;
+                const isDone = Boolean(completedStages[i]);
                 return (
                   <li key={step.title}>
                     <div
@@ -527,26 +597,36 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
                       className={`group flex items-start gap-3.5 rounded-2xl border p-4 transition-all cursor-pointer ${
                         isSelected
                           ? "border-neutral-900 bg-white shadow-sm ring-1 ring-neutral-900/5"
+                          : isDone
+                          ? "border-emerald-200 bg-emerald-50/30 hover:border-emerald-300"
                           : "border-neutral-200 bg-white/70 hover:border-neutral-300 hover:bg-white"
                       }`}
                     >
-                      <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                          isSelected
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStageCompleted(i);
+                        }}
+                        title={isDone ? "Mark as in-progress" : "Mark as completed"}
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all cursor-pointer ${
+                          isDone
+                            ? "bg-emerald-600 text-white shadow-2xs"
+                            : isSelected
                             ? "bg-neutral-900 text-white"
                             : "border border-neutral-300 bg-neutral-100 text-neutral-700 group-hover:border-neutral-900"
                         }`}
                       >
-                        {i + 1}
-                      </span>
+                        {isDone ? "✓" : i + 1}
+                      </button>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-neutral-900 truncate">
+                          <p className={`text-sm font-semibold truncate ${isDone ? "text-emerald-950" : "text-neutral-900"}`}>
                             {step.title}
                           </p>
-                          <span className="text-[11px] font-medium text-blue-600 group-hover:underline">
-                            {isSelected ? "Active" : "Research →"}
+                          <span className={`text-[11px] font-medium ${isDone ? "text-emerald-700 font-semibold" : "text-blue-600 group-hover:underline"}`}>
+                            {isDone ? "Completed ✓" : isSelected ? "Active" : "Research →"}
                           </span>
                         </div>
                         
@@ -574,10 +654,24 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
                 
                 {/* Stage Header */}
                 <div className="border-b border-neutral-100 pb-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    <span>Stage {selectedStepIndex! + 1} Research Hub</span>
-                    <span>&bull;</span>
-                    <span className="text-emerald-700 font-bold">Curated Resources</span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                      <span>Stage {selectedStepIndex! + 1} Research Hub</span>
+                      <span>&bull;</span>
+                      <span className="text-emerald-700 font-bold">Curated Resources</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleStageCompleted(selectedStepIndex!)}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                        completedStages[selectedStepIndex!]
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                          : "border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      <span>{completedStages[selectedStepIndex!] ? "✓ Completed" : "○ Mark as Complete"}</span>
+                    </button>
                   </div>
                   <h3 className="text-xl font-bold text-neutral-900">{selectedStep.title}</h3>
                   <p className="mt-1 text-xs text-neutral-600 leading-relaxed">{selectedStep.detail}</p>
@@ -744,6 +838,72 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
                   </p>
                 </Card>
               </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 3: CURATED OPEN-SOURCE GITHUB PROJECTS ────────────────────── */}
+      {activeTab === "projects" && (
+        <div className="space-y-4">
+          <p className="text-xs text-neutral-500">
+            High-value open-source repositories and architectural codebases mapped to <strong>{roleLabel}</strong>.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {githubProjects.map((proj: GitHubProject) => (
+              <div
+                key={proj.id}
+                className="flex flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xs hover:border-neutral-900 transition-all group"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="flex items-center gap-1.5 text-xs font-mono font-bold text-neutral-900">
+                      <svg className="w-4 h-4 text-neutral-900 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                      </svg>
+                      {proj.repo}
+                    </span>
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                      ★ {proj.stars}
+                    </span>
+                  </div>
+
+                  <h4 className="text-sm font-bold text-neutral-900 group-hover:text-blue-600 transition-colors">
+                    {proj.name}
+                  </h4>
+                  <p className="mt-1.5 text-xs text-neutral-600 leading-relaxed">
+                    {proj.description}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {proj.topics.map((t) => (
+                      <span
+                        key={t}
+                        className="rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-medium text-neutral-600"
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-3 text-xs">
+                  <span className="text-[11px] font-semibold text-neutral-400">
+                    Difficulty: <strong className="text-neutral-700">{proj.difficulty}</strong>
+                  </span>
+
+                  <a
+                    href={proj.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 font-semibold text-neutral-900 hover:text-blue-600 underline decoration-neutral-300 group-hover:decoration-blue-600"
+                  >
+                    <span>Inspect Codebase</span>
+                    <span>↗</span>
+                  </a>
+                </div>
+              </div>
             ))}
           </div>
         </div>

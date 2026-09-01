@@ -3,6 +3,7 @@ import { Newsreader, Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
+import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
 
 const display = Newsreader({
   subsets: ["latin"],
@@ -34,8 +35,10 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body className="font-body antialiased">
         <AppProvider>
-          {children}
-          <GlobalVoiceDictator />
+          <GlobalVoiceProvider>
+            {children}
+            <GlobalVoiceDictator />
+          </GlobalVoiceProvider>
         </AppProvider>
       </body>
     </html>

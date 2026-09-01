@@ -11,6 +11,5 @@ Thumbs.db
 tsconfig.tsbuildinfo
 *.exe
 cloudflared*
-.claude/
-careerforge/start-tunnel.js
+start-tunnel.js
 

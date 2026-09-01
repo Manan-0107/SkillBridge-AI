@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 2. Try Google Gemini API (Gemini 1.5 / 2.0 Flash) ────────────────────
-    const geminiKey = process.env.GEMINI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
     if (geminiKey && geminiKey.trim().length > 5) {
       try {
         const geminiResponse = await callGeminiLLM(geminiKey, messages, userName, role, voiceMode);

@@ -311,6 +311,17 @@ export function AuthGate() {
             </GhostButton>
           </div>
 
+          {/* Guest / Demo Access Button for Instant Evaluation */}
+          <div className="mt-4 pt-4 border-t border-line/60">
+            <button
+              type="button"
+              onClick={() => signIn("alex.rivera@example.com", "Alex Rivera")}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/80 py-2.5 px-3 text-xs font-semibold text-neutral-700 hover:bg-white hover:border-neutral-900 hover:text-neutral-900 transition-all shadow-2xs cursor-pointer"
+            >
+              <span>🚀 Explore Platform as Guest (Candidate Demo)</span>
+            </button>
+          </div>
+
           <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
             By continuing, you agree to CareerForge’s Terms of Service and Accessibility Standards.
           </p>

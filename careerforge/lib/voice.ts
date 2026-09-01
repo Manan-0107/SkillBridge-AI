@@ -59,6 +59,8 @@ export function detectTextLanguage(text: string): string {
   return currentLanguage || "en-US";
 }
 
+export const detectLanguageFromText = detectTextLanguage;
+
 export function setGlobalVoiceLanguage(langCode: string) {
   currentLanguage = langCode;
 }
@@ -303,22 +305,42 @@ export type SpeechRecognitionController = {
   isActive: () => boolean;
 };
 
+export interface SpeechRecognitionOptions {
+  lang?: string;
+  continuous?: boolean;
+  onTranscript: (text: string, isFinal?: boolean) => void;
+  onListeningChange?: (listening: boolean) => void;
+  onError?: (error: string) => void;
+}
+
 export function startSpeechRecognition(
-  callbacks: {
-    onTranscript: (text: string, isFinal: boolean) => void;
-    onListeningChange: (listening: boolean) => void;
-    onError: (error: string) => void;
-  },
-  options?: {
+  callbacksOrOptions:
+    | SpeechRecognitionOptions
+    | {
+        onTranscript: (text: string, isFinal: boolean) => void;
+        onListeningChange?: (listening: boolean) => void;
+        onError?: (error: string) => void;
+      },
+  optionsArg?: {
     lang?: string;
     continuous?: boolean;
   }
 ): SpeechRecognitionController | null {
   if (!isSpeechRecognitionSupported()) {
-    callbacks.onError("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
-    callbacks.onListeningChange(false);
+    callbacksOrOptions.onError?.("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
+    callbacksOrOptions.onListeningChange?.(false);
     return null;
   }
+
+  const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions;
+  const lang = (isOptionsObject ? (callbacksOrOptions as SpeechRecognitionOptions).lang : optionsArg?.lang) || currentLanguage || "en-US";
+  const continuous = isOptionsObject
+    ? (callbacksOrOptions as SpeechRecognitionOptions).continuous !== false
+    : optionsArg?.continuous !== false;
+
+  const onTranscript = callbacksOrOptions.onTranscript;
+  const onListeningChange = callbacksOrOptions.onListeningChange || (() => {});
+  const onError = callbacksOrOptions.onError || (() => {});
 
   let running = true;
 
@@ -327,12 +349,12 @@ export function startSpeechRecognition(
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognitionClass();
 
-    recognition.continuous = options?.continuous !== undefined ? options.continuous : true;
+    recognition.continuous = continuous;
     recognition.interimResults = true;
-    recognition.lang = options?.lang || currentLanguage || "en-US";
+    recognition.lang = lang;
 
     recognition.onstart = () => {
-      callbacks.onListeningChange(true);
+      onListeningChange(true);
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -351,24 +373,24 @@ export function startSpeechRecognition(
       if (final) {
         const detected = detectTextLanguage(final);
         currentLanguage = detected;
-        callbacks.onTranscript(final, true);
+        onTranscript(final, true);
       } else if (interim) {
-        callbacks.onTranscript(interim, false);
+        onTranscript(interim, false);
       }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (event: any) => {
       if (event.error !== "no-speech") {
-        callbacks.onError(event.error || "Microphone recognition error");
+        onError(event.error || "Microphone recognition error");
       }
-      callbacks.onListeningChange(false);
+      onListeningChange(false);
     };
 
     recognition.onend = () => {
-      callbacks.onListeningChange(false);
+      onListeningChange(false);
       // Auto restart if continuous was requested and not stopped manually
-      if (running && options?.continuous) {
+      if (running && continuous) {
         try {
           recognition.start();
         } catch {
@@ -387,14 +409,14 @@ export function startSpeechRecognition(
         } catch {
           // ignore
         }
-        callbacks.onListeningChange(false);
+        onListeningChange(false);
       },
       isActive: () => running,
     };
   } catch (err) {
     console.error("[Voice] Speech recognition init failed:", err);
-    callbacks.onError("Please check microphone permissions.");
-    callbacks.onListeningChange(false);
+    onError("Please check microphone permissions.");
+    onListeningChange(false);
     return null;
   }
 }

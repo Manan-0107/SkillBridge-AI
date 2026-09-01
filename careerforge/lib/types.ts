@@ -38,6 +38,17 @@ export interface Course {
   url: string;
 }
 
+export interface GitHubProject {
+  id: string;
+  name: string;
+  repo: string;
+  url: string;
+  stars: string;
+  description: string;
+  topics: string[];
+  difficulty: "Beginner" | "Intermediate" | "Advanced";
+}
+
 export interface ResumeAnalysis {
   score: number;
   matchedSkills: string[];

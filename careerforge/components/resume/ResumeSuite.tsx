@@ -23,24 +23,30 @@ export function ResumeSuite({
   initialTab?: TabId;
 }) {
   const [active, setActive] = useState<TabId>(initialTab);
+  const [injectedSummary, setInjectedSummary] = useState<string | null>(null);
 
   useEffect(() => {
     setActive(initialTab);
   }, [initialTab]);
+
+  const handleTransferToBuilder = (tailoredSummary: string) => {
+    setInjectedSummary(tailoredSummary);
+    setActive("builder");
+  };
 
   return (
     <Section
       id="resume"
       eyebrow="Resume Suite"
       title="Get your resume market-ready"
-      description="Analyze it against live market skills, tailor it to your target role, or build one from scratch."
+      description="Analyze it against live market skills, tailor it to your target role, or build and edit with intermediate data overrides."
     >
       <div className="mb-8 flex gap-1 rounded-md border border-line p-1 sm:inline-flex">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActive(t.id)}
-            className={`flex-1 rounded px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${
+            className={`flex-1 rounded px-4 py-2 text-sm font-medium transition-colors sm:flex-none cursor-pointer ${
               active === t.id ? "bg-ink text-paper" : "text-graphite hover:text-ink"
             }`}
           >
@@ -50,8 +56,10 @@ export function ResumeSuite({
       </div>
 
       {active === "analyzer" && <Analyzer role={role} />}
-      {active === "personalizer" && <Personalizer role={role} />}
-      {active === "builder" && <Builder />}
+      {active === "personalizer" && (
+        <Personalizer role={role} onTransferToBuilder={handleTransferToBuilder} />
+      )}
+      {active === "builder" && <Builder initialSummary={injectedSummary || undefined} />}
     </Section>
   );
 }

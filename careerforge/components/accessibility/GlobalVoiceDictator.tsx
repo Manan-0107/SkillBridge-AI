@@ -294,13 +294,13 @@ export function GlobalVoiceDictator() {
 
     const controller = startSpeechRecognition(
       {
-        onTranscript: (transcript, isFinal) => {
-          processSpokenText(transcript, isFinal);
+        onTranscript: (transcript: string, isFinal?: boolean) => {
+          processSpokenText(transcript, !!isFinal);
         },
-        onListeningChange: (isList) => {
+        onListeningChange: (isList: boolean) => {
           setListening(isList);
         },
-        onError: (err) => {
+        onError: (err: string) => {
           console.warn("[VoiceDictator] Error:", err);
           setListening(false);
         },
