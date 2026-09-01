@@ -10,7 +10,9 @@ import {
   SpeechRecognitionController,
   isSpeechRecognitionSupported,
   normalizeSpokenEmail,
+  detectTextLanguage,
 } from "@/lib/voice";
+import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 
 export type Msg = {
@@ -107,6 +109,7 @@ export function AssistantHome({
   const inputRef = useRef(input);
   inputRef.current = input;
   const [voiceLang, setVoiceLang] = useState<string>("auto");
+  const wasVoiceActiveOnHideRef = useRef(false);
 
   // Cleanup timers & speech on unmount
   useEffect(() => {
@@ -117,6 +120,65 @@ export function AssistantHome({
       if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
     };
   }, []);
+
+  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab switched / minimized: pause voice detection temporarily
+        if (listening || voiceMode) {
+          wasVoiceActiveOnHideRef.current = true;
+          stopListening();
+          stopSpeaking();
+        }
+      } else {
+        // Tab restored / visible: resume voice detection & directly ask question
+        if (wasVoiceActiveOnHideRef.current || voiceMode) {
+          wasVoiceActiveOnHideRef.current = false;
+
+          let promptToSpeak = "";
+          const isGu = voiceLang.startsWith("gu");
+          const isHi = voiceLang.startsWith("hi");
+          const isFr = voiceLang.startsWith("fr");
+
+          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
+            const stepQ = getResumeStepPrompt(resumeDraftState.step, voiceLang);
+            promptToSpeak = isGu
+              ? `પાછા સ્વાગત છે! ચાલો આગળ વધીએ. ${stepQ}`
+              : isHi
+              ? `वापसी पर स्वागत है! आइए आगे बढ़ें। ${stepQ}`
+              : isFr
+              ? `Bon retour ! Continuons. ${stepQ}`
+              : `Welcome back! Let's continue. ${stepQ}`;
+          } else {
+            promptToSpeak = isGu
+              ? `પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે ક્યાંથી શરૂ કરવા માંગો છો?`
+              : isHi
+              ? `वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+              : isFr
+              ? `Bon retour ! Je vous écoute. Comment puis-je vous aider aujourd'hui ?`
+              : `Welcome back! I am listening. How can I help you continue?`;
+          }
+
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(promptToSpeak, {
+              lang: voiceLang !== "auto" ? voiceLang : "en-US",
+              onEnd: () => {
+                startListening();
+              },
+            });
+          } else {
+            startListening();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
 
   // Update horizontal prompt scroll buttons
   const checkPromptScroll = () => {

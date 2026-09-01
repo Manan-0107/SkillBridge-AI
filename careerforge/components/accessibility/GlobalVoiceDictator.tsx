@@ -51,6 +51,7 @@ export function GlobalVoiceDictator() {
   const focusedElementRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialAnnouncedRef = useRef(false);
+  const wasActiveBeforeBlurRef = useRef(false);
   const currentLangRef = useRef(voiceLanguage);
   currentLangRef.current = voiceLanguage;
 
@@ -542,6 +543,71 @@ export function GlobalVoiceDictator() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceMode]);
+
+  // ─── 7. Tab-Switch & Minimize Auto-Pause with Direct Question on Return ─────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab hidden or browser minimized: pause voice detection temporarily
+        if (active || listening) {
+          wasActiveBeforeBlurRef.current = true;
+          controllerRef.current?.stop();
+          controllerRef.current = null;
+          setListening(false);
+          stopSpeaking();
+          showStatus("⏸️ Voice paused (tab minimized)", 2500);
+        }
+      } else {
+        // Tab restored/active: resume voice detection & directly ask a question
+        if (wasActiveBeforeBlurRef.current || voiceMode) {
+          wasActiveBeforeBlurRef.current = false;
+
+          let questionPrompt = "";
+          const isGu = currentLangRef.current.startsWith("gu");
+          const isHi = currentLangRef.current.startsWith("hi");
+          const isFr = currentLangRef.current.startsWith("fr");
+
+          if (focusedElementRef.current) {
+            questionPrompt = getFieldPromptMessage(
+              focusedFieldLabel || "field",
+              focusedElementRef.current.type,
+              currentLangRef.current
+            );
+          } else {
+            if (isGu) {
+              questionPrompt = "પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે શું કરવા માંગો છો?";
+            } else if (isHi) {
+              questionPrompt = "वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप क्या करना चाहेंगे?";
+            } else if (isFr) {
+              questionPrompt = "Bon retour ! Je vous écoute. Que souhaitez-vous faire maintenant ?";
+            } else {
+              questionPrompt = "Welcome back! I am listening. What would you like to explore next?";
+            }
+          }
+
+          setAiSpeechPrompt(questionPrompt);
+          showStatus("🎙️ " + questionPrompt, 4000);
+          playAccessibleChime("focus");
+
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(questionPrompt, {
+              lang: currentLangRef.current,
+              onEnd: () => {
+                startVoiceDictation();
+              },
+            });
+          } else {
+            startVoiceDictation();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [active, listening, voiceMode, accessibilityPrefs, focusedFieldLabel, startVoiceDictation, showStatus]);
 
   // Clean up on unmount
   useEffect(() => {
