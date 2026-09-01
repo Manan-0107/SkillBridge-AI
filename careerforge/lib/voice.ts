@@ -61,7 +61,6 @@ export function detectTextLanguage(text: string): string {
   if (/[\u4E00-\u9FFF]/.test(clean)) return "zh-CN"; // Chinese (中文)
 
   // 2. Transliterated / Spoken terms in Latin script
-  // Gujarati Transliteration
   if (
     /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub)\b/i.test(
       lower
@@ -70,7 +69,6 @@ export function detectTextLanguage(text: string): string {
     return "gu-IN";
   }
 
-  // Hindi Transliteration
   if (
     /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek)\b/i.test(
       lower
@@ -79,7 +77,6 @@ export function detectTextLanguage(text: string): string {
     return "hi-IN";
   }
 
-  // Spanish
   if (
     /[ñáéíóú¿¡]/i.test(clean) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes)\b/i.test(lower)
@@ -87,7 +84,6 @@ export function detectTextLanguage(text: string): string {
     return "es-ES";
   }
 
-  // French
   if (
     /[éèêëàâîïôûùç]/i.test(clean) ||
     /\b(bonjour|comment|aide|merci|s'il vous plait|mon nom)\b/i.test(lower)
@@ -95,7 +91,6 @@ export function detectTextLanguage(text: string): string {
     return "fr-FR";
   }
 
-  // German
   if (
     /[äöüß]/i.test(clean) ||
     /\b(hallo|hilfe|danke|bitte|mein name|guten tag)\b/i.test(lower)
@@ -103,7 +98,6 @@ export function detectTextLanguage(text: string): string {
     return "de-DE";
   }
 
-  // 3. Default to current language or English
   return currentLanguage || "en-US";
 }
 
@@ -118,7 +112,7 @@ export function getGlobalVoiceLanguage(): string {
 }
 
 // ─── 2. Accessible Web Audio Chimes for Blind & Disabled Users ─────────────────
-export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate") {
+export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate" | "focus") {
   if (typeof window === "undefined") return;
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;

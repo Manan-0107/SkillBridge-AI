@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState, useEffect, ChangeEvent } from "react";
+import { FormEvent, useRef, useState, useEffect, ChangeEvent, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import { FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
 import {
@@ -12,6 +12,8 @@ import {
   normalizeSpokenEmail,
   detectTextLanguage,
 } from "@/lib/voice";
+import { LANGUAGE_LIST, getSupportedLanguage } from "@/lib/speech/languages";
+import { SpeechProviderType } from "@/lib/speech/types";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 
@@ -60,6 +62,10 @@ export function AssistantHome({
     setTargetRole,
     voiceMode,
     setVoiceMode,
+    voiceLanguage,
+    setVoiceLanguage,
+    speechProvider,
+    setSpeechProvider,
     accessibilityPrefs,
     setAccessibilityPrefs,
     currentLocation,
@@ -86,6 +92,8 @@ export function AssistantHome({
   // ─── Voice & Silence Detection State ───────────────────────────────────────
   const [listening, setListening] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [liveSpokenText, setLiveSpokenText] = useState<string | null>(null);
+  const [lastAssistantReply, setLastAssistantReply] = useState<string | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
 
@@ -108,6 +116,7 @@ export function AssistantHome({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef(input);
   inputRef.current = input;
+  const runPromptRef = useRef<(prompt: string) => void>(() => {});
   const [voiceLang, setVoiceLang] = useState<string>("auto");
   const wasVoiceActiveOnHideRef = useRef(false);
 
@@ -121,97 +130,8 @@ export function AssistantHome({
     };
   }, []);
 
-  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab switched / minimized: pause voice detection temporarily
-        if (listening || voiceMode) {
-          wasVoiceActiveOnHideRef.current = true;
-          stopListening();
-          stopSpeaking();
-        }
-      } else {
-        // Tab restored / visible: resume voice detection & directly ask question
-        if (wasVoiceActiveOnHideRef.current || voiceMode) {
-          wasVoiceActiveOnHideRef.current = false;
-
-          let promptToSpeak = "";
-          const isGu = voiceLang.startsWith("gu");
-          const isHi = voiceLang.startsWith("hi");
-          const isFr = voiceLang.startsWith("fr");
-
-          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
-            const stepQ = getResumeStepPrompt(resumeDraftState.step, voiceLang);
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! ચાલો આગળ વધીએ. ${stepQ}`
-              : isHi
-              ? `वापसी पर स्वागत है! आइए आगे बढ़ें। ${stepQ}`
-              : isFr
-              ? `Bon retour ! Continuons. ${stepQ}`
-              : `Welcome back! Let's continue. ${stepQ}`;
-          } else {
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે ક્યાંથી શરૂ કરવા માંગો છો?`
-              : isHi
-              ? `वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
-              : isFr
-              ? `Bon retour ! Je vous écoute. Comment puis-je vous aider aujourd'hui ?`
-              : `Welcome back! I am listening. How can I help you continue?`;
-          }
-
-          if (accessibilityPrefs?.speechOutput !== false) {
-            speakText(promptToSpeak, {
-              lang: voiceLang !== "auto" ? voiceLang : "en-US",
-              onEnd: () => {
-                startListening();
-              },
-            });
-          } else {
-            startListening();
-          }
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
-
-  // Update horizontal prompt scroll buttons
-  const checkPromptScroll = () => {
-    if (promptScrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = promptScrollRef.current;
-      setCanScrollLeft(scrollLeft > 4);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
-    }
-  };
-
-  useEffect(() => {
-    checkPromptScroll();
-    window.addEventListener("resize", checkPromptScroll);
-    return () => window.removeEventListener("resize", checkPromptScroll);
-  }, []);
-
-  const scrollPrompts = (direction: "left" | "right") => {
-    if (promptScrollRef.current) {
-      const offset = direction === "left" ? -280 : 280;
-      promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
-      setTimeout(checkPromptScroll, 320);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3200);
-  };
-
   // ─── Voice Recognition with 3.5s Silence Auto-Send ─────────────────────────
-  const clearSilenceTimers = () => {
+  const clearSilenceTimers = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -221,9 +141,15 @@ export function AssistantHome({
       silenceCountdownIntervalRef.current = null;
     }
     setSilenceCountdown(null);
-  };
+  }, []);
 
-  const startSilenceAutoSendCountdown = () => {
+  const stopListening = useCallback(() => {
+    clearSilenceTimers();
+    speechControllerRef.current?.stop();
+    setListening(false);
+  }, [clearSilenceTimers]);
+
+  const startSilenceAutoSendCountdown = useCallback(() => {
     clearSilenceTimers();
 
     let timeLeft = 3.5;
@@ -249,24 +175,19 @@ export function AssistantHome({
       const textToSend = inputRef.current.trim();
       if (textToSend) {
         setInput("");
-        runPrompt(textToSend);
+        inputRef.current = "";
+        runPromptRef.current(textToSend);
       }
     }, 3500);
-  };
+  }, [clearSilenceTimers]);
 
-  const stopListening = () => {
-    clearSilenceTimers();
-    speechControllerRef.current?.stop();
-    setListening(false);
-  };
-
-  const startListening = () => {
+  const startListening = useCallback(() => {
     setMicError(null);
     clearSilenceTimers();
-    speechBaseTextRef.current = input.trim();
+    speechBaseTextRef.current = inputRef.current.trim();
 
     const controller = startSpeechRecognition({
-      lang: voiceLang,
+      lang: voiceLang !== "auto" ? voiceLang : "en-US",
       onTranscript: (transcript: string) => {
         if (transcript) {
           let processed = transcript;
@@ -298,28 +219,107 @@ export function AssistantHome({
     });
 
     speechControllerRef.current = controller;
-  };
+  }, [clearSilenceTimers, startSilenceAutoSendCountdown, voiceLang]);
 
-  const toggleListening = () => {
+  const toggleListening = useCallback(() => {
     if (listening) {
       stopListening();
     } else {
       startListening();
     }
+  }, [listening, startListening, stopListening]);
+
+  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab switched / minimized: pause voice detection temporarily
+        if (listening || voiceMode) {
+          wasVoiceActiveOnHideRef.current = true;
+          stopListening();
+          stopSpeaking();
+        }
+      } else {
+        // Tab restored / visible: resume voice detection & directly ask question
+        if (wasVoiceActiveOnHideRef.current && voiceMode) {
+          wasVoiceActiveOnHideRef.current = false;
+          let promptToSpeak = "Welcome back! How can I help you continue?";
+          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
+            promptToSpeak = getResumeStepPrompt(resumeDraftState.step, voiceLang);
+          }
+
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(promptToSpeak, {
+              lang: voiceLang !== "auto" ? voiceLang : "en-US",
+              onEnd: () => {
+                startListening();
+              },
+            });
+          } else {
+            startListening();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
+
+  const stopAllVoice = () => {
+    stopSpeaking();
+    stopListening();
+    setSpeakingMsgId(null);
+    setLiveSpokenText(null);
   };
 
   const toggleSpeech = (msgId: string, text: string) => {
     if (speakingMsgId === msgId) {
       stopSpeaking();
       setSpeakingMsgId(null);
+      setLiveSpokenText(null);
       return;
     }
     stopSpeaking();
     setSpeakingMsgId(msgId);
+    setLiveSpokenText(text);
+    setLastAssistantReply(text);
     speakText(text, {
-      onEnd: () => setSpeakingMsgId(null),
-      onError: () => setSpeakingMsgId(null),
+      lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(text),
+      onEnd: () => {
+        setSpeakingMsgId(null);
+        setLiveSpokenText(null);
+      },
+      onError: () => {
+        setSpeakingMsgId(null);
+        setLiveSpokenText(null);
+      },
     });
+  };
+
+  const repeatLastResponse = () => {
+    const textToRepeat =
+      lastAssistantReply ||
+      messages
+        .slice()
+        .reverse()
+        .find((m) => m.role === "assistant")?.text;
+
+    if (textToRepeat) {
+      toggleSpeech(`repeat-${Date.now()}`, textToRepeat);
+    }
+  };
+
+  const toggleMute = () => {
+    const nextSpeech = !accessibilityPrefs.speechOutput;
+    setAccessibilityPrefs({ speechOutput: nextSpeech });
+    if (!nextSpeech) {
+      stopSpeaking();
+      setSpeakingMsgId(null);
+      setLiveSpokenText(null);
+    }
   };
 
   const userDisplayName = user?.name
@@ -327,6 +327,35 @@ export function AssistantHome({
     : user?.email
     ? user.email.split("@")[0]
     : "there";
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3200);
+  };
+
+  const checkPromptScroll = () => {
+    if (promptScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = promptScrollRef.current;
+      setCanScrollLeft(scrollLeft > 4);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+    }
+  };
+
+  useEffect(() => {
+    checkPromptScroll();
+    window.addEventListener("resize", checkPromptScroll);
+    return () => window.removeEventListener("resize", checkPromptScroll);
+  }, []);
+
+  const scrollPrompts = (direction: "left" | "right") => {
+    if (promptScrollRef.current) {
+      const offset = direction === "left" ? -280 : 280;
+      promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+      setTimeout(checkPromptScroll, 320);
+    }
+  };
 
   // ─── 1. Load Conversations from LocalStorage ────────────────────────────────
   useEffect(() => {
@@ -561,6 +590,10 @@ export function AssistantHome({
           },
           targetRole: user?.targetRole || "frontend",
           voiceMode,
+          language: voiceLanguage !== "auto" ? voiceLanguage : undefined,
+          conversationLanguageState: {
+            detectedLanguage: voiceLanguage !== "auto" ? voiceLanguage : "en",
+          },
           currentPage: "assistant",
           accessibilityPrefs,
           resumeDraftState,
@@ -588,6 +621,7 @@ export function AssistantHome({
         "I'm here to support your career journey. What would you like to explore next?";
       const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const hasFeature = Boolean(data.feature);
+      setLastAssistantReply(replyText);
 
       const intent: ParsedIntent = {
         feature: data.feature || null,
@@ -624,11 +658,20 @@ export function AssistantHome({
 
       // Automatically speak the question and auto-listen for user's voice reply
       if (voiceMode && accessibilityPrefs?.speechOutput !== false) {
+        setSpeakingMsgId(finalMessages[finalMessages.length - 1].id);
+        setLiveSpokenText(replyText);
         speakText(replyText, {
+          lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(replyText),
           onEnd: () => {
+            setSpeakingMsgId(null);
+            setLiveSpokenText(null);
             if (voiceMode) {
               startListening();
             }
+          },
+          onError: () => {
+            setSpeakingMsgId(null);
+            setLiveSpokenText(null);
           },
         });
       }
@@ -660,6 +703,7 @@ export function AssistantHome({
       setBusy(false);
     }
   };
+  runPromptRef.current = runPrompt;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -854,39 +898,115 @@ export function AssistantHome({
       <div className="flex flex-1 flex-col overflow-hidden">
         
         {/* Top Chat Toolbar */}
-        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2.5">
-          <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-4 py-2 gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs cursor-pointer"
               title="Toggle Sidebar"
+              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
               <SidebarToggleIcon className="w-3.5 h-3.5" />
-              <span>{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
+              <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
-            <span className="text-xs font-semibold text-neutral-800 truncate max-w-[180px] sm:max-w-md">
+            <span className="text-xs font-semibold text-neutral-800 truncate max-w-[140px] sm:max-w-xs">
               {activeConversation?.title || "Career Copilot"}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Voice Toolbar: Provider, Language, Repeat, Stop, Mute */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Language Selector Dropdown */}
+            <select
+              value={voiceLanguage}
+              onChange={(e) => setVoiceLanguage(e.target.value)}
+              title="Select speech and assistant language"
+              aria-label="Speech Language Selector"
+              className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer"
+            >
+              <option value="auto">🌐 Auto Detect Language</option>
+              {LANGUAGE_LIST.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.flag} {l.nativeName} ({l.name})
+                </option>
+              ))}
+            </select>
+
+            {/* Speech Provider Dropdown */}
+            <select
+              value={speechProvider}
+              onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
+              title="Speech Provider Strategy"
+              aria-label="Speech Provider Selector"
+              className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer hidden md:inline-block"
+            >
+              <option value="auto">⚡ Auto (Web → Azure → Google)</option>
+              <option value="web">🌐 Web Speech API (Free)</option>
+              <option value="azure">☁️ Microsoft Azure Speech</option>
+              <option value="google">☁️ Google Cloud Speech</option>
+            </select>
+
+            {/* Repeat Button */}
+            <button
+              type="button"
+              onClick={repeatLastResponse}
+              title="Repeat last spoken response"
+              aria-label="Repeat last spoken response"
+              className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition-colors cursor-pointer shadow-2xs"
+            >
+              <span className="text-sm">↻</span>
+              <span className="hidden sm:inline">Repeat</span>
+            </button>
+
+            {/* Stop Speaking / Listening Button */}
+            {(speakingMsgId || listening) && (
+              <button
+                type="button"
+                onClick={stopAllVoice}
+                title="Stop audio and listening immediately"
+                aria-label="Stop audio and listening"
+                className="flex items-center gap-1 rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-all cursor-pointer shadow-xs animate-pulse"
+              >
+                <span>⏹</span>
+                <span>Stop</span>
+              </button>
+            )}
+
+            {/* Mute / Unmute Toggle */}
+            <button
+              type="button"
+              onClick={toggleMute}
+              title={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
+              aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
+              className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition-colors cursor-pointer shadow-2xs ${
+                accessibilityPrefs.speechOutput
+                  ? "border-blue-200 bg-blue-50/70 text-blue-700 hover:bg-blue-100"
+                  : "border-neutral-200 bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+              }`}
+            >
+              <span>{accessibilityPrefs.speechOutput ? "🔊" : "🔇"}</span>
+              <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice On" : "Muted"}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs cursor-pointer"
               title="Share conversation link or transcript"
+              aria-label="Share Conversation"
             >
               <ShareHeaderIcon className="w-3.5 h-3.5 text-neutral-600" />
-              <span>Share</span>
+              <span className="hidden sm:inline">Share</span>
             </button>
 
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+              className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-xs"
               title="Start new chat"
+              aria-label="Start New Chat"
             >
               <span>+ New</span>
             </button>
@@ -1063,6 +1183,38 @@ export function AssistantHome({
         <div className="border-t border-neutral-200/80 bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
           <div className="mx-auto max-w-3xl space-y-3">
             
+            {/* Live Spoken Text & Captions Visualizer for Accessibility */}
+            {(liveSpokenText || listening || speakingMsgId) && (
+              <div
+                role="region"
+                aria-label="Live Voice Captions"
+                aria-live="polite"
+                className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/90 px-3.5 py-2 text-xs text-blue-900 shadow-sm animate-in fade-in slide-in-from-bottom-2"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600 animate-ping" />
+                  <div className="truncate">
+                    <span className="font-semibold text-blue-950">
+                      {listening ? "Listening (Voice): " : "Spoken Output: "}
+                    </span>
+                    <span className="font-normal text-blue-800">
+                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening...") : liveSpokenText}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={stopAllVoice}
+                    className="rounded-md bg-blue-200/80 px-2 py-0.5 text-[11px] font-semibold text-blue-900 hover:bg-blue-300 transition-colors cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Hidden Document File Input */}
             <input
               ref={fileInputRef}
