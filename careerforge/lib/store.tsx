@@ -9,12 +9,15 @@ import {
 } from "react";
 import { RoleId, User } from "./types";
 import { upsertUser, updateUserRole } from "./db";
+import { SpeechProviderType, ConversationLanguageState } from "./speech/types";
 
 export interface AccessibilityPreferences {
   interactionMode: "voice" | "text" | "hybrid";
   speechOutput: boolean;
+  voiceNavigation: boolean;
   visualResponses: boolean;
   simplifiedLanguage: boolean;
+  captions: boolean;
   screenReaderMode: boolean;
   highContrast: boolean;
   largeText: boolean;
@@ -24,8 +27,10 @@ export interface AccessibilityPreferences {
 export const defaultAccessibilityPreferences: AccessibilityPreferences = {
   interactionMode: "text",
   speechOutput: true,
+  voiceNavigation: false,
   visualResponses: true,
   simplifiedLanguage: false,
+  captions: true,
   screenReaderMode: false,
   highContrast: false,
   largeText: false,
@@ -44,12 +49,16 @@ interface AppState {
   // ─── Voice & Accessibility Mode State ──────────────────────────────────────
   voiceMode: boolean;
   voiceLanguage: string;
+  speechProvider: SpeechProviderType;
   voiceChecked: boolean;
   accessibilityPrefs: AccessibilityPreferences;
+  conversationLanguageState: ConversationLanguageState;
   setVoiceMode: (active: boolean) => void;
   setVoiceLanguage: (lang: string) => void;
+  setSpeechProvider: (provider: SpeechProviderType) => void;
   setVoiceChecked: (checked: boolean) => void;
   setAccessibilityPrefs: (prefs: Partial<AccessibilityPreferences>) => void;
+  setConversationLanguageState: (state: Partial<ConversationLanguageState>) => void;
   // ─── Session State for Agent Intelligence ──────────────────────────────────
   currentLocation: string | null;
   setCurrentLocation: (loc: string | null) => void;
@@ -80,15 +89,22 @@ function extractDisplayName(email: string, name?: string): string {
     .join(" ");
 }
 
+const SPEECH_PROVIDER_KEY = "careerforge.speechProvider";
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [voiceMode, setVoiceModeState] = useState(true);
   const [voiceLanguage, setVoiceLanguageState] = useState("auto");
+  const [speechProvider, setSpeechProviderState] = useState<SpeechProviderType>("auto");
   const [voiceChecked, setVoiceCheckedState] = useState(false);
   const [accessibilityPrefs, setAccessibilityPrefsState] = useState<AccessibilityPreferences>(
     defaultAccessibilityPreferences
   );
+  const [conversationLanguageState, setConversationLanguageStateState] = useState<ConversationLanguageState>({
+    detectedLanguage: "en",
+    preferredLanguage: "auto",
+  });
   const [currentLocation, setCurrentLocationState] = useState<string | null>(null);
   const [userSkills, setUserSkillsState] = useState<string[]>([]);
   const [missingSkills, setMissingSkillsState] = useState<string[]>([]);
@@ -104,6 +120,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const vl = window.localStorage.getItem(VOICE_LANG_KEY);
       if (vl) setVoiceLanguageState(vl);
+
+      const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
+      if (sp) setSpeechProviderState(sp as SpeechProviderType);
 
       const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
       if (vc !== null) setVoiceCheckedState(vc === "true");
@@ -335,6 +354,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setSpeechProvider = (provider: SpeechProviderType) => {
+    setSpeechProviderState(provider);
+    try {
+      window.localStorage.setItem(SPEECH_PROVIDER_KEY, provider);
+    } catch {}
+  };
+
+  const setConversationLanguageState = (state: Partial<ConversationLanguageState>) => {
+    setConversationLanguageStateState((prev) => ({ ...prev, ...state }));
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -348,12 +378,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTargetRole,
         voiceMode,
         voiceLanguage,
+        speechProvider,
         voiceChecked,
         accessibilityPrefs,
+        conversationLanguageState,
         setVoiceMode,
         setVoiceLanguage,
+        setSpeechProvider,
         setVoiceChecked,
         setAccessibilityPrefs,
+        setConversationLanguageState,
         currentLocation,
         setCurrentLocation,
         userSkills,

@@ -96,3 +96,7 @@ export interface EnhancedAnalysis {
   savedToDb: boolean;
   uploadId: string | null;
 }
+
+// ─── Universal Speech & Voice AI System Types ────────────────────────────────
+export * from "./speech/types";
+

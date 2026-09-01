@@ -61,7 +61,6 @@ export function detectTextLanguage(text: string): string {
   if (/[\u4E00-\u9FFF]/.test(clean)) return "zh-CN"; // Chinese (中文)
 
   // 2. Transliterated / Spoken terms in Latin script
-  // Gujarati Transliteration
   if (
     /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub)\b/i.test(
       lower
@@ -70,7 +69,6 @@ export function detectTextLanguage(text: string): string {
     return "gu-IN";
   }
 
-  // Hindi Transliteration
   if (
     /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek)\b/i.test(
       lower
@@ -79,7 +77,6 @@ export function detectTextLanguage(text: string): string {
     return "hi-IN";
   }
 
-  // Spanish
   if (
     /[ñáéíóú¿¡]/i.test(clean) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes)\b/i.test(lower)
@@ -87,7 +84,6 @@ export function detectTextLanguage(text: string): string {
     return "es-ES";
   }
 
-  // French
   if (
     /[éèêëàâîïôûùç]/i.test(clean) ||
     /\b(bonjour|comment|aide|merci|s'il vous plait|mon nom)\b/i.test(lower)
@@ -95,7 +91,6 @@ export function detectTextLanguage(text: string): string {
     return "fr-FR";
   }
 
-  // German
   if (
     /[äöüß]/i.test(clean) ||
     /\b(hallo|hilfe|danke|bitte|mein name|guten tag)\b/i.test(lower)
@@ -103,7 +98,6 @@ export function detectTextLanguage(text: string): string {
     return "de-DE";
   }
 
-  // 3. Default to current language or English
   return currentLanguage || "en-US";
 }
 
@@ -118,7 +112,7 @@ export function getGlobalVoiceLanguage(): string {
 }
 
 // ─── 2. Accessible Web Audio Chimes for Blind & Disabled Users ─────────────────
-export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate") {
+export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate" | "focus") {
   if (typeof window === "undefined") return;
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -269,6 +263,17 @@ export function isSpeaking(): boolean {
   return isSelfSpeaking;
 }
 
+let activeRecognitionInstance: any = null;
+
+export function stopAllSpeechRecognition() {
+  if (activeRecognitionInstance) {
+    try {
+      activeRecognitionInstance.abort();
+    } catch {}
+    activeRecognitionInstance = null;
+  }
+}
+
 export function speakText(
   text: string,
   options?: {
@@ -285,6 +290,10 @@ export function speakText(
     options?.onError?.("SpeechSynthesis not supported on this device.");
     return;
   }
+
+  // 1. ABSOLUTE MICROPHONE SHUTDOWN BEFORE TTS
+  stopAllSpeechRecognition();
+  isSelfSpeaking = true;
 
   // Cancel any ongoing speech
   try {
@@ -315,7 +324,6 @@ export function speakText(
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   activeUtterance = utterance;
-  isSelfSpeaking = true;
 
   utterance.lang = targetLang;
   utterance.rate = options?.rate || 0.98;
@@ -344,6 +352,7 @@ export function speakText(
 
   utterance.onstart = () => {
     isSelfSpeaking = true;
+    stopAllSpeechRecognition();
     options?.onStart?.();
   };
 
@@ -404,6 +413,16 @@ export function startSpeechRecognition(
     return null;
   }
 
+  // Safeguard: NEVER listen while AI is speaking
+  if (isSelfSpeaking) {
+    console.warn("[Voice] Cannot start speech recognition while AI is speaking.");
+    callbacksOrOptions.onListeningChange?.(false);
+    return null;
+  }
+
+  // Singleton instance protection: abort previous
+  stopAllSpeechRecognition();
+
   const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions;
   const lang = (isOptionsObject ? (callbacksOrOptions as SpeechRecognitionOptions).lang : optionsArg?.lang) || currentLanguage || "en-US";
   const continuous = isOptionsObject
@@ -417,9 +436,9 @@ export function startSpeechRecognition(
   let running = true;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognitionClass();
+    activeRecognitionInstance = recognition;
 
     recognition.continuous = continuous;
     recognition.interimResults = true;
@@ -431,15 +450,15 @@ export function startSpeechRecognition(
 
     // ── Instant Barge-In / Interruption: cancel AI speech when user speaks ──
     recognition.onspeechstart = () => {
-      if (isSpeaking()) {
+      if (isSelfSpeaking) {
         stopSpeaking();
       }
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      if (isSpeaking()) {
-        stopSpeaking();
+      // Safeguard 3: If AI is speaking, DROP ALL RESULTS IMMEDIATELY
+      if (isSelfSpeaking) {
+        return;
       }
 
       let interim = "";
@@ -454,17 +473,18 @@ export function startSpeechRecognition(
       }
 
       if (final) {
-        const detected = detectTextLanguage(final);
+        const cleanFinal = final.trim();
+        if (!cleanFinal) return;
+        const detected = detectTextLanguage(cleanFinal);
         currentLanguage = detected;
-        onTranscript(final, true);
+        onTranscript(cleanFinal, true);
       } else if (interim) {
         onTranscript(interim, false);
       }
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (event: any) => {
-      if (event.error !== "no-speech") {
+      if (event.error !== "no-speech" && event.error !== "aborted") {
         onError(event.error || "Microphone recognition error");
       }
       onListeningChange(false);
@@ -472,8 +492,8 @@ export function startSpeechRecognition(
 
     recognition.onend = () => {
       onListeningChange(false);
-      // Auto restart if continuous was requested and not stopped manually
-      if (running && continuous) {
+      // Safeguard 5: NEVER auto-restart if AI is speaking
+      if (running && continuous && !isSelfSpeaking) {
         try {
           recognition.start();
         } catch {
@@ -489,8 +509,9 @@ export function startSpeechRecognition(
         running = false;
         try {
           recognition.stop();
-        } catch {
-          // ignore
+        } catch {}
+        if (activeRecognitionInstance === recognition) {
+          activeRecognitionInstance = null;
         }
         onListeningChange(false);
       },
