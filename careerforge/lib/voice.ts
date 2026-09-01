@@ -35,11 +35,9 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentLanguage = "en-US";
 let isSelfSpeaking = false;
-let speechCooldownUntil = 0;
 
 export function isAIAudioPlaying(): boolean {
-  if (typeof window === "undefined") return false;
-  return isSelfSpeaking || (window.speechSynthesis && window.speechSynthesis.speaking) || Date.now() < speechCooldownUntil;
+  return isSelfSpeaking;
 }
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
@@ -247,10 +245,11 @@ export function isSpeechSynthesisSupported(): boolean {
 
 export function stopSpeaking() {
   if (isSpeechSynthesisSupported()) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
     activeUtterance = null;
     isSelfSpeaking = false;
-    speechCooldownUntil = 0;
   }
 }
 
@@ -267,8 +266,7 @@ export function resumeSpeaking() {
 }
 
 export function isSpeaking(): boolean {
-  if (!isSpeechSynthesisSupported()) return false;
-  return isSelfSpeaking || window.speechSynthesis.speaking || Date.now() < speechCooldownUntil;
+  return isSelfSpeaking;
 }
 
 export function speakText(
@@ -289,7 +287,9 @@ export function speakText(
   }
 
   // Cancel any ongoing speech
-  window.speechSynthesis.cancel();
+  try {
+    window.speechSynthesis.cancel();
+  } catch {}
 
   // Strip Markdown & action directives
   const cleanText = text
@@ -305,6 +305,7 @@ export function speakText(
     .trim();
 
   if (!cleanText) {
+    isSelfSpeaking = false;
     options?.onEnd?.();
     return;
   }
@@ -338,7 +339,6 @@ export function speakText(
 
   const finalizeSpeech = () => {
     isSelfSpeaking = false;
-    speechCooldownUntil = Date.now() + 800; // 800ms cooldown buffer
     activeUtterance = null;
   };
 
@@ -357,7 +357,12 @@ export function speakText(
     options?.onError?.(e);
   };
 
-  window.speechSynthesis.speak(utterance);
+  try {
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    finalizeSpeech();
+    options?.onError?.(err);
+  }
 }
 
 // ─── 5. Multi-Language Speech-to-Text (STT) ───────────────────────────────────
@@ -424,11 +429,17 @@ export function startSpeechRecognition(
       onListeningChange(true);
     };
 
+    // ── Instant Barge-In / Interruption: cancel AI speech when user speaks ──
+    recognition.onspeechstart = () => {
+      if (isSpeaking()) {
+        stopSpeaking();
+      }
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      // ── Acoustic Echo Cancellation: Discard any mic input while AI is speaking
-      if (isAIAudioPlaying()) {
-        return;
+      if (isSpeaking()) {
+        stopSpeaking();
       }
 
       let interim = "";

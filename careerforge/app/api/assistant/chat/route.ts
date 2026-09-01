@@ -941,6 +941,78 @@ function generateCognitiveAgentResponse(
     };
   }
 
+  // ─── Affirmative Continuation Intent ("yes", "continue", "proceed", "sure", "ok", "હા", "हाँ")
+  const isAffirmative =
+    lower === "yes" ||
+    lower === "yes please" ||
+    lower === "continue" ||
+    lower === "proceed" ||
+    lower === "sure" ||
+    lower === "ok" ||
+    lower === "okay" ||
+    lower === "હા" ||
+    lower === "ચોક્કસ" ||
+    lower === "हाँ" ||
+    lower === "जरूर" ||
+    lower === "oui";
+
+  if (isAffirmative) {
+    const lastAssistantMsg = messages
+      .slice()
+      .reverse()
+      .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
+
+    if (lastAssistantMsg.includes("resume") || lastAssistantMsg.includes("રેઝ્યૂમે") || lastAssistantMsg.includes("रेज़्यूमे")) {
+      const reply = isGujarati
+        ? "સરસ! ચાલો તમારું રેઝ્યૂમે બનાવવાનું શરૂ કરીએ. સૌથી પહેલા, તમારું પૂરું નામ શું છે?"
+        : isHindi
+        ? "शानदार! आइए आपका रेज़्यूमे बनाना शुरू करते हैं। सबसे पहले, आपका पूरा नाम क्या है?"
+        : "Awesome! Let's build your resume step-by-step. First, what is your full name?";
+      return {
+        reply,
+        feature: "resume",
+        resumeTab: "builder",
+        featureTitle: "Resume Builder",
+        toolCall: { tool: "conversationalResumeBuilder", parameters: { step: 1, field: "fullName" } },
+      };
+    }
+
+    if (lastAssistantMsg.includes("job") || lastAssistantMsg.includes("નોકરી") || lastAssistantMsg.includes("नौकरी")) {
+      const reply = isGujarati
+        ? "ચાલો તમારા માટે યોગ્ય નોકરીઓ શોધીએ."
+        : isHindi
+        ? "आइए आपके लिए सही नौकरियां ढूंढते हैं।"
+        : "Let's search for verified jobs tailored to your skills.";
+      return {
+        reply,
+        feature: "local",
+        featureTitle: "Verified Jobs",
+        toolCall: { tool: "searchJobs", parameters: { role, remote: true } },
+      };
+    }
+
+    if (lastAssistantMsg.includes("course") || lastAssistantMsg.includes("કોર્સ") || lastAssistantMsg.includes("कोर्स")) {
+      const reply = isGujarati
+        ? "ચાલો તમારા માટે ટોચના કોર્સીસ જોઈએ."
+        : isHindi
+        ? "आइए आपके लिए शीर्ष कोर्सेज देखते हैं।"
+        : "Opening curated courses tailored to your skill gaps.";
+      return {
+        reply,
+        feature: "courses",
+        featureTitle: "Curated Courses",
+        toolCall: { tool: "searchCourses", parameters: { topic: role } },
+      };
+    }
+
+    const reply = isGujarati
+      ? "ચોક્કસ! આગળ વધવા માટે તમે મને તમારું રેઝ્યૂમે, કોર્સીસ, રોડમેપ અથવા નોકરીઓ વિશે પૂછી શકો છો."
+      : isHindi
+      ? "बिल्कुल! आगे बढ़ने के लिए आप मुझसे रेज़्यूमे, कोर्सेज, रोडमैप या नौकरियों के बारे में पूछ सकते हैं।"
+      : "Great! We can continue with your resume builder, explore your career roadmap, or find curated jobs and courses. What would you like to start with?";
+    return { reply };
+  }
+
   // ─── J. Greetings & General Inquiries
   if (isFrench) {
     return {

@@ -202,9 +202,9 @@ export function GlobalVoiceDictator() {
   // ─── 4. Voice Command Parser & Multilingual Form Filler ─────────────────────
   const processSpokenText = useCallback(
     (text: string, isFinal: boolean) => {
-      // ── Acoustic Echo Cancellation Guard: Discard all audio while AI is speaking
-      if (isAIAudioPlaying()) {
-        return;
+      // ── Instant Barge-In / Interruption: cancel AI speech when user speaks ──
+      if (isSpeaking()) {
+        stopSpeaking();
       }
 
       const clean = text.trim();
@@ -233,6 +233,82 @@ export function GlobalVoiceDictator() {
       // ── Strict Background Audio Guard: Discard all audio if tab is hidden / in background
       if (typeof document !== "undefined" && document.hidden) {
         return;
+      }
+
+      // ── Top Priority: Name Confirmation Response ("Yes" / "Correct" / "હા" / "हाँ")
+      if (pendingNameVerificationRef.current) {
+        const isYes =
+          lower === "yes" ||
+          lower === "correct" ||
+          lower === "yeah" ||
+          lower === "yep" ||
+          lower === "sure" ||
+          lower === "right" ||
+          lower === "ok" ||
+          lower === "okay" ||
+          lower === "continue" ||
+          lower.includes("yes") ||
+          lower.includes("correct") ||
+          lower.includes("સાચું") ||
+          lower.includes("હા") ||
+          lower.includes("हाँ") ||
+          lower.includes("सही") ||
+          lower.includes("બરાબર");
+
+        const isNo =
+          lower === "no" ||
+          lower === "wrong" ||
+          lower === "incorrect" ||
+          lower === "change" ||
+          lower === "ના" ||
+          lower === "નહીં" ||
+          lower === "नहीं" ||
+          lower === "गलत";
+
+        if (isYes) {
+          const confirmedName = pendingNameVerificationRef.current;
+          pendingNameVerificationRef.current = null;
+          playAccessibleChime("success");
+
+          const nextEmail = document.querySelector<HTMLInputElement>(
+            '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
+          );
+          if (nextEmail) {
+            nextEmail.focus();
+            focusedElementRef.current = nextEmail;
+            setPendingFieldTarget("email");
+          }
+
+          const nextMsg = isGujarati
+            ? `નામ ${confirmedName} કન્ફર્મ થયું! સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.`
+            : isHindi
+            ? `नाम ${confirmedName} की पुष्टि हुई! स्टेप २: कृपया अपना ईमेल पता बोलें।`
+            : `Name confirmed as ${confirmedName}! Step 2 of 3: Please speak your email address.`;
+
+          setAiSpeechPrompt(nextMsg);
+          speakText(nextMsg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${nextMsg}`, 4500);
+          return;
+        }
+
+        if (isNo) {
+          pendingNameVerificationRef.current = null;
+          const nameInput = document.querySelector<HTMLInputElement>('#auth-name-input');
+          if (nameInput) {
+            nameInput.focus();
+            focusedElementRef.current = nameInput;
+            setNativeInputValue(nameInput, "");
+          }
+          const retryMsg = isGujarati
+            ? "કૃપા કરીને તમારું પૂરું નામ ફરીથી બોલો."
+            : isHindi
+            ? "कृपया अपना पूरा नाम दोबारा बोलें।"
+            : "Please speak your full name again.";
+          setAiSpeechPrompt(retryMsg);
+          speakText(retryMsg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${retryMsg}`, 3500);
+          return;
+        }
       }
 
       // ── Command 0A: "Go Back" / "Previous" / "Go to previous section"
@@ -564,51 +640,6 @@ export function GlobalVoiceDictator() {
           target.name?.toLowerCase().includes("pin") ||
           target.id?.toLowerCase().includes("pin");
 
-        // If awaiting Name Confirmation:
-        if (pendingNameVerificationRef.current) {
-          const isYes =
-            lower === "yes" ||
-            lower === "correct" ||
-            lower === "yeah" ||
-            lower === "yep" ||
-            lower === "sure" ||
-            lower === "right" ||
-            lower === "ok" ||
-            lower === "okay" ||
-            lower === "હા" ||
-            lower === "સાચું" ||
-            lower === "બરાબર" ||
-            lower === "हाँ" ||
-            lower === "सही" ||
-            lower === "oui";
-
-          if (isYes) {
-            const confirmedName = pendingNameVerificationRef.current;
-            pendingNameVerificationRef.current = null;
-            playAccessibleChime("success");
-
-            // Advance to Email!
-            const nextEmail = document.querySelector<HTMLInputElement>(
-              '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
-            );
-            if (nextEmail) {
-              nextEmail.focus();
-              focusedElementRef.current = nextEmail;
-              setPendingFieldTarget("email");
-              const nextMsg = isGujarati
-                ? `નામ ${confirmedName} કન્ફર્મ થયું! સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.`
-                : isHindi
-                ? `नाम ${confirmedName} की पुष्टि हुई! स्टेप २: कृपया अपना ईमेल पता बोलें।`
-                : `Name confirmed! Step 2 of 3: Please speak your email address.`;
-              setAiSpeechPrompt(nextMsg);
-              speakText(nextMsg, { lang: currentLangRef.current });
-              showStatus(`🎙️ ${nextMsg}`, 4500);
-            }
-            return;
-          }
-          // If not yes, treat as name correction
-        }
-
         if (isNameField) {
           const cleanName = normalizeSpokenName(clean);
           setNativeInputValue(target, cleanName);
@@ -808,7 +839,6 @@ export function GlobalVoiceDictator() {
     const controller = startSpeechRecognition(
       {
         onTranscript: (transcript: string, isFinal?: boolean) => {
-          if (isAIAudioPlaying()) return;
           processSpokenText(transcript, !!isFinal);
         },
         onListeningChange: (isList: boolean) => {
