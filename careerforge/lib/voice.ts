@@ -34,6 +34,13 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentLanguage = "en-US";
+let isSelfSpeaking = false;
+let speechCooldownUntil = 0;
+
+export function isAIAudioPlaying(): boolean {
+  if (typeof window === "undefined") return false;
+  return isSelfSpeaking || (window.speechSynthesis && window.speechSynthesis.speaking) || Date.now() < speechCooldownUntil;
+}
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
 export function detectTextLanguage(text: string): string {
@@ -235,6 +242,8 @@ export function stopSpeaking() {
   if (isSpeechSynthesisSupported()) {
     window.speechSynthesis.cancel();
     activeUtterance = null;
+    isSelfSpeaking = false;
+    speechCooldownUntil = 0;
   }
 }
 
@@ -252,7 +261,7 @@ export function resumeSpeaking() {
 
 export function isSpeaking(): boolean {
   if (!isSpeechSynthesisSupported()) return false;
-  return window.speechSynthesis.speaking;
+  return isSelfSpeaking || window.speechSynthesis.speaking;
 }
 
 export function speakText(
@@ -298,6 +307,7 @@ export function speakText(
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   activeUtterance = utterance;
+  isSelfSpeaking = true;
 
   utterance.lang = targetLang;
   utterance.rate = options?.rate || 0.98;
@@ -319,17 +329,24 @@ export function speakText(
     utterance.voice = matchingVoice;
   }
 
+  const finalizeSpeech = () => {
+    isSelfSpeaking = false;
+    speechCooldownUntil = Date.now() + 800; // 800ms cooldown buffer
+    activeUtterance = null;
+  };
+
   utterance.onstart = () => {
+    isSelfSpeaking = true;
     options?.onStart?.();
   };
 
   utterance.onend = () => {
-    activeUtterance = null;
+    finalizeSpeech();
     options?.onEnd?.();
   };
 
   utterance.onerror = (e) => {
-    activeUtterance = null;
+    finalizeSpeech();
     options?.onError?.(e);
   };
 
@@ -402,6 +419,11 @@ export function startSpeechRecognition(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
+      // ── Acoustic Echo Cancellation: Discard any mic input while AI is speaking
+      if (isAIAudioPlaying()) {
+        return;
+      }
+
       let interim = "";
       let final = "";
 
@@ -463,3 +485,143 @@ export function startSpeechRecognition(
     return null;
   }
 }
+
+// ─── 6. Spoken Email Normalization (Resolves "at the rate", "@", "dot", etc.) ──
+export function normalizeSpokenEmail(raw: string): string {
+  if (!raw) return "";
+  let text = raw.trim();
+
+  // Strip conversational prefixes and linking verbs
+  text = text.replace(
+    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
+    ""
+  );
+  text = text.replace(/^(?:છે|है|est|is)\s+/i, "");
+
+  // Convert spoken number words to digits
+  text = text
+    .replace(/\beleven\s+twenty\s+seven\b/gi, "1127")
+    .replace(/\btwenty\s+seven\b/gi, "27")
+    .replace(/\bone\s+one\s+two\s+seven\b/gi, "1127")
+    .replace(/\bzero\b/gi, "0")
+    .replace(/\bone\b/gi, "1")
+    .replace(/\btwo\b/gi, "2")
+    .replace(/\bthree\b/gi, "3")
+    .replace(/\bfour\b/gi, "4")
+    .replace(/\bfive\b/gi, "5")
+    .replace(/\bsix\b/gi, "6")
+    .replace(/\bseven\b/gi, "7")
+    .replace(/\beight\b/gi, "8")
+    .replace(/\bnine\b/gi, "9")
+    .replace(/\bten\b/gi, "10")
+    .replace(/\beleven\b/gi, "11")
+    .replace(/\btwelve\b/gi, "12")
+    .replace(/\bthirteen\b/gi, "13")
+    .replace(/\bfourteen\b/gi, "14")
+    .replace(/\bfifteen\b/gi, "15")
+    .replace(/\bsixteen\b/gi, "16")
+    .replace(/\bseventeen\b/gi, "17")
+    .replace(/\beighteen\b/gi, "18")
+    .replace(/\bnineteen\b/gi, "19")
+    .replace(/\btwenty\b/gi, "20");
+
+  // 1. Spoken "@" representations across English, Hindi, Gujarati, French, Spanish
+  text = text
+    .replace(
+      /\s*(?:at\s+the\s+rate\s+of|at\s+the\s+rate|add\s+the\s+rate|at\s+rate|એટ\s*ધ\s*રેટ|એટ\s*રેટ|एट\s*द\s*रेट\s*ऑफ़|एट\s*द\s*रेट|एट\s*रेट|arobase|arroba|a\s+commercial)\s*/gi,
+      "@"
+    )
+    .replace(/\s+at\s+/gi, "@");
+
+  // 2. Spoken "." representations
+  text = text
+    .replace(/\s*(?:dot|dott|डॉट|ડૉટ|point|punto)\s*/gi, ".")
+    .replace(/\s*\.\s*/g, ".");
+
+  // 3. Spoken special characters
+  text = text
+    .replace(/\s*(?:underscore|અંડરસ્કોર|अंडरस्कोर)\s*/gi, "_")
+    .replace(/\s*(?:dash|hyphen|માઈનસ|माइनस|tiret)\s*/gi, "-");
+
+  // 4. Remove internal whitespace around @ and .
+  text = text
+    .replace(/\s*@\s*/g, "@")
+    .replace(/\s*\.\s*/g, ".")
+    .replace(/\s+/g, "");
+
+  // 5. Common domain corrections if STT split it
+  text = text
+    .replace(/@g\s*mail/i, "@gmail")
+    .replace(/@y\s*ahoo/i, "@yahoo")
+    .replace(/@out\s*look/i, "@outlook")
+    .replace(/@hot\s*mail/i, "@hotmail")
+    .replace(/\.c\s*om/i, ".com")
+    .replace(/\.i\s*n/i, ".in")
+    .replace(/\.o\s*rg/i, ".org")
+    .replace(/\.e\s*du/i, ".edu")
+    .replace(/\.n\s*et/i, ".net");
+
+  return text.toLowerCase();
+}
+
+// ─── 7. Live Focused Field Prompt Generator ───────────────────────────────────
+export function getFieldPromptMessage(
+  fieldLabel: string,
+  fieldType: string = "text",
+  lang: string = "en-US"
+): string {
+  const lowerLabel = (fieldLabel || "").toLowerCase();
+  const isEmail =
+    fieldType === "email" ||
+    lowerLabel.includes("email") ||
+    lowerLabel.includes("ઈમેલ") ||
+    lowerLabel.includes("ईमेल");
+  const isPass =
+    fieldType === "password" ||
+    lowerLabel.includes("pass") ||
+    lowerLabel.includes("પાસવર્ડ") ||
+    lowerLabel.includes("पासवर्ड");
+  const isName =
+    lowerLabel.includes("name") || lowerLabel.includes("નામ") || lowerLabel.includes("नाम");
+  const isSearch =
+    lowerLabel.includes("search") ||
+    lowerLabel.includes("find") ||
+    lowerLabel.includes("સર્ચ") ||
+    lowerLabel.includes("खोज");
+  const isRole =
+    lowerLabel.includes("role") || lowerLabel.includes("title") || lowerLabel.includes("job");
+
+  if (lang.startsWith("gu")) {
+    if (isEmail) return "કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.";
+    if (isPass) return "કૃપા કરીને તમારો પાસવર્ડ બોલો.";
+    if (isName) return "કૃપા કરીને તમારું પૂરું નામ બોલો.";
+    if (isSearch) return "કૃપા કરીને તમે શું સર્ચ કરવા માંગો છો તે બોલો.";
+    if (isRole) return "કૃપા કરીને તમારો ઇચ્છિત રોલ અથવા જોબ ટાઇટલ બોલો.";
+    return `કૃપા કરીને ${fieldLabel || "આ ખાનું"} ભરવા માટે બોલો.`;
+  }
+
+  if (lang.startsWith("hi")) {
+    if (isEmail) return "कृपया अपना ईमेल पता बोलें।";
+    if (isPass) return "कृपया अपना पासवर्ड बोलें।";
+    if (isName) return "कृपया अपना पूरा नाम बोलें।";
+    if (isSearch) return "कृपया सर्च करने के लिए बोलें।";
+    if (isRole) return "कृपया अपना लक्षित रोल या पद बोलें।";
+    return `कृपया ${fieldLabel || "इस फ़ील्ड"} के लिए बोलें।`;
+  }
+
+  if (lang.startsWith("fr")) {
+    if (isEmail) return "Veuillez dicter votre adresse e-mail.";
+    if (isPass) return "Veuillez dicter votre mot de passe.";
+    if (isName) return "Veuillez dicter votre nom complet.";
+    if (isSearch) return "Que souhaitez-vous rechercher ?";
+    return `Veuillez dicter pour ${fieldLabel || "ce champ"}.`;
+  }
+
+  if (isEmail) return "Please speak your email address.";
+  if (isPass) return "Please speak your password.";
+  if (isName) return "Please speak your full name.";
+  if (isSearch) return "Please speak what you would like to search for.";
+  if (isRole) return "Please speak your target role or job title.";
+  return `Please speak to fill ${fieldLabel || "this field"}.`;
+}
+

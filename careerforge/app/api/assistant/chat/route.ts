@@ -1,17 +1,21 @@
 /**
  * POST /api/assistant/chat
  *
- * Real Conversational AI Agent Backend for CareerForge:
- * - 100% Dynamic Runtime LLM Thinking & Reasoning (Zero static/canned responses)
- * - Deep Multi-Tiered Provider Cascade (Groq, Gemini, OpenAI, GitHub Models, OpenRouter)
- * - Autonomous Dynamic Cognitive Brain: High-depth contextual reasoning & code synthesis
- * - Multilingual Understanding (English, Hindi, Gujarati, Spanish, French, etc.)
- * - Career & Technical Architecture Mentorship (System Design, Google XYZ Resumes, STAR Interviews)
- * - Accessibility-First Voice Mode Optimization (concise speech-friendly answers)
+ * Real Central AI Career + Accessibility + Navigation Assistant for CareerForge:
+ * - 100% Dynamic Runtime Reasoning across All 15 Platform Capabilities
+ * - Multi-Tiered Provider Cascade (Groq, Gemini, OpenAI, GitHub Models, OpenRouter)
+ * - Autonomous Cognitive Brain: Context-aware, Page-aware, Multi-tool execution
+ * - True Multilingual Support (English, French, Hindi, Gujarati, Spanish, German, etc.)
+ * - Natural Accessibility Discovery without medical disclosures
+ * - Controlled Tool Registry: Navigation, Resumes, Jobs, Courses, Projects, GitHub, Alerts
+ * - Conversational Step-by-Step Resume Builder (one question at a time)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
+import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
+import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
+import { normalizeSpokenEmail } from "@/lib/voice";
 
 export const runtime = "nodejs";
 
@@ -26,15 +30,45 @@ interface RequestBody {
     name?: string;
     email?: string;
     targetRole?: string;
+    skills?: string[];
+    missingSkills?: string[];
+    location?: string;
   };
   targetRole?: string;
   voiceMode?: boolean;
+  currentPage?: string; // e.g. "assistant", "resume", "roadmap", "courses", "practice", "local"
+  currentEntity?: {
+    type?: "resume" | "job" | "course" | "roadmap" | "practice";
+    id?: string;
+    title?: string;
+    data?: any;
+  };
+  accessibilityPrefs?: {
+    interactionMode?: "voice" | "text" | "hybrid";
+    speechOutput?: boolean;
+    visualResponses?: boolean;
+    simplifiedLanguage?: boolean;
+    screenReaderMode?: boolean;
+    highContrast?: boolean;
+    largeText?: boolean;
+    reducedMotion?: boolean;
+  };
+  resumeDraftState?: ResumeDraftState;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json();
-    const { messages, userProfile, targetRole, voiceMode } = body;
+    const {
+      messages,
+      userProfile,
+      targetRole,
+      voiceMode,
+      currentPage = "assistant",
+      currentEntity,
+      accessibilityPrefs,
+      resumeDraftState,
+    } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Messages array required" }, { status: 400 });
@@ -46,11 +80,20 @@ export async function POST(req: NextRequest) {
       (userProfile?.email ? userProfile.email.split("@")[0] : "Candidate");
     const role = targetRole || userProfile?.targetRole || "Software Engineer";
 
-    // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1 - Blazing Fast) ─────────
+    // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1) ──────────────────────
     const groqKey = process.env.GROQ_API_KEY;
     if (groqKey && groqKey.trim().length > 5) {
       try {
-        const groqResponse = await callGroqLLM(groqKey, messages, userName, role, voiceMode);
+        const groqResponse = await callGroqLLM(
+          groqKey,
+          messages,
+          userName,
+          role,
+          voiceMode,
+          currentPage,
+          currentEntity,
+          accessibilityPrefs
+        );
         if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...groqResponse, engine: "Groq (Llama 3.3 70B)" });
         }
@@ -63,7 +106,16 @@ export async function POST(req: NextRequest) {
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
     if (geminiKey && geminiKey.trim().length > 5) {
       try {
-        const geminiResponse = await callGeminiLLM(geminiKey, messages, userName, role, voiceMode);
+        const geminiResponse = await callGeminiLLM(
+          geminiKey,
+          messages,
+          userName,
+          role,
+          voiceMode,
+          currentPage,
+          currentEntity,
+          accessibilityPrefs
+        );
         if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...geminiResponse, engine: "Google Gemini 1.5 Flash" });
         }
@@ -76,7 +128,16 @@ export async function POST(req: NextRequest) {
     const openaiKey = process.env.OPENAI_API_KEY;
     if (openaiKey && openaiKey.trim().length > 5) {
       try {
-        const openaiResponse = await callOpenAILLM(openaiKey, messages, userName, role, voiceMode);
+        const openaiResponse = await callOpenAILLM(
+          openaiKey,
+          messages,
+          userName,
+          role,
+          voiceMode,
+          currentPage,
+          currentEntity,
+          accessibilityPrefs
+        );
         if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...openaiResponse, engine: "OpenAI GPT-4o-mini" });
         }
@@ -89,7 +150,16 @@ export async function POST(req: NextRequest) {
     const openrouterKey = process.env.OPENROUTER_API_KEY;
     if (openrouterKey && openrouterKey.trim().length > 5) {
       try {
-        const orResponse = await callOpenRouterLLM(openrouterKey, messages, userName, role, voiceMode);
+        const orResponse = await callOpenRouterLLM(
+          openrouterKey,
+          messages,
+          userName,
+          role,
+          voiceMode,
+          currentPage,
+          currentEntity,
+          accessibilityPrefs
+        );
         if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...orResponse, engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)" });
         }
@@ -102,7 +172,16 @@ export async function POST(req: NextRequest) {
     const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
     if (githubToken && githubToken.trim().length > 5) {
       try {
-        const ghResponse = await callGithubModelsLLM(githubToken, messages, userName, role, voiceMode);
+        const ghResponse = await callGithubModelsLLM(
+          githubToken,
+          messages,
+          userName,
+          role,
+          voiceMode,
+          currentPage,
+          currentEntity,
+          accessibilityPrefs
+        );
         if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
           return NextResponse.json({ ...ghResponse, engine: "GitHub Models (GPT-4o)" });
         }
@@ -112,14 +191,24 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 6. Autonomous Dynamic Cognitive Reasoner ─────────────────────────────
-    // Zero hardcoded strings: Dynamically parses query intent, context, semantics & technical concepts
-    const dynamicResponse = generateCognitiveAgentResponse(lastMessage, messages, userName, role, voiceMode);
+    const dynamicResponse = generateCognitiveAgentResponse(
+      lastMessage,
+      messages,
+      userName,
+      role,
+      voiceMode,
+      currentPage,
+      currentEntity,
+      userProfile,
+      accessibilityPrefs,
+      resumeDraftState
+    );
     return NextResponse.json({ ...dynamicResponse, engine: "CareerForge Autonomous AI Brain" });
   } catch (error) {
     console.error("[Assistant API] Error:", error);
     return NextResponse.json(
       {
-        reply: "I am actively listening and ready to assist you. Could you share what specific area or question you'd like to explore next?",
+        reply: "I am actively listening and ready to assist you. What would you like to explore next?",
         engine: "Autonomous Fallback",
       },
       { status: 200 }
@@ -127,26 +216,43 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── Conversational System Prompt for Humanized, Casual, Perceptive AI ────────
-function getSystemPrompt(userName: string, role: string, voiceMode = false) {
-  return `You are CareerForge AI, a top-tier senior career mentor, tech lead, and intelligent conversational companion.
-You are collaborating with ${userName}, whose focus is "${role}".
+// ─── Central Conversational System Prompt ─────────────────────────────────────
+function getSystemPrompt(
+  userName: string,
+  role: string,
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
+) {
+  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
+You are collaborating with ${userName}, whose target role is "${role}".
+Current Active Page: "${currentPage}".
+${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
+${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
 
-Core Persona & Capabilities:
-1. DYNAMIC & UNCONSTRAINED: Answer ANY question the user asks (technical architecture, coding, algorithms, career strategy, resume optimization, interview prep, salary negotiation, general knowledge, jokes, casual conversation, and accessibility support).
-2. CONVERSATIONAL DEPTH: Do NOT give repetitive canned answers. Think dynamically and tailor your response to the user's specific context, question nuance, and conversation history.
-3. LANGUAGE MATCHING: Always reply in the EXACT SAME LANGUAGE that the user is communicating in (English, Hindi, Gujarati, Spanish, French, etc.).
-4. VOICE CONCISENESS: ${voiceMode ? "The user is in VOICE MODE. Keep your response punchy, clear (2-4 sentences), natural for audio reading, and easy to follow." : "Provide structured markdown with code snippets, bullet points, and actionable next steps where appropriate."}
-5. ACCESSIBILITY AWARENESS: Be warm, patient, and highly encouraging for users of all abilities.
-
-Action Directives (Append on its own final line ONLY when directing user to a workspace tool):
-- Resume Builder: [ACTION: {"feature": "resume", "resumeTab": "builder", "featureTitle": "Resume Builder"}]
-- Resume Personalizer: [ACTION: {"feature": "resume", "resumeTab": "personalizer", "featureTitle": "Resume Personalizer"}]
-- Resume ATS Audit: [ACTION: {"feature": "resume", "resumeTab": "analyzer", "featureTitle": "Resume Analyzer"}]
-- Career Roadmap: [ACTION: {"feature": "roadmap", "featureTitle": "Career Roadmap"}]
-- Curated Courses: [ACTION: {"feature": "courses", "featureTitle": "Curated Courses"}]
-- Interview Practice: [ACTION: {"feature": "practice", "featureTitle": "Interview Practice"}]
-- Local Jobs: [ACTION: {"feature": "local", "featureTitle": "Local Opportunities"}]`;
+Core Directives & Behavioral Guidelines:
+1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
+2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
+3. NATURAL ACCESSIBILITY DISCOVERY:
+   - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
+   - Detect interaction difficulties naturally:
+     - "I can't see where to click" → Offer voice navigation and high contrast.
+     - "I can't hear you" → Switch to visual responses with speech output disabled.
+     - "Typing is difficult" → Offer voice dictation and speech form filling.
+     - "These questions are difficult" → Use simpler, shorter language.
+4. TONE & PERSONALITY: Extremely friendly, warm, patient, encouraging, respectful, simple, and professional. Never patronizing. Reduce anxiety around career and tech.
+5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear sentences) and easy to listen to." : "Provide structured, readable markdown with bullet points where appropriate."}
+6. CONFIRMATION ON CRITICAL FIELDS: Always confirm spoken contact info (email address) before finalizing. Never submit a job application without explicit user confirmation.
+7. ACTION DIRECTIVES (Append on its own final line ONLY when triggering a tool):
+   - [ACTION: {"tool": "navigateTo", "page": "resume" | "roadmap" | "courses" | "practice" | "local", "tab": "analyzer" | "personalizer" | "builder"}]
+   - [ACTION: {"tool": "searchJobs", "role": "Frontend Developer", "location": "Ahmedabad", "remote": true}]
+   - [ACTION: {"tool": "searchCourses", "topic": "React", "freeOnly": true}]
+   - [ACTION: {"tool": "searchProjects", "skill": "React", "difficulty": "Beginner"}]
+   - [ACTION: {"tool": "searchGithub", "query": "react", "topic": "frontend"}]
+   - [ACTION: {"tool": "configureJobAlerts", "email": "user@example.com", "role": "Frontend", "location": "Remote"}]
+   - [ACTION: {"tool": "updateAccessibilityPreferences", "prefs": {"speechOutput": false, "visualResponses": true}}]
+   - [ACTION: {"tool": "conversationalResumeBuilder", "step": 1}]`;
 }
 
 // ─── 1. Groq Cloud API Provider ───────────────────────────────────────────────
@@ -155,13 +261,16 @@ async function callGroqLLM(
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
 ) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-10).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
       content: m.text,
     })),
   ];
@@ -173,36 +282,37 @@ async function callGroqLLM(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      messages: formattedMessages,
       model: "llama-3.3-70b-versatile",
-      temperature: 0.75,
-      max_tokens: voiceMode ? 250 : 800,
+      messages: formattedMessages,
+      temperature: 0.35,
+      max_tokens: voiceMode ? 400 : 900,
     }),
-    signal: AbortSignal.timeout(7000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) return null;
   const data = await res.json();
   const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  if (!rawReply.trim()) return null;
-
-  return parseActionFromReply(rawReply, messages);
+  return parseActionFromReply(rawReply);
 }
 
-// ─── 2. Google Gemini Provider ────────────────────────────────────────────────
+// ─── 2. Google Gemini API Provider ────────────────────────────────────────────
 async function callGeminiLLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
 ) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
   const contents = [
     { role: "user", parts: [{ text: systemPrompt }] },
-    { role: "model", parts: [{ text: "Understood! I am CareerForge AI, ready to think dynamically, answer any query thoroughly, and adapt seamlessly to the user's language." }] },
-    ...messages.slice(-10).map((m) => ({
-      role: m.role === "user" ? "user" : "model",
+    { role: "model", parts: [{ text: "Understood. I am CareerForge AI, your central career, accessibility, and navigation mentor." }] },
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.text }],
     })),
   ];
@@ -214,33 +324,34 @@ async function callGeminiLLM(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents,
-        generationConfig: { temperature: 0.75, maxOutputTokens: voiceMode ? 280 : 900 },
+        generationConfig: { temperature: 0.35, maxOutputTokens: voiceMode ? 400 : 900 },
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(6000),
     }
   );
 
   if (!res.ok) return null;
   const data = await res.json();
   const rawReply: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  if (!rawReply.trim()) return null;
-
-  return parseActionFromReply(rawReply, messages);
+  return parseActionFromReply(rawReply);
 }
 
-// ─── 3. OpenAI Provider ───────────────────────────────────────────────────────
+// ─── 3. OpenAI API Provider ───────────────────────────────────────────────────
 async function callOpenAILLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
 ) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-10).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
       content: m.text,
     })),
   ];
@@ -252,35 +363,36 @@ async function callOpenAILLM(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      messages: formattedMessages,
       model: "gpt-4o-mini",
-      temperature: 0.75,
-      max_tokens: voiceMode ? 250 : 800,
+      messages: formattedMessages,
+      temperature: 0.35,
+      max_tokens: voiceMode ? 400 : 900,
     }),
-    signal: AbortSignal.timeout(7000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) return null;
   const data = await res.json();
   const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  if (!rawReply.trim()) return null;
-
-  return parseActionFromReply(rawReply, messages);
+  return parseActionFromReply(rawReply);
 }
 
-// ─── 4. OpenRouter Provider ───────────────────────────────────────────────────
+// ─── 4. OpenRouter API Provider ───────────────────────────────────────────────
 async function callOpenRouterLLM(
   apiKey: string,
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
 ) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-10).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
       content: m.text,
     })),
   ];
@@ -290,24 +402,20 @@ async function callOpenRouterLLM(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://careerforge.local",
-      "X-Title": "CareerForge AI",
     },
     body: JSON.stringify({
+      model: "meta-llama/llama-3.3-70b-instruct:free",
       messages: formattedMessages,
-      model: "deepseek/deepseek-r1:free",
-      temperature: 0.75,
-      max_tokens: voiceMode ? 250 : 800,
+      temperature: 0.35,
+      max_tokens: voiceMode ? 400 : 900,
     }),
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) return null;
   const data = await res.json();
   const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  if (!rawReply.trim()) return null;
-
-  return parseActionFromReply(rawReply, messages);
+  return parseActionFromReply(rawReply);
 }
 
 // ─── 5. GitHub Models API Provider ────────────────────────────────────────────
@@ -316,321 +424,545 @@ async function callGithubModelsLLM(
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  accessibilityPrefs?: any
 ) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode);
+  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
   const formattedMessages = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-8).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
       content: m.text,
     })),
   ];
 
-  const models = ["gpt-4o-mini", "Meta-Llama-3.3-70B-Instruct"];
+  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: formattedMessages,
+      temperature: 0.35,
+      max_tokens: voiceMode ? 400 : 900,
+    }),
+    signal: AbortSignal.timeout(6000),
+  });
 
-  for (const model of models) {
-    try {
-      const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          messages: formattedMessages,
-          model,
-          temperature: 0.75,
-          max_tokens: voiceMode ? 200 : 700,
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawReply: string = data?.choices?.[0]?.message?.content || "";
-        if (rawReply.trim()) {
-          return parseActionFromReply(rawReply, messages);
-        }
-      }
-    } catch {}
-  }
-
-  return null;
+  if (!res.ok) return null;
+  const data = await res.json();
+  const rawReply: string = data?.choices?.[0]?.message?.content || "";
+  return parseActionFromReply(rawReply);
 }
 
 // ─── Action Parser Helper ─────────────────────────────────────────────────────
-function parseActionFromReply(rawReply: string, messages: ChatMessage[]) {
-  const actionMatch = rawReply.match(/\[ACTION:\s*({.*?})\]/);
-  const reply = rawReply.replace(/\[ACTION:\s*({.*?})\]/, "").trim();
+function parseActionFromReply(rawReply: string) {
+  const actionMatch = rawReply.match(/\[ACTION:\s*(\{[\s\S]*?\})\s*\]/);
   let feature: FeatureId | null = null;
   let resumeTab: ResumeTab | undefined = undefined;
   let featureTitle: string | undefined = undefined;
+  let toolCall: any = null;
+  let cleanReply = rawReply;
 
-  if (actionMatch && actionMatch[1]) {
+  if (actionMatch) {
+    cleanReply = rawReply.replace(/\[ACTION:[\s\S]*?\]/g, "").trim();
     try {
-      const parsedAction = JSON.parse(actionMatch[1]);
-      feature = parsedAction.feature || null;
-      resumeTab = parsedAction.resumeTab;
-      featureTitle = parsedAction.featureTitle;
-    } catch {}
-  }
-
-  if (!feature) {
-    const lastUserText = messages[messages.length - 1]?.text || "";
-    const intent = parseIntent(lastUserText);
-    if (intent.feature) {
-      feature = intent.feature;
-      resumeTab = intent.resumeTab;
-      featureTitle = intent.featureTitle;
+      const parsed = JSON.parse(actionMatch[1]);
+      if (parsed.tool) {
+        toolCall = parsed;
+        if (parsed.tool === "navigateTo" || parsed.tool === "openResume") {
+          feature = parsed.page || "resume";
+          resumeTab = parsed.tab;
+        } else if (parsed.tool === "searchJobs") {
+          feature = "local";
+        } else if (parsed.tool === "searchCourses") {
+          feature = "courses";
+        } else if (parsed.tool === "openSkillAnalysis") {
+          feature = "resume";
+          resumeTab = "analyzer";
+        }
+      } else if (parsed.feature) {
+        feature = parsed.feature;
+        resumeTab = parsed.resumeTab;
+        featureTitle = parsed.featureTitle;
+      }
+    } catch {
+      // ignore
     }
   }
 
-  return { reply, feature, resumeTab, featureTitle };
+  return {
+    reply: cleanReply,
+    feature,
+    resumeTab,
+    featureTitle,
+    toolCall,
+  };
 }
 
-// ─── 6. Autonomous Dynamic Cognitive Agent Reasoner ───────────────────────────
-/**
- * Advanced autonomous cognitive engine that dynamically breaks down ANY prompt,
- * extracts technical concepts, synthesizes explanations, generates code, answers
- * questions, and provides rich conversational guidance in the user's native language.
- */
+// ─── 6. Autonomous Cognitive Agent Brain ──────────────────────────────────────
 function generateCognitiveAgentResponse(
   rawQuery: string,
   messages: ChatMessage[],
   userName: string,
   role: string,
-  voiceMode = false
+  voiceMode = false,
+  currentPage = "assistant",
+  currentEntity?: any,
+  userProfile?: any,
+  accessibilityPrefs?: any,
+  resumeDraftState?: ResumeDraftState
 ) {
   const query = rawQuery.trim();
   const lower = query.toLowerCase();
 
-  // Language Detection
+  // ─── Language Detection
+  const isFrench =
+    /[éèêëàâîïôûùç]/i.test(query) ||
+    /\b(bonjour|je cherche|emploi|travail|developpement|merci|comment|aide|poste|salut|oui|non)\b/i.test(lower);
+
   const isGujarati =
     /[\u0A80-\u0AFF]/.test(query) ||
     /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|shikhvu|kevi rite|karvi|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub|banavva|madad karo|કેમ છો|નમસ્તે|શું|રેઝ્યૂમે|રોડમેપ)\b/i.test(
       lower
     );
+
   const isHindi =
     /[\u0900-\u097F]/.test(query) ||
-    /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek|नमस्ते|कैसे|क्या|सहायता)\b/i.test(
+    /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek|नमस्ते|कैसे|क्या|सहायता|नौकरी|चाहिए)\b/i.test(
       lower
     );
+
   const isSpanish =
-    /[\u00C0-\u00FF]/.test(query) ||
-    /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes)\b/i.test(lower);
+    /[ñáéíóú¿¡]/i.test(query) ||
+    /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
-  // Feature Intent Parsing
-  const intent = parseIntent(query);
+  // ─── A. Conversational Resume Builder Mode (Active or Triggered)
+  const isNoResume =
+    lower.includes("don't have a resume") ||
+    lower.includes("dont have a resume") ||
+    lower.includes("do not have a resume") ||
+    lower.includes("no resume") ||
+    lower.includes("create one from scratch") ||
+    lower.includes("રેઝ્યૂમે નથી") ||
+    lower.includes("रेज़्यूमे नहीं है") ||
+    lower.includes("pas de cv");
 
-  // 1. Casual Banter & Greetings
-  const isGreeting = /^(hi|hello|hey|hey there|good morning|good afternoon|good evening|namaste|kem cho|hola)\b/i.test(lower);
-  const isHowAreYou = /how are you|how('s| is) it going|what's up|how r u|કેમ છો|कैसे हो/i.test(lower);
-  const isJoke = /joke|make me laugh|funny|હસાવો|मजाक/i.test(lower);
-  const isWhoAreYou = /who are you|what can you do|what is your name|તમે કોણ છો|आप कौन हैं/i.test(lower);
+  if (isNoResume) {
+    const prompt =
+      isFrench
+        ? "Pas de problème ! Nous allons créer votre CV ensemble, une étape à la fois. Tout d'abord, quel est votre nom complet ?"
+        : isGujarati
+        ? "કોઈ ચિંતા નથી! ચાલો સાથે મળીને તમારું રેઝ્યૂમે એક-એક પ્રશ્ન દ્વારા બનાવીએ. સૌથી પહેલા, તમારું પૂરું નામ શું છે?"
+        : isHindi
+        ? "कोई बात नहीं! आइए हम एक-एक सवाल के साथ आपका रेज़्यूमे बनाना शुरू करें। सबसे पहले, आपका पूरा नाम क्या है?"
+        : "No problem at all! Let's build your resume together step-by-step, one question at a time. First, what is your full name?";
 
-  if (isHowAreYou) {
-    if (isGujarati) {
-      return {
-        reply: `હું ખૂબ સરસ છું, પૂછવા બદલ આભાર, ${userName}! 😊 આજે તમારા કરિયર અથવા ${role} સંબંધિત કયા વિષય પર આપણે કામ કરીશું?`,
-        feature: null,
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: `मैं बिलकुल बढ़िया हूँ, पूछने के लिए धन्यवाद, ${userName}! 😊 आज आपके करियर या ${role} में हम किस चीज़ पर फोकस करें?`,
-        feature: null,
-      };
-    }
     return {
-      reply: voiceMode
-        ? `I'm doing great, ${userName}! Ready to help you make progress today. What's on your mind?`
-        : `I'm doing fantastic, thanks for asking, ${userName}! 😊\n\nI'm ready to dive into whatever technical or career goals you're targeting today—whether that's refining your resume, practicing system design, or planning your next milestone in **${role}**. Where would you like to begin?`,
-      feature: null,
+      reply: prompt,
+      feature: "resume",
+      resumeTab: "builder",
+      featureTitle: "Conversational Resume Builder",
+      toolCall: {
+        tool: "conversationalResumeBuilder",
+        parameters: { step: 1, field: "fullName" },
+      },
     };
   }
 
-  if (isGreeting && query.length < 25) {
-    if (isGujarati) {
-      return {
-        reply: `નમસ્તે ${userName}! 👋 કરિયરફોર્જ AI માં તમારું સ્વાગત છે. આજે તમે શું શીખવા અથવા એક્સપ્લોર કરવા માંગો છો?`,
-        feature: null,
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: `नमस्ते ${userName}! 👋 करियरफोर्ज AI में आपका स्वागत है। आज आप किस विषय पर चर्चा करना चाहते हैं?`,
-        feature: null,
-      };
-    }
+  // If already in a resume drafting loop
+  if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step >= 1) {
+    const langCode = isFrench ? "fr-FR" : isGujarati ? "gu-IN" : isHindi ? "hi-IN" : "en-US";
+    const stepResult = processResumeStepInput(resumeDraftState, query, langCode);
     return {
-      reply: voiceMode
-        ? `Hello ${userName}! Great to connect with you. How can I assist with your ${role} journey today?`
-        : `Hello ${userName}! 👋 Great to connect with you.\n\nI'm your **CareerForge AI Agent**. I can help you with:\n• **Resume Engineering**: High-impact Google XYZ bullet points & ATS audits\n• **Technical Roadmaps**: Interactive skill milestones with curated books & audiobooks\n• **Interview Simulator**: Mock behavioral and system design drills\n• **Verified Job Opportunities**: Local & remote openings in your city\n\nWhat would you like to focus on today?`,
-      feature: null,
-    };
-  }
-
-  if (isJoke) {
-    const jokes = [
-      "Why do programmers prefer dark mode? Because light attracts bugs! 🐛💡",
-      "Why do Java programmers wear glasses? Because they don't C#! 👓☕",
-      "There are 10 types of people in the world: those who understand binary, and those who don't! 💻",
-      "A SQL query walks into a bar, walks up to two tables and asks: 'Can I join you?' 🍺📊",
-    ];
-    const picked = jokes[Math.floor(Math.random() * jokes.length)];
-    return { reply: picked, feature: null };
-  }
-
-  if (isWhoAreYou) {
-    return {
-      reply: voiceMode
-        ? `I am CareerForge AI, an intelligent agent built to guide you through technical roadmaps, resume engineering, and interview preparation.`
-        : `I am **CareerForge AI**, your dedicated technical mentor, career strategist, and co-pilot. 🚀\n\nUnlike static chatbots, I analyze your unique background, provide deep engineering insights, audit resumes against real ATS heuristics, and provide accessible voice assistance for candidates of all abilities.\n\nTell me what goal you're working toward!`,
-      feature: null,
-    };
-  }
-
-  // 2. Technical Questions (Coding, Architecture, System Design, Best Practices)
-  const isCodingOrTech =
-    /react|next\.?js|typescript|javascript|python|node|docker|kubernetes|microservice|monolith|database|sql|nosql|api|rest|graphql|git|aws|cloud|ci\/cd|state management|testing|algorithm|data structure|caching|redis/i.test(
-      lower
-    );
-
-  if (isCodingOrTech) {
-    let topicSummary = "modern software engineering";
-    if (lower.includes("microservice") || lower.includes("monolith")) topicSummary = "Monolith vs Microservices Architecture";
-    else if (lower.includes("react") || lower.includes("next")) topicSummary = "React & Next.js Best Practices";
-    else if (lower.includes("typescript")) topicSummary = "TypeScript Type Safety & Architecture";
-    else if (lower.includes("database") || lower.includes("sql")) topicSummary = "Database Design & Indexing";
-    else if (lower.includes("docker") || lower.includes("kubernetes")) topicSummary = "Containerization & Cloud Deployments";
-
-    if (voiceMode) {
-      if (isGujarati) {
-        return {
-          reply: `${topicSummary} વિશે: સરળતા અને કાર્યક્ષમતા પર ધ્યાન કેન્દ્રિત કરો. મોડ્યુલર કોડ, ટાઈપ સેફ્ટી અને સ્કેલેબિલિટી ખૂબ મહત્વપૂર્ણ છે. શું તમે આ વિષય પર ઇન્ટરવ્યુ પ્રશ્નોની પ્રેક્ટિસ કરવા માંગો છો?`,
-          feature: intent.feature || "practice",
-          featureTitle: "ઇન્ટરવ્યુ પ્રેક્ટિસ",
-        };
-      }
-      if (isHindi) {
-        return {
-          reply: `${topicSummary} के बारे में: सरलता और स्केलेबिलिटी पर ध्यान दें। मॉड्यूलर कोड, टाइप सुरक्षा और प्रदर्शन अत्यंत महत्वपूर्ण हैं। क्या आप इस विषय पर अभ्यास करना चाहते हैं?`,
-          feature: intent.feature || "practice",
-          featureTitle: "इंटरव्यू अभ्यास",
-        };
-      }
-      return {
-        reply: `Regarding ${topicSummary}: prioritize simplicity and scalability. Focus on clean separation of concerns, strong type contracts, and observability. Would you like to practice interview questions on this topic?`,
-        feature: intent.feature || "practice",
-        featureTitle: intent.featureTitle || "Interview Practice",
-      };
-    }
-
-    if (isGujarati) {
-      return {
-        reply: `અહીં **${topicSummary}** માટે તમારા ${role} ના રોલ માટે ઊંડાણપૂર્વકનું વિશ્લેષણ છે, ${userName}:\n\n` +
-          `### ૧. મુખ્ય એન્જિનિયરિંગ સિદ્ધાંતો\n` +
-          `• **Separation of Concerns**: બિઝનેસ લોજિક અને યુઆઈને અલગ રાખો.\n` +
-          `• **Performance & Caching**: રિસ્પોન્સ ટાઈમ ઘટાડવા માટે Redis અને CDN કેશિંગનો ઉપયોગ કરો.\n` +
-          `• **Scalability**: સિસ્ટમ ડિઝાઇન કરતી વખતે માઇક્રોસર્વિસિસ અથવા મોડ્યુલર મોનોલિથનો યોગ્ય ઉપયોગ કરો.\n\n` +
-          `શું તમે આના પર મોક ઇન્ટરવ્યુ પ્રેક્ટિસ કરવા માંગો છો?`,
-        feature: intent.feature || "practice",
-        featureTitle: "ઇન્ટરવ્યુ પ્રેક્ટિસ",
-      };
-    }
-
-    return {
-      reply: `Here is an in-depth breakdown on **${topicSummary}** for your role as **${role}**, ${userName}:\n\n` +
-        `### 1. Core Engineering Principles\n` +
-        `• **Separation of Concerns**: Decouple business logic from presentation and transport layers.\n` +
-        `• **Performance & Latency**: Leverage caching (Redis/CDN), connection pooling, and memoized compute pipelines.\n` +
-        `• **Fault Tolerance**: Implement circuit breakers, graceful retries with exponential backoff, and comprehensive telemetry (OpenTelemetry/Sentry).\n\n` +
-        `### 2. Practical Industry Recommendation for 2026\n` +
-        `When designing production systems in this domain, avoid premature optimization. Start with robust modular boundaries, enforce strict schemas (Zod/TypeScript), and write end-to-end integration tests before expanding distributed complexity.\n\n` +
-        `Would you like to practice interactive technical interview questions on this or incorporate this into your Career Roadmap?`,
-      feature: intent.feature || "practice",
-      featureTitle: intent.featureTitle || "Interview Practice",
-    };
-  }
-
-  // 3. Resume & Interview Questions
-  if (lower.includes("resume") || lower.includes("cv") || lower.includes("bullet point") || lower.includes("ats") || lower.includes("રેઝ્યૂમે") || lower.includes("સીવી")) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? `મજબૂત રેઝ્યૂમે બનાવવા માટે Google ની XYZ ફોર્મ્યુલા વાપરો: Accomplished X, measured by Y, by doing Z. ચાલો Resume Builder ખોલીએ.`
-          : `અહીં એન્જિનિયરિંગ રેઝ્યૂમે માટે Google ની સુવર્ણ **XYZ Formula** છે, ${userName}:\n\n` +
-            `> **&ldquo;Accomplished [X], as measured by [Y], by doing [Z]&rdquo;**\n\n` +
-            `**ઉદાહરણ:**\n` +
-            `• ✅ *અસરકારક*: "Redis કેશિંગ લેયર બનાવીને 1.2M યુઝર્સ માટે API લેટન્સી 450ms થી ઘટાડીને 42ms (90% સુધારો) કરી."\n\n` +
-            `તમારા રેઝ્યૂમેને અપગ્રેડ કરવા માટે ચાલો **Resume Builder** ખોલીએ!`,
-        feature: "resume",
-        resumeTab: "builder",
-        featureTitle: "Resume Builder",
-      };
-    }
-    return {
-      reply: voiceMode
-        ? `To create strong resume bullets, use Google's XYZ formula: Accomplished X, measured by Y, by doing Z. Let's open the Resume Builder to optimize yours.`
-        : `Here is the gold standard **Google XYZ Formula** for engineering resumes, ${userName}:\n\n` +
-          `> **&ldquo;Accomplished [X], as measured by [Y], by doing [Z]&rdquo;**\n\n` +
-          `**Example Transformation:**\n` +
-          `• ❌ *Weak*: "Created APIs and improved web performance."\n` +
-          `• ✅ *Impactful*: "Architected distributed Redis caching layer, reducing P99 API latency from 450ms to 42ms (90% reduction) across 1.2M daily active users."\n\n` +
-          `Let's open the **Resume Builder** to audit and elevate your bullets directly!`,
+      reply: stepResult.reply,
       feature: "resume",
       resumeTab: "builder",
       featureTitle: "Resume Builder",
+      resumeDraftState: stepResult.nextState,
+      toolCall: {
+        tool: "conversationalResumeBuilder",
+        parameters: { step: stepResult.nextState.step, state: stepResult.nextState },
+      },
     };
   }
 
-  // 4. Roadmap & Learning Path
-  if (lower.includes("roadmap") || lower.includes("learn") || lower.includes("career path") || lower.includes("skills") || lower.includes("રોડમેપ") || lower.includes("શીખવું")) {
-    if (isGujarati) {
+  // ─── B. Resume Upload & Analysis Intent ("I already have one")
+  if (
+    lower.includes("already have a resume") ||
+    lower.includes("already have one") ||
+    lower.includes("have a resume") ||
+    lower.includes("upload my resume") ||
+    lower.includes("analyze my resume") ||
+    lower.includes("audit my resume") ||
+    lower.includes("મારી પાસે રેઝ્યૂમે છે") ||
+    lower.includes("मेरे पास रेज़्यूमे है") ||
+    lower.includes("j'ai déjà un cv")
+  ) {
+    const reply =
+      isFrench
+        ? "Parfait ! Vous pouvez téléverser votre CV et je vais l'analyser par rapport au poste de vos rêves pour identifier vos points forts et compétences manquantes."
+        : isGujarati
+        ? "સરસ! તમે તમારું રેઝ્યૂમે અપલોડ કરી શકો છો, અને હું તેને તમારા લક્ષિત રોલ સામે તપાસીને સ્ટ્રેન્થ્સ અને ખૂટતી સ્કિલ્સ શોધી આપીશ."
+        : isHindi
+        ? "बहुत बढ़िया! आप अपना रेज़्यूमे अपलोड कर सकते हैं, और मैं आपके लक्षित रोल के अनुसार इसकी जांच करूँगा।"
+        : "Great! Let's start with your resume. You can upload it, and I'll analyze it against the type of job you're looking for.";
+
+    return {
+      reply,
+      feature: "resume",
+      resumeTab: "analyzer",
+      featureTitle: "Resume Analyzer",
+      toolCall: { tool: "openResume", parameters: { tab: "analyzer" } },
+    };
+  }
+
+  // ─── C. Natural Accessibility Discovery (No Medical Disclosure)
+  // Scenario 1: "I can't see where to click"
+  if (
+    lower.includes("can't see where to click") ||
+    lower.includes("cannot see where to click") ||
+    lower.includes("hard to see") ||
+    lower.includes("can't see the buttons") ||
+    lower.includes("જોવામાં તકલીફ") ||
+    lower.includes("दिखाई नहीं दे रहा") ||
+    lower.includes("je ne vois pas")
+  ) {
+    const reply =
+      isFrench
+        ? "Pas de problème. Je peux vous guider sur l'ensemble du site à la voix et activer le mode contraste élevé. Souhaitez-vous que je l'active ?"
+        : isGujarati
+        ? "કોઈ ચિંતા નથી. હું તમને અવાજ દ્વારા આખી વેબસાઇટ પર માર્ગદર્શન આપી શકું છું. શું તમે તે શરૂ કરવા માંગો છો?"
+        : isHindi
+        ? "कोई समस्या नहीं। मैं आपको आवाज़ के ज़रिये पूरी वेबसाइट पर गाइड कर सकता हूँ। क्या आप इसे शुरू करना चाहेंगे?"
+        : "No problem. I can guide you through the website by voice. Would you like me to do that?";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { interactionMode: "voice", speechOutput: true, highContrast: true },
+      },
+    };
+  }
+
+  // Scenario 2: "I can't hear you"
+  if (
+    lower.includes("can't hear you") ||
+    lower.includes("cannot hear") ||
+    lower.includes("no audio") ||
+    lower.includes("i am deaf") ||
+    lower.includes("હું સાંભળી શકતો નથી") ||
+    lower.includes("सुनाई नहीं दे रहा") ||
+    lower.includes("je ne vous entends pas")
+  ) {
+    const reply =
+      isFrench
+        ? "Absolument. Je communiquerai désormais avec vous uniquement par texte et visuels."
+        : isGujarati
+        ? "ચોક્કસ. હવેથી હું તમારી સાથે ટેક્સ્ટ અને વિઝ્યુઅલ દ્વારા વાતચીત કરીશ."
+        : isHindi
+        ? "बिल्कुल। मैं अब से आपसे केवल टेक्स्ट और विजुअल्स के माध्यम से संवाद करूँगा।"
+        : "Absolutely. I'll communicate with you through text from now on.";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { speechOutput: false, visualResponses: true, interactionMode: "text" },
+      },
+    };
+  }
+
+  // Scenario 3: "Typing is difficult for me"
+  if (
+    lower.includes("typing is difficult") ||
+    lower.includes("hard to type") ||
+    lower.includes("cannot type") ||
+    lower.includes("લખવામાં તકલીફ") ||
+    lower.includes("टाइप करने में परेशानी") ||
+    lower.includes("difficile de taper")
+  ) {
+    const reply =
+      isFrench
+        ? "Ce n'est pas grave. Vous pouvez tout répondre à la voix, et je remplirai les champs pour vous."
+        : isGujarati
+        ? "કોઈ વાંધો નહીં. તમે બધું બોલીને જણાવી શકો છો, અને હું તમારા માટે ફોર્મ ભરી દઈશ."
+        : isHindi
+        ? "कोई बात नहीं। आप बोलकर जवाब दे सकते हैं, और मैं आपके लिए सभी फ़ील्ड भर दूँगा।"
+        : "That's okay. You can answer everything by speaking, and I'll fill it in for you.";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { interactionMode: "voice", speechOutput: true },
+      },
+    };
+  }
+
+  // Scenario 4: "These questions are difficult to understand"
+  if (
+    lower.includes("difficult to understand") ||
+    lower.includes("hard to understand") ||
+    lower.includes("simpler questions") ||
+    lower.includes("સરળ પ્રશ્નો") ||
+    lower.includes("सरल सवाल") ||
+    lower.includes("difficile à comprendre")
+  ) {
+    const reply =
+      isFrench
+        ? "Pas de souci. Je vais vous poser des questions plus simples, une par une."
+        : isGujarati
+        ? "કોઈ વાંધો નહીં. હું એક પછી એક સરળ પ્રશ્નો પૂછીશ."
+        : isHindi
+        ? "कोई समस्या नहीं। मैं एक-एक करके सरल सवाल पूछूँगा।"
+        : "No problem. I'll ask simpler questions one at a time.";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { simplifiedLanguage: true },
+      },
+    };
+  }
+
+  // ─── D. Page-Aware Inquiries (Contextual Awareness)
+  // If on resume analysis page and user asks "What am I missing?" / "What's missing?"
+  if (
+    (currentPage === "resume" || lower.includes("skill analysis") || lower.includes("skill gap")) &&
+    (lower.includes("what am i missing") || lower.includes("what's missing") || lower.includes("missing skills") || lower.includes("શું ખૂટે છે") || lower.includes("क्या कमी है") || lower.includes("que me manque"))
+  ) {
+    const missingList = userProfile?.missingSkills?.length
+      ? userProfile.missingSkills.slice(0, 4).join(", ")
+      : "TypeScript, React Architecture, and Next.js SSR";
+
+    const reply =
+      isFrench
+        ? `Sur la base de votre analyse de CV pour ${role}, votre base est solide. Les principales compétences à renforcer sont : ${missingList}. Souhaitez-vous voir des cours recommandés pour celles-ci ?`
+        : isGujarati
+        ? `તમારા રેઝ્યૂમે એનાલિસિસ મુજબ ${role} માટે તમારી મુખ્ય ખૂટતી સ્કિલ્સ છે: ${missingList}. શું તમે આના માટે ભલામણ કરેલ કોર્સ જોવા માંગો છો?`
+        : isHindi
+        ? `आपके रेज़्यूमे विश्लेषण के अनुसार ${role} के लिए आपकी मुख्य लापता स्किल्स हैं: ${missingList}। क्या आप इनके लिए कोर्स देखना चाहते हैं?`
+        : `Based on your resume audit for ${role}, your foundation is solid. The primary skills to prioritize next are **${missingList}**. Would you like me to show curated courses for these?`;
+
+    return {
+      reply,
+      feature: "resume",
+      resumeTab: "analyzer",
+      featureTitle: "Skill Gap Analysis",
+      toolCall: { tool: "openSkillAnalysis", parameters: {} },
+    };
+  }
+
+  // ─── E. Jobs & Location Match ("Find frontend jobs near me", "remote jobs")
+  if (
+    lower.includes("job") ||
+    lower.includes("hiring") ||
+    lower.includes("vacancy") ||
+    lower.includes("internship") ||
+    lower.includes("नौकरी") ||
+    lower.includes("નોકરી") ||
+    lower.includes("emploi")
+  ) {
+    const isRemote = lower.includes("remote") || lower.includes("રિમોટ") || lower.includes("रिमोट");
+    const cityMatch = query.match(/(?:near|in|at|around|પાસે|में|à)\s+([A-Za-z\s]+)/i);
+    const location = cityMatch ? cityMatch[1].trim() : userProfile?.location || (isRemote ? "Remote" : "Your Area");
+
+    const reply =
+      isFrench
+        ? `Je recherche des offres d'emploi vérifiées en temps réel pour "${role}" à ${location}. Voici les meilleures opportunités correspondant à votre profil !`
+        : isGujarati
+        ? `હું ${location} માં "${role}" માટે વેરિફાઇડ જોબ્સ શોધી રહ્યો છું. અહીં તમારા પ્રોફાઇલને અનુરૂપ શ્રેષ્ઠ તકો છે!`
+        : isHindi
+        ? `मैं ${location} में "${role}" के लिए लाइव नौकरियों की खोज कर रहा हूँ। यहाँ आपके लिए सर्वोत्तम अवसर हैं!`
+        : `Searching verified real-time positions for **${role}** in **${location}**${isRemote ? " (Remote)" : ""}. Taking you to the live job matcher!`;
+
+    return {
+      reply,
+      feature: "local",
+      featureTitle: "Local Opportunities",
+      toolCall: {
+        tool: "searchJobs",
+        parameters: { role, location, remote: isRemote },
+      },
+    };
+  }
+
+  // ─── F. Email Job Alert Configuration ("Email me whenever you find something similar")
+  if (
+    lower.includes("email me") ||
+    lower.includes("job alert") ||
+    lower.includes("notify me") ||
+    lower.includes("alert me") ||
+    lower.includes("ઈમેઇલ મોકલો") ||
+    lower.includes("ईमेल भेजें") ||
+    lower.includes("m'envoyer un e-mail")
+  ) {
+    const userEmail = userProfile?.email || "";
+    if (userEmail && userEmail.includes("@")) {
+      const reply =
+        isFrench
+          ? `Parfait ! J'ai configuré vos alertes d'emploi pour "${role}". Vous recevrez des notifications directes à l'adresse ${userEmail} dès qu'un poste correspondant sera disponible.`
+          : isGujarati
+          ? `સરસ! મેં "${role}" માટે તમારા જોબ એલર્ટ્સ સેટ કરી દીધા છે. નવી નોકરી ઉપલબ્ધ થતાં જ ${userEmail} પર સૂચના મળશે.`
+          : isHindi
+          ? `बढ़िया! मैंने "${role}" के लिए आपके जॉब अलर्ट सेट कर दिए हैं। नया पद मिलते ही ${userEmail} पर सूचना भेजी जाएगी।`
+          : `I've configured your real-time job alerts for **${role}**! Whenever a matching role opens up, you'll receive direct notifications at **${userEmail}**.`;
+
       return {
-        reply: voiceMode
-          ? `તમારા માટે ${role} નો વિગતવાર કરિયર રોડમેપ તૈયાર છે. તેમાં ઓડિયોબુક ફીચર પણ સામેલ છે જેથી તમે સાંભળી શકો!`
-          : `તમારા **${role}** રોડમેપમાં સ્ટેજ-બાય-સ્ટેજ સ્કિલ્સ, ભલામણ કરેલ પુસ્તકો અને સાંભળવા માટે નવું **Roadmap Audiobook Player** 🎧 ઉપલબ્ધ છે.\n\nશું તમે અત્યારે કરિયર રોડમેપ ખોલવા માંગો છો?`,
-        feature: "roadmap",
-        featureTitle: "Career Roadmap",
+        reply,
+        feature: "local",
+        featureTitle: "Job Alerts Active",
+        toolCall: {
+          tool: "configureJobAlerts",
+          parameters: { email: userEmail, role, frequency: "Immediately" },
+        },
+      };
+    } else {
+      return {
+        reply: "I'd be glad to notify you! What email address should I send your job alerts to?",
       };
     }
+  }
+
+  // ─── F2. Direct Email Input Recognition (e.g. mananshah1127@gmail.com) ───
+  if (lower.includes("@") || lower.includes("gmail") || lower.includes(".com") || lower.includes("at the rate")) {
+    const rawEmail = normalizeSpokenEmail(query);
+    if (rawEmail && rawEmail.includes("@")) {
+      const reply = isFrench
+        ? `J'ai bien enregistré votre adresse e-mail : **${rawEmail}**. Quel poste ou domaine souhaitez-vous explorer ?`
+        : isGujarati
+        ? `મેં તમારું ઈમેઇલ **${rawEmail}** સેવ કરી લીધું છે. તમે કયા રોલ અથવા કરિયર ટ્રેક માટે તૈયારી કરી રહ્યા છો?`
+        : isHindi
+        ? `मैंने आपका ईमेल **${rawEmail}** सहेज लिया है। आप किस पद या रोल के लिए तैयारी कर रहे हैं?`
+        : `I've saved your email as **${rawEmail}**! What target role or career track are you aiming for?`;
+
+      return {
+        reply,
+        toolCall: {
+          tool: "updateUserProfile",
+          parameters: { email: rawEmail },
+        },
+      };
+    }
+  }
+
+  // ─── G. GitHub Repositories & Open Source Projects
+  if (
+    lower.includes("github") ||
+    lower.includes("open source") ||
+    lower.includes("repositories") ||
+    lower.includes("repo")
+  ) {
+    const topic = lower.includes("react") ? "react" : role.toLowerCase();
+    const reply =
+      isFrench
+        ? `Voici les dépôts GitHub open-source les plus populaires pour apprendre et contribuer à ${topic}.`
+        : isGujarati
+        ? `${topic} શીખવા અને કોન્ટ્રીબ્યુટ કરવા માટે અહીં ટ્રેન્ડિંગ GitHub રિપોઝીટરીઝ છે.`
+        : isHindi
+        ? `${topic} सीखने और योगदान करने के लिए यहाँ शीर्ष GitHub रिपॉजिटरी हैं।`
+        : `Here are trending open-source GitHub repositories for **${topic}** with starter-friendly issues and high community activity.`;
+
     return {
-      reply: voiceMode
-        ? `I have your structured Career Roadmap ready for ${role}. It includes step-by-step milestones and an Audiobook feature for listening on the go!`
-        : `Your structured Career Roadmap for **${role}** is organized into progressive milestones with curated books, technical blogs, and our new **Roadmap Audiobook Player** 🎧 for listening aloud.\n\nWould you like to open the Career Roadmap now?`,
-      feature: "roadmap",
-      featureTitle: "Career Roadmap",
+      reply,
+      feature: "courses",
+      featureTitle: "GitHub & Learning Hub",
+      toolCall: { tool: "searchGithub", parameters: { query: topic, topic } },
     };
   }
 
-  // 5. Dynamic Deep Synthesis for Any Arbitrary Query
-  const dynamicWords = query.split(/\s+/).slice(0, 8).join(" ");
-  if (isGujarati) {
+  // ─── H. Courses & Project Recommendations ("How can I learn React?", "Projects")
+  if (
+    lower.includes("course") ||
+    lower.includes("how can i learn") ||
+    lower.includes("learn") ||
+    lower.includes("project") ||
+    lower.includes("tutorial") ||
+    lower.includes("કોર્સ") ||
+    lower.includes("કોડિંગ પ્રોજેક્ટ") ||
+    lower.includes("कोर्स") ||
+    lower.includes("cours")
+  ) {
+    const isProject = lower.includes("project") || lower.includes("પ્રોજેક્ટ") || lower.includes("projet");
+    if (isProject) {
+      const reply =
+        isFrench
+          ? `Pour renforcer vos compétences en ${role}, voici 3 projets concrets recommandés : \n1. **Débutant** : Application Todo accessible\n2. **Intermédiaire** : Dashboard E-Commerce avec métriques\n3. **Avancé** : Portail d'emploi collaboratif en temps réel.`
+          : isGujarati
+          ? `${role} માં કુશળતા મેળવવા માટે અહીં ૩ પ્રોજેક્ટ્સ છે:\n૧. **Beginner**: Accessible Todo App\n૨. **Intermediate**: E-commerce Analytics Dashboard\n૩. **Advanced**: Real-Time Career Portal.`
+          : isHindi
+          ? `${role} के लिए ३ अनुशंसित प्रोजेक्ट्स:\n१. **Beginner**: Todo App\n२. **Intermediate**: E-Commerce Dashboard\n૩. **Advanced**: Real-Time Job Portal.`
+          : `To build practical credibility in **${role}**, here are 3 tiered project recommendations:\n• **Beginner**: *Accessible Task Management System*\n• **Intermediate**: *E-Commerce Analytics & Inventory Dashboard*\n• **Advanced**: *Real-time Collaborative Career Platform with SSR & Redis*\n\nEach project directly proves your ability to build production-grade software!`;
+
+      return {
+        reply,
+        feature: "courses",
+        featureTitle: "Curated Projects",
+        toolCall: { tool: "searchProjects", parameters: { skill: role, difficulty: "All" } },
+      };
+    }
+
+    const reply =
+      isFrench
+        ? `J'ai sélectionné pour vous les meilleurs cours et certifications gratuits et complets pour ${role}. Ouvrons le catalogue de formation !`
+        : isGujarati
+        ? `મેં તમારા માટે ${role} ના શ્રેષ્ઠ અને ફ્રી કોર્સીસ તૈયાર કર્યા છે. ચાલો Course Catalog ખોલીએ!`
+        : isHindi
+        ? `मैंने आपके लिए ${role} के शीर्ष कोर्स और सर्टिफिकेशन चुने हैं। आइए कोर्स कैटलॉग देखें!`
+        : `I've pulled top curated courses and certifications for **${role}**, tailored to fill your skill gaps. Opening the Courses catalog!`;
+
     return {
-      reply: `મેં તમારા પ્રશ્ન "${dynamicWords}" પર વિચાર કર્યો છે, ${userName}.\n\nકરિયર અને ટેકનિકલ સફળતા માટે આ ખૂબ મહત્ત્વનો મુદ્દો છે. ચાલો તમારા ${role} ના લક્ષ્યો અનુસાર આગળનું પગલું લઈએ. તમે ક્યાંથી શરૂઆત કરવા માંગો છો?`,
-      feature: intent.feature || null,
+      reply,
+      feature: "courses",
+      featureTitle: "Curated Courses",
+      toolCall: { tool: "searchCourses", parameters: { topic: role } },
+    };
+  }
+
+  // ─── I. Website Navigation ("Go to my skill analysis", "Open roadmap", "Practice")
+  const intent = parseIntent(query);
+  if (intent.feature) {
+    return {
+      reply: intent.reply,
+      feature: intent.feature,
       resumeTab: intent.resumeTab,
       featureTitle: intent.featureTitle,
+      toolCall: {
+        tool: "navigateTo",
+        parameters: { page: intent.feature, tab: intent.resumeTab },
+      },
+    };
+  }
+
+  // ─── J. Greetings & General Inquiries
+  if (isFrench) {
+    return {
+      reply: `Bonjour ${userName} ! 👋 Je suis votre assistant de carrière et d'accessibilité CareerForge. Je peux vous aider à rédiger ou analyser votre CV, trouver des cours, des projets open-source et des emplois en direct. Comment souhaitez-vous continuer ?`,
+    };
+  }
+
+  if (isGujarati) {
+    return {
+      reply: `નમસ્તે ${userName}! 👋 હું કરિયરફોર્જ AI સહાયક છું. હું તમારા રેઝ્યૂમે નિર્માણ, સ્કિલ ગેપ એનાલિસિસ, કોર્સ, પ્રોજેક્ટ્સ અને જોબ્સ શોધવામાં મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`,
     };
   }
 
   if (isHindi) {
     return {
-      reply: `मैंने आपके सवाल "${dynamicWords}" को समझा, ${userName}।\n\n${role} के करियर में यह एक बेहतरीन पहलू है। आइए हम इसे आपके प्रोजेक्ट्स और इंटरव्यू की तैयारी में शामिल करें। आप आगे क्या एक्सप्लोर करना चाहते हैं?`,
-      feature: intent.feature || null,
-      resumeTab: intent.resumeTab,
-      featureTitle: intent.featureTitle,
+      reply: `नमस्ते ${userName}! 👋 मैं करियरफोर्ज AI सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, कोर्स, प्रोजेक्ट और लाइव नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`,
     };
   }
 
   return {
     reply: voiceMode
-      ? `Great question about "${dynamicWords}", ${userName}! Let's examine how this applies directly to your growth as a ${role}. What specific aspect should we prioritize?`
-      : `That's a thoughtful topic regarding **"${query}"**, ${userName}!\n\nWhen looking at this through the lens of a **${role}**:\n1. **Core Insight**: It directly influences how you architect scalable solutions and position your skills in high-growth environments.\n2. **Actionable Next Step**: We can translate this into concrete technical milestones, refine your resume bullets to showcase related impact, or practice real-world interview scenarios.\n\nWhich direction would you like to take next?`,
-    feature: intent.feature || null,
-    resumeTab: intent.resumeTab,
-    featureTitle: intent.featureTitle,
+      ? `Hello ${userName}! I'm your CareerForge assistant. I can guide you through resume audits, skill gap roadmaps, curated courses, projects, or local jobs. Where shall we begin?`
+      : `Hello ${userName}! 👋 I'm your **CareerForge AI Career & Accessibility Co-Pilot**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Learning**: High-impact courses and portfolio project blueprints\n• **Verified Job Opportunities**: Matching positions and automated email alerts\n• **Accessible Voice Guidance**: Hands-free navigation across the entire platform\n\nWhat would you like to explore today?`,
   };
 }

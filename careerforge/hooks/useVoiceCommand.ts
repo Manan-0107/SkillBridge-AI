@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isAIAudioPlaying } from "@/lib/voice";
 
 // ---------------------------------------------------------------------------
 // Minimal Web Speech API typings (not consistently shipped in lib.dom.d.ts)
@@ -198,6 +199,11 @@ export function useVoiceCommand(
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Ignore microphone input while AI audio or speech synthesis is playing
+      if (isAIAudioPlaying()) {
+        return;
+      }
+
       if (!heardSpeechSinceStartRef.current) {
         onSpeechDetected?.();
       }
