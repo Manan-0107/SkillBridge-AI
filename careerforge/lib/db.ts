@@ -80,6 +80,7 @@ export async function upsertUser(params: {
   name?: string;
   phone?: string;
   picture?: string;
+  avatarUrl?: string;
   authProvider: "email" | "google" | "github" | "phone";
   targetRole?: string | null;
 }): Promise<DbUser | null> {
@@ -91,7 +92,7 @@ export async function upsertUser(params: {
       {
         email: params.email,
         name: params.name ?? null,
-        picture: params.picture ?? null,
+        picture: params.avatarUrl ?? params.picture ?? null,
         auth_provider: params.authProvider,
         target_role: params.targetRole ?? null,
         updated_at: new Date().toISOString(),

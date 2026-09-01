@@ -51,14 +51,14 @@ export function VoiceModeDetector() {
 
     try {
       recognitionRef.current = startSpeechRecognition({
-        onTranscript: (transcript) => {
+        onTranscript: (transcript: string) => {
           if (transcript.trim().length > 0) {
             // VOICE DETECTED!
             setDetectedText(transcript);
             handleVoiceDetected(transcript);
           }
         },
-        onListeningChange: (isList) => setListening(isList),
+        onListeningChange: (isList: boolean) => setListening(isList),
         onError: () => {
           // If silence / error on this attempt, move to next check after brief pause
           scheduleNextAttempt(currentAttempt + 1);

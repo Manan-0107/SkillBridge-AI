@@ -39,6 +39,8 @@ import {
 } from "react";
 import { useVoiceCommand } from "@/hooks/useVoiceCommand";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useApp } from "@/lib/store";
+import { detectTextLanguage, setGlobalVoiceLanguage } from "@/lib/voice";
 
 export const MAX_ACTIVATION_ATTEMPTS = 3;
 
@@ -166,13 +168,23 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
     persistFallback(true);
   }, [persistFallback]);
 
+  const { voiceLanguage, setVoiceLanguage } = useApp();
+
   const voice = useVoiceCommand({
     // Stay enabled through the probe itself, and afterward for as long as
     // we're in voice mode. Once resolved to text mode, disable — the mic
     // should not keep running in the background.
     enabled: isPreferenceLoading || isVoiceMode,
+    lang: voiceLanguage || "en-US",
     onSpeechDetected: resolveAsVoiceMode,
     onFallbackTriggered: resolveAsTextMode,
+    onResult: (spokenText) => {
+      const detected = detectTextLanguage(spokenText);
+      if (detected && detected !== voiceLanguage) {
+        setVoiceLanguage(detected);
+        setGlobalVoiceLanguage(detected);
+      }
+    },
   });
 
   useEffect(() => {

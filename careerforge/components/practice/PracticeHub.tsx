@@ -486,12 +486,12 @@ export function PracticeHub() {
 
     const controller = startSpeechRecognition({
       lang: "en-US",
-      onTranscript: (transcript) => {
+      onTranscript: (transcript: string) => {
         const base = speechBaseTextRef.current;
         const combined = base ? `${base} ${transcript}` : transcript;
         setUserAnswer(combined);
       },
-      onListeningChange: (isList) => setListening(isList),
+      onListeningChange: (isList: boolean) => setListening(isList),
       onError: () => setListening(false),
     });
     speechControllerRef.current = controller;

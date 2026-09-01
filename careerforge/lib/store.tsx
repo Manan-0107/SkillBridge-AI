@@ -19,10 +19,20 @@ interface AppState {
   signInWithPhone: (phone: string, name?: string) => Promise<void>;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
+  // ─── Voice & Accessibility Mode State ──────────────────────────────────────
+  voiceMode: boolean;
+  voiceLanguage: string;
+  voiceChecked: boolean;
+  setVoiceMode: (active: boolean) => void;
+  setVoiceLanguage: (lang: string) => void;
+  setVoiceChecked: (checked: boolean) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
 const STORAGE_KEY = "careerforge.user";
+const VOICE_MODE_KEY = "careerforge.voiceMode";
+const VOICE_LANG_KEY = "careerforge.voiceLang";
+const VOICE_CHECKED_KEY = "careerforge.voiceChecked";
 
 function extractDisplayName(email: string, name?: string): string {
   if (name && name.trim()) return name.trim();
@@ -37,11 +47,23 @@ function extractDisplayName(email: string, name?: string): string {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
+  const [voiceMode, setVoiceModeState] = useState(false);
+  const [voiceLanguage, setVoiceLanguageState] = useState("auto");
+  const [voiceChecked, setVoiceCheckedState] = useState(false);
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) setUser(JSON.parse(raw));
+
+      const vm = window.localStorage.getItem(VOICE_MODE_KEY);
+      if (vm !== null) setVoiceModeState(vm === "true");
+
+      const vl = window.localStorage.getItem(VOICE_LANG_KEY);
+      if (vl) setVoiceLanguageState(vl);
+
+      const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
+      if (vc !== null) setVoiceCheckedState(vc === "true");
     } catch {
       // localStorage unavailable — proceed unauthenticated
     }
@@ -52,6 +74,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(next);
     if (next) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     else window.localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const setVoiceMode = (active: boolean) => {
+    setVoiceModeState(active);
+    try {
+      window.localStorage.setItem(VOICE_MODE_KEY, String(active));
+    } catch {}
+  };
+
+  const setVoiceLanguage = (lang: string) => {
+    setVoiceLanguageState(lang);
+    try {
+      window.localStorage.setItem(VOICE_LANG_KEY, lang);
+    } catch {}
+  };
+
+  const setVoiceChecked = (checked: boolean) => {
+    setVoiceCheckedState(checked);
+    try {
+      window.localStorage.setItem(VOICE_CHECKED_KEY, String(checked));
+    } catch {}
   };
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
@@ -80,7 +123,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(updated);
       }
     } catch (e) {
-      // DB is optional — continue without it
       console.warn("[auth] DB upsert failed:", e);
     }
   };
@@ -199,6 +241,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         signInWithPhone,
         signOut,
         setTargetRole,
+        voiceMode,
+        voiceLanguage,
+        voiceChecked,
+        setVoiceMode,
+        setVoiceLanguage,
+        setVoiceChecked,
       }}
     >
       {children}

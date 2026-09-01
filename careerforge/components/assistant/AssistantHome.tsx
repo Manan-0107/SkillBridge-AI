@@ -52,7 +52,7 @@ export function AssistantHome({
 }: {
   onRedirect: (feature: FeatureId, tab?: ResumeTab) => void;
 }) {
-  const { user, setTargetRole } = useApp();
+  const { user, setTargetRole, voiceMode } = useApp();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -194,7 +194,7 @@ export function AssistantHome({
 
     const controller = startSpeechRecognition({
       lang: voiceLang,
-      onTranscript: (transcript) => {
+      onTranscript: (transcript: string) => {
         if (transcript) {
           const base = speechBaseTextRef.current;
           const combined = base ? `${base} ${transcript}` : transcript;
@@ -203,11 +203,11 @@ export function AssistantHome({
           startSilenceAutoSendCountdown();
         }
       },
-      onListeningChange: (isList) => {
+      onListeningChange: (isList: boolean) => {
         setListening(isList);
         if (!isList) clearSilenceTimers();
       },
-      onError: (err) => {
+      onError: (err: string) => {
         setMicError(err);
         setListening(false);
         clearSilenceTimers();
@@ -515,14 +515,18 @@ export function AssistantHome({
       );
       scrollToBottom();
 
-      if (hasFeature && data.feature) {
+      // Automatically speak the response if in Voice Mode
+      if (voiceMode) {
+        speakText(replyText);
+      }
+
+      setBusy(false);
+      if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
         setRedirectCountdown(3);
         const timer = setTimeout(() => {
           executeRedirect(data.feature, data.resumeTab);
         }, 3200);
         setActiveTimer(timer);
-      } else {
-        setBusy(false);
       }
     } catch (err) {
       console.error("[AssistantHome] LLM call error:", err);

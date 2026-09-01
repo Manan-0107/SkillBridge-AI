@@ -19,7 +19,7 @@ interface SuggestionItem {
 }
 
 export function LocalOpportunities() {
-  const { user } = useApp();
+  const { user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
   const targetRole = user?.targetRole || "frontend";
   const [searchTerm, setSearchTerm] = useState("");
   const [locationInput, setLocationInput] = useState("");

@@ -5,6 +5,7 @@ import { Section } from "@/components/ui/Section";
 import { roadmaps, roleOptions, courseCatalog, roleGitHubProjects } from "@/lib/data";
 import { RoleId, Course, GitHubProject } from "@/lib/types";
 import { Card, Tag } from "@/components/ui/Primitives";
+import { RoadmapAudiobook } from "./RoadmapAudiobook";
 
 // Comprehensive topic research resources (Blogs, Books, Video Playlists)
 interface StepResource {
@@ -497,6 +498,16 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
       title={`Your Path to ${roleLabel}`}
       description="Interactive milestone progression, recommended technical books, architecture guides, and open-source GitHub projects."
     >
+      {/* Accessibility Audiobook Narration Player */}
+      <RoadmapAudiobook
+        role={role}
+        roleLabel={roleLabel}
+        steps={steps}
+        stepResources={stepResourcesByRole[role]}
+        selectedStepIndex={selectedStepIndex ?? 0}
+        onSelectStep={(idx) => setSelectedStepIndex(idx)}
+      />
+
       {/* Overall Progress Tracker Bar */}
       <div className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
