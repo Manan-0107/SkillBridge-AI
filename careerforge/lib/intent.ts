@@ -89,6 +89,11 @@ export function parseIntent(raw: string): ParsedIntent {
       "check resume",
       "audit resume",
       "resume feedback",
+      "skill analysis",
+      "skill gap",
+      "skills analysis",
+      "skills gap",
+      "skill audit",
     ])
   ) {
     return {

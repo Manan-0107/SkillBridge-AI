@@ -52,7 +52,17 @@ export function AssistantHome({
 }: {
   onRedirect: (feature: FeatureId, tab?: ResumeTab) => void;
 }) {
-  const { user, setTargetRole, voiceMode } = useApp();
+  const {
+    user,
+    setTargetRole,
+    voiceMode,
+    setVoiceMode,
+    accessibilityPrefs,
+    setAccessibilityPrefs,
+    currentLocation,
+    userSkills,
+    missingSkills,
+  } = useApp();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -61,6 +71,7 @@ export function AssistantHome({
   const [busy, setBusy] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   const [activeTimer, setActiveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [resumeDraftState, setResumeDraftState] = useState<any>(null);
 
   // Document attachment state
   const [attachedFile, setAttachedFile] = useState<{
@@ -268,16 +279,12 @@ export function AssistantHome({
   };
 
   const getGreetingMessage = (): Msg => {
-    const hour = new Date().getHours();
-    const timeOfDay =
-      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
     return {
       id: "intro-1",
       role: "assistant",
       time: now,
-      text: `${timeOfDay}, ${userDisplayName}! 👋 I'm your CareerForge AI Copilot. You can ask in any language (English, Hindi, Hinglish, Spanish, etc.) and I'll guide you! What would you like to explore today?`,
+      text: `Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type. How would you like to continue?`,
     };
   };
 
@@ -468,13 +475,33 @@ export function AssistantHome({
             name: user?.name,
             email: user?.email,
             targetRole: user?.targetRole || undefined,
+            skills: userSkills,
+            missingSkills,
+            location: currentLocation || undefined,
           },
           targetRole: user?.targetRole || "frontend",
+          voiceMode,
+          currentPage: "assistant",
+          accessibilityPrefs,
+          resumeDraftState,
         }),
       });
 
       if (!res.ok) throw new Error("Chat request failed");
       const data = await res.json();
+
+      if (data.resumeDraftState) {
+        setResumeDraftState(data.resumeDraftState);
+      }
+
+      if (data.toolCall) {
+        if (data.toolCall.tool === "updateAccessibilityPreferences" && data.toolCall.parameters) {
+          setAccessibilityPrefs(data.toolCall.parameters);
+          if (data.toolCall.parameters.interactionMode === "voice") {
+            setVoiceMode(true);
+          }
+        }
+      }
 
       const replyText =
         data.reply ||
@@ -515,8 +542,8 @@ export function AssistantHome({
       );
       scrollToBottom();
 
-      // Automatically speak the response if in Voice Mode
-      if (voiceMode) {
+      // Automatically speak the response if speech output is active
+      if (voiceMode && accessibilityPrefs?.speechOutput !== false) {
         speakText(replyText);
       }
 
@@ -784,14 +811,41 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-8 text-center space-y-3">
+              <div className="mb-8 text-center space-y-4">
                 <h1 className="font-display text-3xl italic text-ink md:text-4xl tracking-tight">
                   {userDisplayName ? `Hello, ${userDisplayName}` : "How can I help you today?"}
                 </h1>
 
                 <p className="mx-auto max-w-md text-xs text-graphite leading-relaxed">
-                  Ask career questions in any language, upload your resume for review, or explore guided tracks below.
+                  I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type.
                 </p>
+
+                {/* Primary Voice vs Text Entry Options */}
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoiceMode(true);
+                      toggleListening();
+                      speakText("Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. How can I help you today?");
+                    }}
+                    className="flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-xs font-semibold shadow-md transition-all cursor-pointer transform hover:-translate-y-0.5"
+                  >
+                    <span className="text-sm">🎙️</span>
+                    <span>Talk to me (Voice)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      textareaRef.current?.focus();
+                    }}
+                    className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-800 px-5 py-2.5 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                  >
+                    <span className="text-sm">⌨️</span>
+                    <span>Type to me (Text)</span>
+                  </button>
+                </div>
               </div>
             )}
 

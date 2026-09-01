@@ -10,6 +10,28 @@ import {
 import { RoleId, User } from "./types";
 import { upsertUser, updateUserRole } from "./db";
 
+export interface AccessibilityPreferences {
+  interactionMode: "voice" | "text" | "hybrid";
+  speechOutput: boolean;
+  visualResponses: boolean;
+  simplifiedLanguage: boolean;
+  screenReaderMode: boolean;
+  highContrast: boolean;
+  largeText: boolean;
+  reducedMotion: boolean;
+}
+
+export const defaultAccessibilityPreferences: AccessibilityPreferences = {
+  interactionMode: "text",
+  speechOutput: true,
+  visualResponses: true,
+  simplifiedLanguage: false,
+  screenReaderMode: false,
+  highContrast: false,
+  largeText: false,
+  reducedMotion: false,
+};
+
 interface AppState {
   user: User | null;
   ready: boolean;
@@ -23,9 +45,20 @@ interface AppState {
   voiceMode: boolean;
   voiceLanguage: string;
   voiceChecked: boolean;
+  accessibilityPrefs: AccessibilityPreferences;
   setVoiceMode: (active: boolean) => void;
   setVoiceLanguage: (lang: string) => void;
   setVoiceChecked: (checked: boolean) => void;
+  setAccessibilityPrefs: (prefs: Partial<AccessibilityPreferences>) => void;
+  // ─── Session State for Agent Intelligence ──────────────────────────────────
+  currentLocation: string | null;
+  setCurrentLocation: (loc: string | null) => void;
+  userSkills: string[];
+  setUserSkills: (skills: string[]) => void;
+  missingSkills: string[];
+  setMissingSkills: (skills: string[]) => void;
+  activeResumeText: string | null;
+  setActiveResumeText: (text: string | null) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -33,6 +66,9 @@ const STORAGE_KEY = "careerforge.user";
 const VOICE_MODE_KEY = "careerforge.voiceMode";
 const VOICE_LANG_KEY = "careerforge.voiceLang";
 const VOICE_CHECKED_KEY = "careerforge.voiceChecked";
+const ACCESS_PREFS_KEY = "careerforge.accessPrefs";
+const USER_SKILLS_KEY = "careerforge.userSkills";
+const LOCATION_KEY = "careerforge.userLocation";
 
 function extractDisplayName(email: string, name?: string): string {
   if (name && name.trim()) return name.trim();
@@ -50,6 +86,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [voiceMode, setVoiceModeState] = useState(false);
   const [voiceLanguage, setVoiceLanguageState] = useState("auto");
   const [voiceChecked, setVoiceCheckedState] = useState(false);
+  const [accessibilityPrefs, setAccessibilityPrefsState] = useState<AccessibilityPreferences>(
+    defaultAccessibilityPreferences
+  );
+  const [currentLocation, setCurrentLocationState] = useState<string | null>(null);
+  const [userSkills, setUserSkillsState] = useState<string[]>([]);
+  const [missingSkills, setMissingSkillsState] = useState<string[]>([]);
+  const [activeResumeText, setActiveResumeTextState] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -64,11 +107,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
       if (vc !== null) setVoiceCheckedState(vc === "true");
+
+      const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
+      if (ap) setAccessibilityPrefsState(JSON.parse(ap));
+
+      const sk = window.localStorage.getItem(USER_SKILLS_KEY);
+      if (sk) setUserSkillsState(JSON.parse(sk));
+
+      const loc = window.localStorage.getItem(LOCATION_KEY);
+      if (loc) setCurrentLocationState(loc);
     } catch {
       // localStorage unavailable — proceed unauthenticated
     }
     setReady(true);
   }, []);
+
+  // Apply visual accessibility preferences to document root
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const root = document.documentElement;
+      if (accessibilityPrefs.highContrast) root.classList.add("high-contrast");
+      else root.classList.remove("high-contrast");
+
+      if (accessibilityPrefs.largeText) root.classList.add("large-text");
+      else root.classList.remove("large-text");
+
+      if (accessibilityPrefs.reducedMotion) root.classList.add("reduced-motion");
+      else root.classList.remove("reduced-motion");
+    }
+  }, [accessibilityPrefs]);
 
   const persist = (next: User | null) => {
     setUser(next);
@@ -78,6 +145,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setVoiceMode = (active: boolean) => {
     setVoiceModeState(active);
+    setAccessibilityPrefsState((prev) => ({
+      ...prev,
+      interactionMode: active ? "voice" : "text",
+      speechOutput: active,
+    }));
     try {
       window.localStorage.setItem(VOICE_MODE_KEY, String(active));
     } catch {}
@@ -95,6 +167,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       window.localStorage.setItem(VOICE_CHECKED_KEY, String(checked));
     } catch {}
+  };
+
+  const setAccessibilityPrefs = (prefs: Partial<AccessibilityPreferences>) => {
+    setAccessibilityPrefsState((prev) => {
+      const next = { ...prev, ...prefs };
+      try {
+        window.localStorage.setItem(ACCESS_PREFS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const setCurrentLocation = (loc: string | null) => {
+    setCurrentLocationState(loc);
+    try {
+      if (loc) window.localStorage.setItem(LOCATION_KEY, loc);
+      else window.localStorage.removeItem(LOCATION_KEY);
+    } catch {}
+  };
+
+  const setUserSkills = (skills: string[]) => {
+    setUserSkillsState(skills);
+    try {
+      window.localStorage.setItem(USER_SKILLS_KEY, JSON.stringify(skills));
+    } catch {}
+  };
+
+  const setMissingSkills = (skills: string[]) => {
+    setMissingSkillsState(skills);
+  };
+
+  const setActiveResumeText = (text: string | null) => {
+    setActiveResumeTextState(text);
   };
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
@@ -244,9 +349,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         voiceMode,
         voiceLanguage,
         voiceChecked,
+        accessibilityPrefs,
         setVoiceMode,
         setVoiceLanguage,
         setVoiceChecked,
+        setAccessibilityPrefs,
+        currentLocation,
+        setCurrentLocation,
+        userSkills,
+        setUserSkills,
+        missingSkills,
+        setMissingSkills,
+        activeResumeText,
+        setActiveResumeText,
       }}
     >
       {children}

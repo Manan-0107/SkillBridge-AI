@@ -18,7 +18,18 @@ import {
 } from "@/lib/voice";
 
 export function GlobalVoiceDictator() {
-  const { user, voiceMode, voiceLanguage, setVoiceMode, setVoiceLanguage } = useApp();
+  const {
+    user,
+    voiceMode,
+    voiceLanguage,
+    setVoiceMode,
+    setVoiceLanguage,
+    accessibilityPrefs,
+    setAccessibilityPrefs,
+    currentLocation,
+    userSkills,
+    missingSkills,
+  } = useApp();
 
   const [active, setActive] = useState(false);
   const [listening, setListening] = useState(false);
@@ -122,23 +133,40 @@ export function GlobalVoiceDictator() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: [{ role: "user", text: userQuestion }],
-            userProfile: { name: user?.name, email: user?.email, targetRole: user?.targetRole || undefined },
+            userProfile: {
+              name: user?.name,
+              email: user?.email,
+              targetRole: user?.targetRole || undefined,
+              skills: userSkills,
+              missingSkills,
+              location: currentLocation || undefined,
+            },
             targetRole: user?.targetRole || "Software Engineer",
             voiceMode: true,
+            accessibilityPrefs,
           }),
         });
         const data = await res.json();
+
+        if (data.toolCall && data.toolCall.tool === "updateAccessibilityPreferences" && data.toolCall.parameters) {
+          setAccessibilityPrefs(data.toolCall.parameters);
+        }
+
         const replyText = data.reply || "";
 
         if (replyText) {
           setAiSpeechPrompt(replyText);
           showStatus(`🤖 ${replyText.slice(0, 50)}...`, 5000);
-          speakText(replyText, {
-            lang: detectedLang,
-            onEnd: () => {
-              setIsAiAnswering(false);
-            },
-          });
+          if (accessibilityPrefs?.speechOutput !== false) {
+            speakText(replyText, {
+              lang: detectedLang,
+              onEnd: () => {
+                setIsAiAnswering(false);
+              },
+            });
+          } else {
+            setIsAiAnswering(false);
+          }
         }
       } catch (err) {
         console.warn("[VoiceAgent] AI query error:", err);
@@ -146,7 +174,7 @@ export function GlobalVoiceDictator() {
         setIsAiAnswering(false);
       }
     },
-    [user, showStatus]
+    [user, userSkills, missingSkills, currentLocation, accessibilityPrefs, setAccessibilityPrefs, showStatus]
   );
 
   // ─── 4. Voice Command Parser & Multilingual Form Filler ─────────────────────

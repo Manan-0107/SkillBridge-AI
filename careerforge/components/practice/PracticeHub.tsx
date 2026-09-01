@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import { useApp } from "@/lib/store";
 import { Section } from "@/components/ui/Section";
 import { Card, PrimaryButton, GhostButton, Tag } from "@/components/ui/Primitives";
 import { startSpeechRecognition, SpeechRecognitionController, speakText, stopSpeaking } from "@/lib/voice";

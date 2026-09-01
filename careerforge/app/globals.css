@@ -152,3 +152,32 @@ body {
     break-after: avoid;
   }
 }
+
+/* =========================================================
+   ACCESSIBILITY UTILITIES
+   ========================================================= */
+html.high-contrast,
+html.high-contrast body {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.high-contrast * {
+  border-color: #FFFFFF !important;
+}
+
+html.high-contrast button,
+html.high-contrast a,
+html.high-contrast input,
+html.high-contrast textarea {
+  outline: 2px solid #FFFF00 !important;
+}
+
+html.large-text {
+  font-size: 20px !important;
+}
+
+html.reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}
