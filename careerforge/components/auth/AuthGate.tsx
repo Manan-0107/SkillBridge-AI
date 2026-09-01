@@ -151,9 +151,8 @@ export function AuthGate() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-6 py-12">
-      <div className="w-full max-w-xl space-y-8">
-        
+    <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-8 sm:px-6 sm:py-12">
+      <div className="w-full max-w-md space-y-6">
         {/* Top Header */}
         <div className="text-center">
           <p className="font-display text-4xl italic text-ink">CareerForge</p>
@@ -162,28 +161,11 @@ export function AuthGate() {
           </p>
         </div>
 
-        {/* ─── Disability Inclusion & Hardship Quote Banner ─────────────────── */}
-        <div className="rounded-2xl border border-line bg-white/80 p-5 shadow-sm backdrop-blur-sm transition-all hover:border-graphite/40">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
-              ♿
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
-              Inclusion &amp; Accessibility Commitment
-            </span>
-          </div>
-          <blockquote className="font-display text-sm italic leading-relaxed text-ink pl-3 border-l-2 border-amber-500 my-2">
-            &ldquo;For most people, technology makes things easier. For persons with disabilities, technology makes things possible. The true hardship is not the limitation itself, but navigating a world designed without you in mind.&rdquo;
-          </blockquote>
-          <p className="text-[11.5px] text-graphite leading-relaxed">
-            Every candidate, regardless of physical or cognitive challenges, deserves frictionless tools, assistive compatibility, and an equal opportunity to build an exceptional career.
-          </p>
-        </div>
-
         {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
           <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
             <button
+              type="button"
               onClick={() => setMode("signup")}
               className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
                 mode === "signup" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
@@ -192,6 +174,7 @@ export function AuthGate() {
               Create account
             </button>
             <button
+              type="button"
               onClick={() => setMode("signin")}
               className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
                 mode === "signin" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
@@ -199,15 +182,6 @@ export function AuthGate() {
             >
               Sign in
             </button>
-          </div>
-
-          {/* Voice Input Assistance Tip for Disabled Users */}
-          <div className="mb-4 flex items-center justify-between rounded-xl bg-indigo-50/70 border border-indigo-200/70 px-3.5 py-2 text-xs text-indigo-900">
-            <div className="flex items-center gap-2">
-              <span className="text-base animate-pulse">🎙️</span>
-              <span><strong>Voice Ready:</strong> Speak into any box or say <em>&quot;email ...&quot;</em> / <em>&quot;submit&quot;</em></span>
-            </div>
-            <span className="text-[10px] font-bold bg-indigo-200/80 px-2 py-0.5 rounded text-indigo-800">Alt+V</span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

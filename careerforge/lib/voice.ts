@@ -190,6 +190,13 @@ export function setNativeInputValue(
   value: string
 ) {
   if (!element) return;
+
+  // Clean value: for single-line inputs (name, email, password, search, etc.), strip trailing speech punctuation (.)
+  let cleanValue = value;
+  if (element instanceof HTMLInputElement || element.tagName.toLowerCase() === "input") {
+    cleanValue = cleanValue.trim().replace(/[.,;?!]+$/, "");
+  }
+
   const prototype =
     element instanceof HTMLTextAreaElement
       ? window.HTMLTextAreaElement.prototype
@@ -198,9 +205,9 @@ export function setNativeInputValue(
   const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
 
   if (valueSetter) {
-    valueSetter.call(element, value);
+    valueSetter.call(element, cleanValue);
   } else {
-    element.value = value;
+    element.value = cleanValue;
   }
 
   element.dispatchEvent(new Event("input", { bubbles: true }));

@@ -233,7 +233,64 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // ── Command 0: Step Rewind / Jump ("go to full name again", "change email", "go to pin again")
+      // ── Command 0A: "Go Back" / "Previous" / "Go to previous section"
+      const isGoBack =
+        lower === "go back" ||
+        lower === "back" ||
+        lower === "previous" ||
+        lower === "previous section" ||
+        lower === "go to previous section" ||
+        lower === "go to previous" ||
+        lower.includes("go back") ||
+        lower.includes("previous section") ||
+        lower === "પાછળ જાઓ" ||
+        lower === "પાછળ" ||
+        lower === "પીછે જાઓ" ||
+        lower === "પીછે" ||
+        lower === "retour";
+
+      if (isGoBack) {
+        playAccessibleChime("navigate");
+
+        // If on AuthGate step:
+        const passInput = document.querySelector<HTMLInputElement>('#auth-password-input');
+        const emailInput = document.querySelector<HTMLInputElement>('#auth-email-input');
+        const nameInput = document.querySelector<HTMLInputElement>('#auth-name-input');
+
+        if (focusedElementRef.current === passInput || pendingFieldTarget === "password") {
+          if (emailInput) {
+            emailInput.focus();
+            focusedElementRef.current = emailInput;
+            setPendingFieldTarget("email");
+            const msg = isGujarati ? "પાછળ ગયા: ઈમેઇલ સરનામું. કૃપા કરીને તમારું ઈમેઇલ બોલો." : isHindi ? "पीछे गए: ईमेल पता। कृपया अपना ईमेल बोलें।" : "Going back to Email Address. Please speak your email address.";
+            setAiSpeechPrompt(msg);
+            speakText(msg, { lang: currentLangRef.current });
+            showStatus(`🎙️ ${msg}`, 3500);
+            return;
+          }
+        } else if (focusedElementRef.current === emailInput || pendingFieldTarget === "email") {
+          if (nameInput) {
+            nameInput.focus();
+            focusedElementRef.current = nameInput;
+            setPendingFieldTarget("name");
+            const msg = isGujarati ? "પાછળ ગયા: પૂરું નામ. કૃપા કરીને તમારું નામ બોલો." : isHindi ? "पीछे गए: पूरा नाम। कृपया अपना नाम बोलें।" : "Going back to Full Name. Please speak your full name.";
+            setAiSpeechPrompt(msg);
+            speakText(msg, { lang: currentLangRef.current });
+            showStatus(`🎙️ ${msg}`, 3500);
+            return;
+          }
+        }
+
+        // If on Workspace -> Navigate back to Assistant
+        window.dispatchEvent(new CustomEvent("careerforge:navigate", { detail: { feature: "assistant" } }));
+        const backMsg = isGujarati ? "પાછળ મુખ્ય પેજ પર આવ્યા." : isHindi ? "पीछे मुख्य पेज पर वापस आए।" : "Navigated back to Assistant.";
+        setAiSpeechPrompt(backMsg);
+        speakText(backMsg, { lang: currentLangRef.current });
+        showStatus(`🚀 ${backMsg}`, 3500);
+        return;
+      }
+
+      // ── Command 0B: Step Rewind / Jump ("go to full name again", "change email", "go to pin again")
       const isJumpName =
         lower.includes("go to full name") ||
         lower.includes("full name section") ||
