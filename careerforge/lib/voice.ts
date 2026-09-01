@@ -424,11 +424,17 @@ export function startSpeechRecognition(
       onListeningChange(true);
     };
 
+    // ── Instant Barge-In / Interruption: cancel AI speech when user speaks ──
+    recognition.onspeechstart = () => {
+      if (isSpeaking()) {
+        stopSpeaking();
+      }
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      // ── Acoustic Echo Cancellation: Discard any mic input while AI is speaking
-      if (isAIAudioPlaying()) {
-        return;
+      if (isSpeaking()) {
+        stopSpeaking();
       }
 
       let interim = "";
