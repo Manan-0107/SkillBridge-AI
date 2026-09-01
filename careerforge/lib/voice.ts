@@ -268,7 +268,7 @@ export function resumeSpeaking() {
 
 export function isSpeaking(): boolean {
   if (!isSpeechSynthesisSupported()) return false;
-  return isSelfSpeaking || window.speechSynthesis.speaking;
+  return isSelfSpeaking || window.speechSynthesis.speaking || Date.now() < speechCooldownUntil;
 }
 
 export function speakText(
@@ -581,6 +581,42 @@ export function normalizeSpokenEmail(raw: string): string {
     .replace(/\.n\s*et/i, ".net");
 
   return text.toLowerCase();
+}
+
+// ─── 6b. Spoken Name Normalization (Resolves phonetic errors like "Sha" -> "Shah") ──
+export function normalizeSpokenName(raw: string): string {
+  if (!raw) return "";
+  let text = raw.trim();
+
+  // Strip conversational prefixes
+  text = text.replace(
+    /^(?:my name is|my name|name is|i am|this is|મારું નામ છે|મારું નામ|નામ છે|નામ|मेरा नाम है|मेरा नाम|नाम है|नाम|je m'appelle|mon nom est|me llamo)\s*/i,
+    ""
+  );
+
+  // Strip conversational suffixes
+  text = text.replace(
+    /\s*(?:is my name|is my full name|છે|હશે|લખી લો|है)$/i,
+    ""
+  );
+
+  // Common phonetic corrections (Sha -> Shah, etc.)
+  text = text
+    .replace(/\bmanan\s+sha\b/gi, "Manan Shah")
+    .replace(/\bmannan\s+sha\b/gi, "Manan Shah")
+    .replace(/\bmananshah\b/gi, "Manan Shah")
+    .replace(/\bmanansha\b/gi, "Manan Shah")
+    .replace(/\bsha\b/gi, "Shah")
+    .replace(/\bpatle\b/gi, "Patel");
+
+  // Strip trailing punctuation
+  text = text.replace(/[.,;?!]+$/, "").trim();
+
+  // Title Case words
+  return text
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 // ─── 7. Live Focused Field Prompt Generator ───────────────────────────────────

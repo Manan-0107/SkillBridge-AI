@@ -17,6 +17,7 @@ import {
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
   normalizeSpokenEmail,
+  normalizeSpokenName,
   getFieldPromptMessage,
 } from "@/lib/voice";
 
@@ -53,6 +54,7 @@ export function GlobalVoiceDictator() {
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialAnnouncedRef = useRef(false);
   const wasActiveBeforeBlurRef = useRef(false);
+  const pendingNameVerificationRef = useRef<string | null>(null);
   const currentLangRef = useRef(voiceLanguage);
   currentLangRef.current = voiceLanguage;
 
@@ -562,30 +564,67 @@ export function GlobalVoiceDictator() {
           target.name?.toLowerCase().includes("pin") ||
           target.id?.toLowerCase().includes("pin");
 
-        if (isNameField) {
-          setNativeInputValue(target, clean);
-          playAccessibleChime("success");
-          showStatus(isGujarati ? `નામ: ${clean}` : `Name: ${clean}`);
+        // If awaiting Name Confirmation:
+        if (pendingNameVerificationRef.current) {
+          const isYes =
+            lower === "yes" ||
+            lower === "correct" ||
+            lower === "yeah" ||
+            lower === "yep" ||
+            lower === "sure" ||
+            lower === "right" ||
+            lower === "ok" ||
+            lower === "okay" ||
+            lower === "હા" ||
+            lower === "સાચું" ||
+            lower === "બરાબર" ||
+            lower === "हाँ" ||
+            lower === "सही" ||
+            lower === "oui";
 
-          // Auto-progress to Email Address!
-          const nextEmail = document.querySelector<HTMLInputElement>(
-            '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
-          );
-          if (nextEmail) {
-            setTimeout(() => {
+          if (isYes) {
+            const confirmedName = pendingNameVerificationRef.current;
+            pendingNameVerificationRef.current = null;
+            playAccessibleChime("success");
+
+            // Advance to Email!
+            const nextEmail = document.querySelector<HTMLInputElement>(
+              '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]'
+            );
+            if (nextEmail) {
               nextEmail.focus();
               focusedElementRef.current = nextEmail;
               setPendingFieldTarget("email");
               const nextMsg = isGujarati
-                ? `નામ ${clean} સેવ થયું. સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.`
+                ? `નામ ${confirmedName} કન્ફર્મ થયું! સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.`
                 : isHindi
-                ? `नाम ${clean} सहेज लिया गया। स्टेप २: कृपया अपना ईमेल पता बोलें।`
-                : `Name recorded as ${clean}. Step 2: Please speak your email address.`;
+                ? `नाम ${confirmedName} की पुष्टि हुई! स्टेप २: कृपया अपना ईमेल पता बोलें।`
+                : `Name confirmed! Step 2 of 3: Please speak your email address.`;
               setAiSpeechPrompt(nextMsg);
               speakText(nextMsg, { lang: currentLangRef.current });
               showStatus(`🎙️ ${nextMsg}`, 4500);
-            }, 500);
+            }
+            return;
           }
+          // If not yes, treat as name correction
+        }
+
+        if (isNameField) {
+          const cleanName = normalizeSpokenName(clean);
+          setNativeInputValue(target, cleanName);
+          pendingNameVerificationRef.current = cleanName;
+          playAccessibleChime("success");
+          showStatus(isGujarati ? `નામ: ${cleanName}` : `Name: ${cleanName}`);
+
+          const verifyMsg = isGujarati
+            ? `મેં તમારું નામ "${cleanName}" નોંધ્યું છે. શું આ સાચું છે? આગળ વધવા માટે 'હા' બોલો અથવા ફરીથી નામ બોલો.`
+            : isHindi
+            ? `मैंने आपका नाम "${cleanName}" दर्ज किया है। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें या दोबारा बोलें।`
+            : `I recorded your name as "${cleanName}". Is that correct? Say 'Yes' to continue or speak your name again.`;
+          
+          setAiSpeechPrompt(verifyMsg);
+          speakText(verifyMsg, { lang: currentLangRef.current });
+          showStatus(`🎙️ ${verifyMsg}`, 5000);
           return;
         }
 
