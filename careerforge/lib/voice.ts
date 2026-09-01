@@ -491,12 +491,24 @@ export function normalizeSpokenEmail(raw: string): string {
   if (!raw) return "";
   let text = raw.trim();
 
-  // Strip conversational prefixes and linking verbs
+  // 1. Direct Regex extraction if standard email format is already present in sentence
+  const directMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (directMatch) {
+    return directMatch[0].toLowerCase();
+  }
+
+  // 2. Strip conversational prefixes and linking verbs
   text = text.replace(
-    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
+    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|if i said|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
     ""
   );
   text = text.replace(/^(?:છે|है|est|is)\s+/i, "");
+
+  // Strip conversational suffixes
+  text = text.replace(
+    /\s*(?:as my email address|as my email id|as my email|is my email address|is my email|is my id|છે|હશે|લખી લો|है)$/i,
+    ""
+  );
 
   // Convert spoken number words to digits
   text = text
