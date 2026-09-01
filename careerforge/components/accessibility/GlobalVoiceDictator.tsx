@@ -13,6 +13,7 @@ import {
   playAccessibleChime,
   speakText,
   stopSpeaking,
+  isSpeaking,
   SUPPORTED_LANGUAGES,
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
@@ -794,7 +795,7 @@ export function GlobalVoiceDictator() {
       }
 
       // ── Standard Action: Type directly into focused element or primary screen input
-      let targetEl = focusedElementRef.current;
+      let targetEl: HTMLInputElement | HTMLTextAreaElement | null = focusedElementRef.current;
       if (!targetEl) {
         const active = document.activeElement;
         if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {

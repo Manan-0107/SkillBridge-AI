@@ -36,6 +36,11 @@ interface RequestBody {
   };
   targetRole?: string;
   voiceMode?: boolean;
+  language?: string;
+  conversationLanguageState?: {
+    detectedLanguage?: string;
+    preferredLanguage?: string;
+  };
   currentPage?: string; // e.g. "assistant", "resume", "roadmap", "courses", "practice", "local"
   currentEntity?: {
     type?: "resume" | "job" | "course" | "roadmap" | "practice";
@@ -46,8 +51,10 @@ interface RequestBody {
   accessibilityPrefs?: {
     interactionMode?: "voice" | "text" | "hybrid";
     speechOutput?: boolean;
+    voiceNavigation?: boolean;
     visualResponses?: boolean;
     simplifiedLanguage?: boolean;
+    captions?: boolean;
     screenReaderMode?: boolean;
     highContrast?: boolean;
     largeText?: boolean;
@@ -541,26 +548,152 @@ function generateCognitiveAgentResponse(
     /[ñáéíóú¿¡]/i.test(query) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
+  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
+  const lastAssistantMsg =
+    messages
+      .slice()
+      .reverse()
+      .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
+
+  if (
+    lower === "voice" ||
+    lower === "voice mode" ||
+    lower === "use voice" ||
+    lower === "speak" ||
+    lower === "voix" ||
+    lower === "અવાજ" ||
+    lower === "आवाज़"
+  ) {
+    const reply = isFrench
+      ? "Super ! Je vais vous guider pas à pas. Vous pouvez parler naturellement et vous pouvez m'interrompre à tout moment. Comment souhaitez-vous que je vous appelle ?"
+      : isGujarati
+      ? "સરસ! હું તમને એક-એક સ્ટેપ દ્વારા માર્ગદર્શન આપીશ. તમે કુદરતી રીતે બોલી શકો છો અને મને ગમે ત્યારે રોકી શકો છો. હું તમને શું કહીને બોલાવું?"
+      : isHindi
+      ? "शानदार! मैं आपको कदम दर कदम गाइड करूँगा। आप स्वाभाविक रूप से बोल सकते हैं और मुझे कभी भी रोक सकते हैं। मैं आपको किस नाम से बुलाऊं?"
+      : "Great! I'll guide you step by step. You can speak naturally, and you can interrupt me anytime. What would you like me to call you?";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { interactionMode: "voice", speechOutput: true },
+      },
+    };
+  }
+
+  // ─── 0b. Voice Onboarding Step 2: Name Response ("My name is Manan")
+  if (
+    (lastAssistantMsg.includes("call you") ||
+      lastAssistantMsg.includes("તમારું નામ") ||
+      lastAssistantMsg.includes("किस नाम") ||
+      lastAssistantMsg.includes("vous appelle")) &&
+    !lower.includes("resume") &&
+    !lower.includes("job")
+  ) {
+    const candidateName = query
+      .replace(/^(?:my name is|i am|call me|je m'appelle|maru naam|mera naam)\s*/i, "")
+      .replace(/[.,;?!]+$/, "")
+      .trim();
+
+    const nameToUse = candidateName || userName || "Candidate";
+    const reply = isFrench
+      ? `Ravi de vous rencontrer, ${nameToUse} ! Quel domaine ou métier vous intéresse ?`
+      : isGujarati
+      ? `તમને મળીને આનંદ થયો, ${nameToUse}! તમે કયા ક્ષેત્ર અથવા કરિયરમાં રસ ધરાવો છો?`
+      : isHindi
+      ? `आपसे मिलकर खुशी हुई, ${nameToUse}! आप किस प्रकार के करियर या पद में रुचि रखते हैं?`
+      : `Nice to meet you, ${nameToUse}. What kind of career are you interested in?`;
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateUserProfile",
+        parameters: { name: nameToUse },
+      },
+    };
+  }
+
+  // ─── 0c. Voice Onboarding Step 3: Career Track Response ("Frontend development")
+  if (
+    lastAssistantMsg.includes("what kind of career") ||
+    lastAssistantMsg.includes("métier vous intéresse") ||
+    lastAssistantMsg.includes("કરિયરમાં રસ") ||
+    lastAssistantMsg.includes("करियर या पद में रुचि")
+  ) {
+    const chosenRole = query.replace(/[.,;?!]+$/, "").trim();
+    const reply = isFrench
+      ? `Parfait pour ${chosenRole} ! Avez-vous déjà un CV, ou souhaitez-vous que je vous aide à en créer un ?`
+      : isGujarati
+      ? `સરસ! ${chosenRole} માટે ઉત્તમ. શું તમારી પાસે પહેલેથી જ રેઝ્યૂમે છે, કે પછી હું તમને નવું બનાવવામાં મદદ કરું?`
+      : isHindi
+      ? `बहुत बढ़िया! ${chosenRole} के लिए शानदार। क्या आपके पास पहले से कोई रेज़्यूमे है, या आप चाहते हैं कि मैं इसे बनाने में मदद करूँ?`
+      : `Great. Do you already have a resume, or would you like me to help you create one?`;
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateUserProfile",
+        parameters: { targetRole: chosenRole },
+      },
+    };
+  }
+
+  // ─── 0d. Natural Accessibility: "I don't want to use the mouse"
+  if (
+    lower.includes("don't want to use the mouse") ||
+    lower.includes("dont want to use the mouse") ||
+    lower.includes("no mouse") ||
+    lower.includes("without mouse") ||
+    lower.includes("hands free") ||
+    lower.includes("hands-free") ||
+    lower.includes("માઉસ નથી વાપરવું") ||
+    lower.includes("माउस का उपयोग नहीं करना") ||
+    lower.includes("pas de souris")
+  ) {
+    const reply = isFrench
+      ? "Absolument. Je vais vous guider sur le site à l'aide de la voix et des raccourcis clavier."
+      : isGujarati
+      ? "ચોક્કસ. હું તમને અવાજ અને કીબોર્ડ નેવિગેશન દ્વારા આખી વેબસાઇટ પર માર્ગદર્શન આપીશ."
+      : isHindi
+      ? "बिल्कुल। मैं आवाज़ और कीबोर्ड नेविगेशन के ज़रिये आपका पूरा मार्गदर्शन करूँगा।"
+      : "Absolutely. I'll guide you through the website using voice and keyboard.";
+
+    return {
+      reply,
+      toolCall: {
+        tool: "updateAccessibilityPreferences",
+        parameters: { voiceNavigation: true, speechOutput: true, interactionMode: "voice" },
+      },
+    };
+  }
+
   // ─── A. Conversational Resume Builder Mode (Active or Triggered)
   const isNoResume =
     lower.includes("don't have a resume") ||
     lower.includes("dont have a resume") ||
     lower.includes("do not have a resume") ||
     lower.includes("no resume") ||
+    lower.includes("don't have one") ||
+    lower.includes("dont have one") ||
     lower.includes("create one from scratch") ||
+    lower.includes("help me build one") ||
+    lower.includes("help me create one") ||
+    lower.includes("નથી") ||
     lower.includes("રેઝ્યૂમે નથી") ||
     lower.includes("रेज़्यूमे नहीं है") ||
-    lower.includes("pas de cv");
+    lower.includes("नहीं है") ||
+    lower.includes("pas de cv") ||
+    lower.includes("n'en ai pas");
 
   if (isNoResume) {
     const prompt =
       isFrench
-        ? "Pas de problème ! Nous allons créer votre CV ensemble, une étape à la fois. Tout d'abord, quel est votre nom complet ?"
+        ? "C'est tout à fait normal. Je vais vous aider à en créer un étape par étape. Tout d'abord, quel est votre nom complet ?"
         : isGujarati
-        ? "કોઈ ચિંતા નથી! ચાલો સાથે મળીને તમારું રેઝ્યૂમે એક-એક પ્રશ્ન દ્વારા બનાવીએ. સૌથી પહેલા, તમારું પૂરું નામ શું છે?"
+        ? "કોઈ ચિંતા નથી! હું તમને રેઝ્યૂમે બનાવવામાં મદદ કરીશ. સૌથી પહેલા, તમારું પૂરું નામ શું છે?"
         : isHindi
-        ? "कोई बात नहीं! आइए हम एक-एक सवाल के साथ आपका रेज़्यूमे बनाना शुरू करें। सबसे पहले, आपका पूरा नाम क्या है?"
-        : "No problem at all! Let's build your resume together step-by-step, one question at a time. First, what is your full name?";
+        ? "कोई बात नहीं! मैं आपको रेज़्यूमे बनाने में पूरी मदद करूँगा। सबसे पहले, आपका पूरा नाम क्या है?"
+        : "That's completely fine. I'll help you build one step-by-step. First, what is your full name?";
 
     return {
       reply: prompt,
