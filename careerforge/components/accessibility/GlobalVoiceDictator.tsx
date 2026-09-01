@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/store";
+import { FeatureId, ResumeTab } from "@/lib/intent";
 import {
   startSpeechRecognition,
   SpeechRecognitionController,
@@ -299,6 +300,80 @@ export function GlobalVoiceDictator() {
         return;
       }
 
+      // ── Command D0: Voice Section Navigation ("go to {section}" / "open {section}" / "go to full section")
+      const isNavResume =
+        lower.includes("go to resume") ||
+        lower.includes("open resume") ||
+        lower.includes("resume section") ||
+        lower.includes("go to full section") ||
+        lower.includes("full section") ||
+        lower.includes("resume studio") ||
+        lower.includes("રેઝ્યૂમે") ||
+        lower.includes("रेज़्यूमे");
+
+      const isNavRoadmap =
+        lower.includes("go to roadmap") ||
+        lower.includes("open roadmap") ||
+        lower.includes("career roadmap") ||
+        lower.includes("રોડમેપ") ||
+        lower.includes("रोडमैप");
+
+      const isNavCourses =
+        lower.includes("go to courses") ||
+        lower.includes("open courses") ||
+        lower.includes("course section") ||
+        lower.includes("કોર્સ") ||
+        lower.includes("कोर्स");
+
+      const isNavPractice =
+        lower.includes("go to practice") ||
+        lower.includes("open practice") ||
+        lower.includes("practice hub") ||
+        lower.includes("પ્રેક્ટિસ") ||
+        lower.includes("प्रैक्टिस");
+
+      const isNavLocal =
+        lower.includes("go to jobs") ||
+        lower.includes("open jobs") ||
+        lower.includes("go to local") ||
+        lower.includes("local opportunities") ||
+        lower.includes("નોકરી") ||
+        lower.includes("नौकरी");
+
+      const isNavAssistant =
+        lower.includes("go to assistant") ||
+        lower.includes("open assistant") ||
+        lower.includes("go to home") ||
+        lower.includes("career assistant") ||
+        lower.includes("સહાયક") ||
+        lower.includes("सहायक");
+
+      if (isNavResume || isNavRoadmap || isNavCourses || isNavPractice || isNavLocal || isNavAssistant) {
+        let dest: FeatureId | "assistant" = "assistant";
+        let title = "Assistant";
+        if (isNavResume) { dest = "resume"; title = "Resume Studio"; }
+        else if (isNavRoadmap) { dest = "roadmap"; title = "Career Roadmap"; }
+        else if (isNavCourses) { dest = "courses"; title = "Courses"; }
+        else if (isNavPractice) { dest = "practice"; title = "Practice Hub"; }
+        else if (isNavLocal) { dest = "local"; title = "Local Jobs"; }
+
+        playAccessibleChime("navigate");
+        window.dispatchEvent(new CustomEvent("careerforge:navigate", { detail: { feature: dest } }));
+        showStatus(`🚀 Navigated to ${title}. Speak now to write or ask questions!`, 4000);
+
+        // After navigation, focus the primary editable input/textarea so subsequent speech is written directly
+        setTimeout(() => {
+          const primaryInput = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            'textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="search"]:not([disabled]), input[type="email"]:not([disabled])'
+          );
+          if (primaryInput) {
+            primaryInput.focus();
+            focusedElementRef.current = primaryInput;
+          }
+        }, 350);
+        return;
+      }
+
       // ── Command D: Scroll Down / Scroll Up (Accessibility aid)
       if (lower.includes("scroll down") || lower.includes("નીચે સ્ક્રોલ") || lower.includes("नीचे स्क्रॉल")) {
         window.scrollBy({ top: 400, behavior: "smooth" });
@@ -533,16 +608,16 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── 6. Auto-Engage Voice Mode if Enabled ───────────────────────────────────
+  // ─── 6. Auto-Start Voice Dictation IMMEDIATELY on Site Open ─────────────────
   useEffect(() => {
-    if (voiceMode && !active && isSpeechRecognitionSupported()) {
+    if (isSpeechRecognitionSupported()) {
       const t = setTimeout(() => {
         startVoiceDictation();
-      }, 1000);
+      }, 300);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode]);
+  }, []);
 
   // ─── 7. Tab-Switch & Minimize Auto-Pause with Direct Question on Return ─────
   useEffect(() => {
@@ -700,11 +775,11 @@ export function GlobalVoiceDictator() {
                 ? "bg-rose-600 text-white shadow-md hover:bg-rose-700 animate-pulse"
                 : "bg-neutral-900 text-white shadow-sm hover:bg-neutral-800"
             }`}
-            title="Toggle Voice Dictation & AI Assistant (Alt + V)"
+            title="Voice Dictation & AI Assistant (Active)"
             aria-pressed={active}
           >
             <span className="text-sm">{active ? "🛑" : "🎙️"}</span>
-            <span>{active ? "Listening (Alt+V)" : "Voice Start"}</span>
+            <span>{active ? "Listening..." : "Voice Start"}</span>
           </button>
 
           {/* Quick Help Button */}
