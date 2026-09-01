@@ -839,7 +839,6 @@ export function GlobalVoiceDictator() {
     const controller = startSpeechRecognition(
       {
         onTranscript: (transcript: string, isFinal?: boolean) => {
-          if (isAIAudioPlaying()) return;
           processSpokenText(transcript, !!isFinal);
         },
         onListeningChange: (isList: boolean) => {
