@@ -106,22 +106,42 @@ export type VoiceState =
   | "ERROR"
   | "FALLBACK_TEXT";
 
-export type ExpectedAnswerType =
-  | "text"
-  | "yes_no"
+export type AnswerType =
+  | "name"
   | "email"
+  | "phone"
+  | "location"
+  | "yes_no"
+  | "job_role"
   | "number"
+  | "date"
+  | "short_text"
+  | "long_text"
   | "choice"
-  | "free_text";
+  | "free_text"
+  | "text";
+
+export type ExpectedAnswerType = AnswerType;
+
+export interface SpeechAnswer {
+  rawTranscript: string;
+  extractedAnswer: string;
+  confidence?: number;
+  answerType?: AnswerType;
+  isValid?: boolean;
+}
 
 export interface QuestionState {
   id: string;
   question: string;
+  answerType?: AnswerType;
   expectedType: ExpectedAnswerType;
   attempts: number;
   maxAttempts: number; // 3
   answered: boolean;
   answer?: unknown;
+  rawTranscript?: string;
+  extractedAnswer?: string;
   validationPrompt?: string;
 }
 

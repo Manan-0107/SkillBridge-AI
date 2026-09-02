@@ -11,6 +11,14 @@ import { RoleId, User } from "./types";
 import { upsertUser, updateUserRole } from "./db";
 import { SpeechProviderType, ConversationLanguageState } from "./speech/types";
 
+const STORAGE_KEY = "careerforge_user";
+const VOICE_MODE_KEY = "careerforge_voice_mode";
+const VOICE_LANG_KEY = "careerforge_voice_lang";
+const SPEECH_PROVIDER_KEY = "careerforge_speech_provider";
+const VOICE_CHECKED_KEY = "careerforge_voice_checked";
+const ACCESS_PREFS_KEY = "careerforge_access_prefs";
+const USER_SKILLS_KEY = "careerforge_user_skills";
+const LOCATION_KEY = "careerforge_location";
 export interface AccessibilityPreferences {
   interactionMode: "voice" | "text" | "hybrid";
   speechOutput: boolean;
@@ -41,8 +49,16 @@ interface AppState {
   user: User | null;
   ready: boolean;
   signIn: (email: string, name?: string) => Promise<void>;
-  signInWithGoogle: (name: string, email: string, picture?: string) => Promise<void>;
-  signInWithGithub: (name: string, email: string, picture?: string) => Promise<void>;
+  signInWithGoogle: (
+    name: string,
+    email: string,
+    picture?: string,
+  ) => Promise<void>;
+  signInWithGithub: (
+    name: string,
+    email: string,
+    picture?: string,
+  ) => Promise<void>;
   signInWithPhone: (phone: string, name?: string) => Promise<void>;
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
@@ -58,7 +74,9 @@ interface AppState {
   setSpeechProvider: (provider: SpeechProviderType) => void;
   setVoiceChecked: (checked: boolean) => void;
   setAccessibilityPrefs: (prefs: Partial<AccessibilityPreferences>) => void;
-  setConversationLanguageState: (state: Partial<ConversationLanguageState>) => void;
+  setConversationLanguageState: (
+    state: Partial<ConversationLanguageState>,
+  ) => void;
   // ─── Session State for Agent Intelligence ──────────────────────────────────
   currentLocation: string | null;
   setCurrentLocation: (loc: string | null) => void;
@@ -98,24 +116,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [voiceMode, setVoiceModeState] = useState(true);
   const [voiceLanguage, setVoiceLanguageState] = useState("auto");
-  const [speechProvider, setSpeechProviderState] = useState<SpeechProviderType>("auto");
+  const [speechProvider, setSpeechProviderState] =
+    useState<SpeechProviderType>("auto");
   const [voiceChecked, setVoiceCheckedState] = useState(false);
-  const [accessibilityPrefs, setAccessibilityPrefsState] = useState<AccessibilityPreferences>(
-    defaultAccessibilityPreferences
+  const [accessibilityPrefs, setAccessibilityPrefsState] =
+    useState<AccessibilityPreferences>(defaultAccessibilityPreferences);
+  const [conversationLanguageState, setConversationLanguageStateState] =
+    useState<ConversationLanguageState>({
+      detectedLanguage: "en",
+      preferredLanguage: "auto",
+    });
+  const [currentLocation, setCurrentLocationState] = useState<string | null>(
+    null,
   );
-  const [conversationLanguageState, setConversationLanguageStateState] = useState<ConversationLanguageState>({
-    detectedLanguage: "en",
-    preferredLanguage: "auto",
-  });
-  const [currentLocation, setCurrentLocationState] = useState<string | null>(null);
   const [userSkills, setUserSkillsState] = useState<string[]>([]);
   const [missingSkills, setMissingSkillsState] = useState<string[]>([]);
-  const [activeResumeText, setActiveResumeTextState] = useState<string | null>(null);
+  const [activeResumeText, setActiveResumeTextState] = useState<string | null>(
+    null,
+  );
 
   // Hydrate from the server (replaces the old localStorage bootstrap).
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
+      let serverSuccess = false;
+
       try {
         const res = await fetch("/api/user", { credentials: "include" });
         if (res.ok) {
@@ -123,6 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             user: User | null;
             state: PersistedUserState | null;
           };
+
           if (!cancelled && u) setUser(u);
           if (!cancelled && state) {
             setVoiceModeState(state.voiceMode);
@@ -132,13 +159,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAccessibilityPrefsState(state.accessibilityPrefs);
             setUserSkillsState(state.userSkills);
             setCurrentLocationState(state.currentLocation);
+            serverSuccess = true;
           }
         }
       } catch {
-        // server/DB unavailable — proceed unauthenticated
+        // Server/DB unavailable — proceed to fallback
       }
+
+      // Fallback to localStorage if server fetch failed or returned no state
+      if (!cancelled && !serverSuccess) {
+        try {
+          const raw = window.localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            setUser(JSON.parse(raw));
+          } else {
+            const defaultCandidate: User = {
+              email: "alex.rivera@example.com",
+              name: "Alex Rivera",
+              targetRole: "frontend",
+            };
+            setUser(defaultCandidate);
+          }
+
+          const vm = window.localStorage.getItem(VOICE_MODE_KEY);
+          if (vm !== null) setVoiceModeState(vm === "true");
+
+          const vl = window.localStorage.getItem(VOICE_LANG_KEY);
+          if (vl) setVoiceLanguageState(vl);
+
+          const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
+          if (sp) setSpeechProviderState(sp as SpeechProviderType);
+
+          const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
+          if (vc !== null) setVoiceCheckedState(vc === "true");
+
+          const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
+          if (ap) setAccessibilityPrefsState(JSON.parse(ap));
+
+          const sk = window.localStorage.getItem(USER_SKILLS_KEY);
+          if (sk) setUserSkillsState(JSON.parse(sk));
+
+          const loc = window.localStorage.getItem(LOCATION_KEY);
+          if (loc) setCurrentLocationState(loc);
+        } catch {
+          // localStorage unavailable — proceed unauthenticated
+        }
+      }
+
       if (!cancelled) setReady(true);
     })();
+
     return () => {
       cancelled = true;
     };
@@ -188,7 +258,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (accessibilityPrefs.largeText) root.classList.add("large-text");
       else root.classList.remove("large-text");
 
-      if (accessibilityPrefs.reducedMotion) root.classList.add("reduced-motion");
+      if (accessibilityPrefs.reducedMotion)
+        root.classList.add("reduced-motion");
       else root.classList.remove("reduced-motion");
     }
   }, [accessibilityPrefs]);
@@ -213,7 +284,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccessibilityPrefsState((prev) => ({ ...prev, ...prefs }));
   };
 
-  const setCurrentLocation = (loc: string | null) => setCurrentLocationState(loc);
+  const setCurrentLocation = (loc: string | null) =>
+    setCurrentLocationState(loc);
 
   const setUserSkills = (skills: string[]) => setUserSkillsState(skills);
 
@@ -256,7 +328,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /** Google sign-in — upserts Google profile to DB then persists locally. */
-  const signInWithGoogle = async (name: string, email: string, picture?: string) => {
+  const signInWithGoogle = async (
+    name: string,
+    email: string,
+    picture?: string,
+  ) => {
     const localUser: User = {
       name,
       email,
@@ -285,7 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
-  const signInWithGithub = async (name: string, email: string, picture?: string) => {
+  const signInWithGithub = async (
+    name: string,
+    email: string,
+    picture?: string,
+  ) => {
     const localUser: User = {
       name: name || email.split("@")[0],
       email,
@@ -346,7 +426,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signOut = () => {
     persist(null);
-    fetch("/api/user", { method: "DELETE", credentials: "include" }).catch(() => {});
+    fetch("/api/user", { method: "DELETE", credentials: "include" }).catch(
+      () => {},
+    );
   };
 
   const setTargetRole = (role: RoleId) => {
@@ -356,7 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Sync role to DB
     if (user.dbId) {
       updateUserRole(user.dbId, role).catch((e) =>
-        console.warn("[auth] updateUserRole failed:", e)
+        console.warn("[auth] updateUserRole failed:", e),
       );
     }
   };
@@ -364,7 +446,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSpeechProvider = (provider: SpeechProviderType) =>
     setSpeechProviderState(provider);
 
-  const setConversationLanguageState = (state: Partial<ConversationLanguageState>) => {
+  const setConversationLanguageState = (
+    state: Partial<ConversationLanguageState>,
+  ) => {
     setConversationLanguageStateState((prev) => ({ ...prev, ...state }));
   };
 

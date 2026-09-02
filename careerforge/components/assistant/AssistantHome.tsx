@@ -13,12 +13,13 @@ import {
   detectTextLanguage,
 } from "@/lib/voice";
 import { LANGUAGE_LIST, getSupportedLanguage } from "@/lib/speech/languages";
-import { SpeechProviderType, QuestionState, ExpectedAnswerType, VoiceState } from "@/lib/speech/types";
+import { SpeechProviderType, QuestionState, ExpectedAnswerType, VoiceState, AnswerType } from "@/lib/speech/types";
 import {
   validateUserAnswer,
   getQuestionRetryPrompt,
   getFallbackMessage,
 } from "@/lib/speech/questionFlow";
+import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 
@@ -200,29 +201,53 @@ export function AssistantHome({
   }, [clearSilenceTimers]);
 
   const startListening = useCallback(() => {
+    if (isAISpeakingRef.current || speakingMsgId || textFallbackActive) {
+      console.warn("[Voice Guard] Cannot start listening while AI is speaking or in text fallback mode.");
+      return;
+    }
+
     setMicError(null);
     clearSilenceTimers();
-    speechBaseTextRef.current = inputRef.current.trim();
 
     const controller = startSpeechRecognition({
-      lang: voiceLang !== "auto" ? voiceLang : "en-US",
-      onTranscript: (transcript: string) => {
+      lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      onTranscript: (transcript: string, isFinal?: boolean) => {
         if (transcript) {
-          let processed = transcript;
-          if (
-            transcript.includes("@") ||
-            transcript.toLowerCase().includes("at the rate") ||
-            transcript.toLowerCase().includes("at rate") ||
-            transcript.toLowerCase().includes("gmail") ||
-            transcript.toLowerCase().includes(".com")
-          ) {
-            processed = normalizeSpokenEmail(transcript);
+          // Detect spoken language if auto mode is enabled
+          const detected = detectTextLanguage(transcript);
+          if (detected && voiceLanguage === "auto" && detected !== voiceLang) {
+            setVoiceLang(detected);
           }
-          const base = speechBaseTextRef.current;
-          const combined = base ? `${base} ${processed}` : processed;
-          setInput(combined);
-          inputRef.current = combined;
-          startSilenceAutoSendCountdown();
+
+          // ── Verbal Barge-In Interruption Check ──
+          const lower = transcript.toLowerCase().trim();
+          if (
+            lower === "stop" ||
+            lower === "wait" ||
+            lower === "pause" ||
+            lower === "રોકો" ||
+            lower === "रुको" ||
+            lower === "arrête"
+          ) {
+            stopAllVoice();
+            return;
+          }
+
+          // ── Extract the Actual Clean Answer based on Question Type ──
+          const currentQ = activeQuestionRef.current;
+          const targetType = currentQ?.answerType || currentQ?.expectedType || "free_text";
+          const langForExtraction = voiceLanguage !== "auto" ? voiceLanguage : detected || "en";
+
+          const extraction = extractAnswerFromTranscript(transcript, targetType, langForExtraction);
+          const cleanAnswer = extraction.extractedAnswer || transcript.trim();
+
+          // ── Put ONLY the Extracted Clean Answer into Existing Input Box ──
+          setInput(cleanAnswer);
+          inputRef.current = cleanAnswer;
+
+          if (isFinal) {
+            startSilenceAutoSendCountdown();
+          }
         }
       },
       onListeningChange: (isList: boolean) => {
@@ -237,7 +262,7 @@ export function AssistantHome({
     });
 
     speechControllerRef.current = controller;
-  }, [clearSilenceTimers, startSilenceAutoSendCountdown, voiceLang]);
+  }, [clearSilenceTimers, speakingMsgId, startSilenceAutoSendCountdown, textFallbackActive, voiceLang, voiceLanguage]);
 
   const toggleListening = useCallback(() => {
     if (listening) {
@@ -664,61 +689,46 @@ export function AssistantHome({
         activeQuestionRef.current = { ...currentQ };
 
         if (currentQ.id === "onboarding_name") {
-          setActiveQuestion({
+          const nextQ: QuestionState = {
             id: "onboarding_career",
             question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
-            expectedType: "free_text",
-            attempts: 0,
-            maxAttempts: 3,
-            answered: false,
-          });
-          activeQuestionRef.current = {
-            id: "onboarding_career",
-            question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
-            expectedType: "free_text",
+            answerType: "job_role",
+            expectedType: "job_role",
             attempts: 0,
             maxAttempts: 3,
             answered: false,
           };
+          setActiveQuestion(nextQ);
+          activeQuestionRef.current = nextQ;
         } else if (currentQ.id === "onboarding_career") {
           setTargetRole(valResult.value);
-          setActiveQuestion({
+          const nextQ: QuestionState = {
             id: "onboarding_has_resume",
             question: "Do you already have a resume?",
-            expectedType: "yes_no",
-            attempts: 0,
-            maxAttempts: 3,
-            answered: false,
-          });
-          activeQuestionRef.current = {
-            id: "onboarding_has_resume",
-            question: "Do you already have a resume?",
+            answerType: "yes_no",
             expectedType: "yes_no",
             attempts: 0,
             maxAttempts: 3,
             answered: false,
           };
+          setActiveQuestion(nextQ);
+          activeQuestionRef.current = nextQ;
         } else if (currentQ.id === "onboarding_has_resume") {
           if (valResult.value === true) {
             setActiveQuestion(null);
             activeQuestionRef.current = null;
           } else {
-            setActiveQuestion({
+            const nextQ: QuestionState = {
               id: "resume_step_1",
               question: "Let's build your resume together! What is your full name?",
-              expectedType: "text",
-              attempts: 0,
-              maxAttempts: 3,
-              answered: false,
-            });
-            activeQuestionRef.current = {
-              id: "resume_step_1",
-              question: "Let's build your resume together! What is your full name?",
-              expectedType: "text",
+              answerType: "name",
+              expectedType: "name",
               attempts: 0,
               maxAttempts: 3,
               answered: false,
             };
+            setActiveQuestion(nextQ);
+            activeQuestionRef.current = nextQ;
           }
         }
       }
@@ -1264,7 +1274,8 @@ export function AssistantHome({
                       const initialQ: QuestionState = {
                         id: "onboarding_name",
                         question: "Hi! I'm your career assistant. What would you like me to call you?",
-                        expectedType: "text",
+                        answerType: "name",
+                        expectedType: "name",
                         attempts: 0,
                         maxAttempts: 3,
                         answered: false,
