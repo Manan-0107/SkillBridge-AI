@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useRef, ChangeEvent, DragEvent } from "react";
-import { useApp } from "@/lib/store";
-import { RoleId, EnhancedAnalysis } from "@/lib/types";
-import { Card, PrimaryButton, GhostButton } from "@/components/ui/Primitives";
+import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { RoleId, ResumeAnalysis, EnhancedAnalysis } from "@/lib/types";
 
 const sampleResumeTexts: Record<RoleId, string> = {
   frontend: `ALEX RIVERA
@@ -125,28 +123,22 @@ B.S. in Computer Information Systems — UIUC (2016 – 2020)
 Core Skills: AWS, Docker, Kubernetes, Terraform, CI/CD, GitHub Actions, Linux/Bash, Python, Prometheus, Grafana, Ansible.`,
 };
 
+function verdict(score: number) {
+  if (score >= 80) return "STRONG MATCH";
+  if (score >= 60) return "MODERATE MATCH";
+  return "NEEDS WORK";
+}
+
 export function Analyzer({ role }: { role: RoleId }) {
-  const { user } = useApp();
   const [text, setText] = useState("");
-  const [result, setResult] = useState<EnhancedAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadingStage, setLoadingStage] = useState("");
-  const [inputMode, setInputMode] = useState<"upload" | "paste">("upload");
-  const [uploadedFile, setUploadedFile] = useState<{
-    name: string;
-    size: number;
-    type: string;
-  } | null>(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [openRoadmapIdx, setOpenRoadmapIdx] = useState<number | null>(null);
+  const [result, setResult] = useState<ResumeAnalysis | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFile = async (file: File) => {
-    setUploadedFile({
-      name: file.name,
-      size: file.size,
-      type: file.type || file.name.split(".").pop() || "document",
-    });
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     const isText =
       file.type.includes("text") ||
@@ -154,564 +146,170 @@ export function Analyzer({ role }: { role: RoleId }) {
       file.name.endsWith(".md");
 
     if (isText) {
-      const reader = new FileReader();
-      reader.onload = (e) => setText((e.target?.result as string) || "");
-      reader.readAsText(file);
-    } else {
-      // PDF / DOCX → server-side extraction
-      try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
-        const data = await res.json();
-        if (data.text) {
-          setText(data.text);
-        } else {
-          // Fallback: load sample for the role so analysis can still run
-          setText(`Uploaded: ${file.name}\nRole: ${role}\n\n${sampleResumeTexts[role] ?? ""}`);
-        }
-      } catch {
-        setText(`Uploaded: ${file.name}\nRole: ${role}\n\n${sampleResumeTexts[role] ?? ""}`);
-      }
+      setText(await file.text());
+      return;
     }
-  };
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    // PDF / DOCX → server-side extraction, fall back to role sample
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
+      const data = await res.json();
+      setText(data.text || sampleResumeTexts[role] || "");
+    } catch {
+      setText(sampleResumeTexts[role] || "");
     }
-  };
-
-  const handleDrag = (e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const removeFile = () => {
-    setUploadedFile(null);
-    setText("");
-    setResult(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const loadSample = () => {
-    const sample = sampleResumeTexts[role] || sampleResumeTexts.frontend;
-    setText(sample);
-    setUploadedFile({
-      name: `${role}_sample_resume.pdf`,
-      size: 48200,
-      type: "application/pdf",
-    });
   };
 
   const run = async () => {
-    if (!text.trim()) return;
-    setLoading(true);
-    setResult(null);
-
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError(null);
     try {
-      // Stage 1: Analyze
-      setLoadingStage("Running 3-engine analysis…");
-      const analyzeRes = await fetch("/api/resume/analyze", {
+      const res = await fetch("/api/resume/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeText: text, role }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Analysis failed (${res.status})`);
 
-      if (!analyzeRes.ok) throw new Error("Analysis failed");
-      const analysis: EnhancedAnalysis = await analyzeRes.json();
-
-      // Stage 2: Save to DB (if user is logged in)
-      if (user?.dbId) {
-        setLoadingStage("Saving to your account…");
-        try {
-          const saveRes = await fetch("/api/resume/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: user.dbId,
-              filename: uploadedFile?.name ?? "pasted_resume",
-              resumeText: text,
-              targetRole: role,
-              analysisResult: analysis,
-            }),
-          });
-          const saveData = await saveRes.json();
-          if (saveData.uploadId) {
-            analysis.savedToDb = true;
-            analysis.uploadId = saveData.uploadId;
-          }
-        } catch {
-          // Save failure is non-fatal
-        }
-      }
-
-      setResult(analysis);
-    } catch (err) {
-      console.error("[Analyzer] run error:", err);
+      const enhanced = data as EnhancedAnalysis;
+      setResult({
+        score: enhanced.overallScore,
+        matchedSkills: enhanced.matchedSkills,
+        missingSkills: enhanced.missingSkills,
+        suggestions: enhanced.engines.ai.available
+          ? enhanced.suggestions
+          : ["AI scoring unavailable — showing keyword-overlap heuristic only. Set GEMINI_API_KEY or GITHUB_TOKEN for full analysis.", ...enhanced.suggestions],
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
-      setLoading(false);
-      setLoadingStage("");
+      setBusy(false);
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  // Voice command "analyze" (see context/VoiceContext.tsx) triggers a run once
+  // this tab is mounted. No-ops on empty text, same as the button.
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    const onAction = (e: Event) => {
+      if ((e as CustomEvent).detail?.action === "analyze") runRef.current();
+    };
+    window.addEventListener("careerforge:action", onAction);
+    return () => window.removeEventListener("careerforge:action", onAction);
+  }, []);
 
   return (
-    <div className="space-y-6">
-      {/* Top Action Bar: Upload vs Paste and Sample Loader */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-        <div className="flex rounded-lg border border-line bg-white/60 p-1">
+    <div className="grid grid-cols-1 border border-black lg:grid-cols-2">
+      {/* ── Left: raw resume input ─────────────────────────────── */}
+      <div className="border-b border-black p-8 lg:border-b-0 lg:border-r">
+        <p className="mb-6 text-xs font-black uppercase tracking-widest">
+          Resume Text · {role} track
+        </p>
+
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={18}
+          placeholder="Paste your full resume text here — summary, experience, skills, education."
+          className="w-full resize-y rounded-none border border-black bg-white p-4 font-mono text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+        />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt,.md,.rtf"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        <div className="mt-6 flex flex-wrap gap-4 text-xs font-black uppercase tracking-widest">
           <button
             type="button"
-            onClick={() => setInputMode("upload")}
-            className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
-              inputMode === "upload"
-                ? "bg-ink text-paper shadow-sm"
-                : "text-graphite hover:text-ink"
-            }`}
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-none border border-black px-6 py-3 hover:bg-zinc-900 hover:text-white"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            <span>Upload File</span>
+            Upload File
           </button>
           <button
             type="button"
-            onClick={() => setInputMode("paste")}
-            className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
-              inputMode === "paste"
-                ? "bg-ink text-paper shadow-sm"
-                : "text-graphite hover:text-ink"
-            }`}
+            onClick={() => setText(sampleResumeTexts[role] || "")}
+            className="rounded-none border border-black px-6 py-3 hover:bg-zinc-900 hover:text-white"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <span>Paste Text</span>
+            Load Sample
+          </button>
+          <button
+            type="button"
+            onClick={run}
+            disabled={!text.trim() || busy}
+            className="rounded-none bg-zinc-900 px-6 py-3 text-white hover:bg-black disabled:opacity-30"
+          >
+            {busy ? "Analyzing…" : "Analyze"}
           </button>
         </div>
-
-        <GhostButton type="button" onClick={loadSample} className="text-xs gap-1.5 bg-white/80">
-          <svg className="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <span>Load Sample {role.toUpperCase()} Resume</span>
-        </GhostButton>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left Column: Input Form / Upload Zone */}
-        <div className="space-y-4">
-          {inputMode === "upload" ? (
-            <div className="space-y-3">
-              {/* Hidden File Input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.doc,.txt,.md,.rtf"
-                onChange={handleFileChange}
-                className="hidden"
-                id="resume-file-upload"
-              />
-
-              {!uploadedFile ? (
-                /* Drag & Drop Zone */
-                <div
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-all ${
-                    dragActive
-                      ? "border-ink bg-ink/5"
-                      : "border-line bg-white/60 hover:border-ink/50 hover:bg-white"
-                  }`}
-                >
-                  <div className="rounded-full bg-neutral-100 p-3 text-ink mb-3 shadow-sm">
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-semibold text-ink">
-                    Click to upload or drag &amp; drop your resume
-                  </p>
-                  <p className="mt-1 text-xs text-graphite">
-                    Supports PDF, DOCX, DOC, TXT, and Markdown (Max 10MB)
-                  </p>
-
-                  <button
-                    type="button"
-                    className="mt-4 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-paper shadow-sm hover:bg-neutral-800 transition-colors"
-                  >
-                    Select Resume File
-                  </button>
-                </div>
-              ) : (
-                /* Uploaded File Card */
-                <div className="rounded-xl border border-line bg-white p-4 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-red-50 p-2.5 text-red-600 font-bold text-xs uppercase">
-                        {uploadedFile.name.split(".").pop() || "PDF"}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-ink truncate max-w-[220px] sm:max-w-xs">
-                          {uploadedFile.name}
-                        </p>
-                        <p className="text-xs text-graphite">
-                          {formatFileSize(uploadedFile.size)} &bull; Ready to audit
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-xs font-medium text-blue-600 hover:underline"
-                      >
-                        Replace
-                      </button>
-                      <button
-                        type="button"
-                        onClick={removeFile}
-                        className="rounded p-1 text-graphite hover:bg-neutral-100 hover:text-red-600 transition-colors"
-                        title="Remove file"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Text preview accordion */}
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-graphite">
-                      Parsed Content Preview
-                    </label>
-                    <textarea
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      rows={6}
-                      className="mt-1 w-full rounded-lg border border-line bg-neutral-50 p-3 text-xs text-ink font-mono focus:border-ink focus:bg-white"
-                      placeholder="Extracted resume text..."
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Paste Raw Text */
+      {/* ── Right: match score ─────────────────────────────────── */}
+      <div className="p-8">
+        {error ? (
+          <p className="border-l-2 border-black pl-4 text-sm leading-relaxed text-red-700">
+            {error}
+          </p>
+        ) : !result ? (
+          <p className="text-xs font-black uppercase tracking-widest text-zinc-400">
+            {busy ? "Analyzing…" : "No analysis yet"}
+          </p>
+        ) : (
+          <div className="space-y-8">
             <div>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={12}
-                placeholder="Paste your full resume text here (experience, skills, education, summary)..."
-                className="w-full rounded-xl border border-line bg-white p-4 text-sm text-ink placeholder:text-graphite/60 focus:border-ink shadow-sm"
-              />
-            </div>
-          )}
-
-          {/* Action Analyze Button */}
-          <div className="flex items-center gap-3">
-            <PrimaryButton
-              onClick={run}
-              disabled={loading || !text.trim()}
-              className="flex-1 py-3 justify-center gap-2 text-sm shadow-sm"
-            >
-              {loading ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span>{loadingStage || "Running Analysis…"}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Audit Resume for {role.toUpperCase()}</span>
-                </>
-              )}
-            </PrimaryButton>
-
-            {text && (
-              <GhostButton
-                type="button"
-                onClick={() => {
-                  setText("");
-                  setUploadedFile(null);
-                  setResult(null);
-                }}
-                className="text-xs"
-              >
-                Clear
-              </GhostButton>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: ATS Analysis Results */}
-        <Card className="min-h-[420px] bg-white">
-          {!result ? (
-            <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center p-6">
-              <div className="rounded-full bg-neutral-100 p-4 text-graphite mb-3">
-                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-ink">No Analysis Generated Yet</h3>
-              <p className="mt-1 max-w-xs text-xs text-graphite leading-relaxed">
-                Upload a resume file or click &ldquo;Load Sample Resume&rdquo; to benchmark your skills, keyword match, and ATS compatibility.
+              <p className="mb-2 text-xs font-black uppercase tracking-widest">
+                Match Score
               </p>
-              {!user && (
-                <p className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-                  Sign in to save your analysis history
-                </p>
-              )}
+              <p className="text-6xl font-black leading-none tabular-nums">
+                {result.score}
+                <span className="text-2xl text-zinc-400">/100</span>
+              </p>
+              <p className="mt-2 text-xs font-black uppercase tracking-widest">
+                {verdict(result.score)}
+              </p>
             </div>
-          ) : (
-            <div className="space-y-5">
 
-              {/* ── Score Header ─────────────────────────────────────── */}
-              <div className="flex items-center justify-between border-b border-line pb-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                    Overall ATS Score
-                  </p>
-                  <p className="text-sm font-medium text-ink capitalize">
-                    {role} Track · {result.engines.ai.available ? "3 engines" : result.engines.github.available ? "2 engines" : "1 engine"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-display text-4xl italic text-ink font-bold">
-                      {result.overallScore}
-                    </span>
-                    <span className="text-sm text-graphite">/100</span>
-                  </div>
-                  <span
-                    className={`inline-block rounded px-2 py-0.5 text-[11px] font-semibold ${
-                      result.overallScore >= 80
-                        ? "bg-emerald-100 text-emerald-800"
-                        : result.overallScore >= 60
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {result.overallScore >= 80
-                      ? "Strong Match"
-                      : result.overallScore >= 60
-                      ? "Moderate Match"
-                      : "Needs Enhancement"}
-                  </span>
-                </div>
-              </div>
-
-              {/* ── Engine Badges ─────────────────────────────────────── */}
-              <div>
-                <p className="text-xs uppercase tracking-wide text-graphite font-semibold mb-2">Analysis Engines</p>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { e: result.engines.heuristic, color: "blue" },
-                    { e: result.engines.github, color: "purple" },
-                    { e: result.engines.ai, color: "emerald" },
-                  ] as const).map(({ e, color }) => (
-                    <div
-                      key={e.name}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
-                        e.available
-                          ? color === "blue"
-                            ? "border-blue-200 bg-blue-50"
-                            : color === "purple"
-                            ? "border-purple-200 bg-purple-50"
-                            : "border-emerald-200 bg-emerald-50"
-                          : "border-neutral-200 bg-neutral-50 opacity-50"
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          e.available
-                            ? color === "blue" ? "bg-blue-500" : color === "purple" ? "bg-purple-500" : "bg-emerald-500"
-                            : "bg-neutral-300"
-                        }`}
-                      />
-                      <span className="font-medium text-ink">{e.name}</span>
-                      {e.available ? (
-                        <span className="font-bold">{e.score}/100</span>
-                      ) : (
-                        <span className="text-graphite">N/A</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {result.savedToDb && (
-                  <p className="mt-2 text-[11px] text-emerald-700 flex items-center gap-1">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Analysis saved to your account
-                  </p>
-                )}
-              </div>
-
-              {/* ── Covered Skills ────────────────────────────────────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                    Detected Skills ({result.matchedSkills.length})
-                  </p>
-                  <span className="text-[11px] text-emerald-700 font-medium">✓ ATS Verified</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.matchedSkills.length ? (
-                    result.matchedSkills.map((s) => (
-                      <span
-                        key={s}
-                        className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-800"
-                      >
-                        ✓ {s}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-graphite">None detected yet.</span>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Missing Skills ────────────────────────────────────── */}
-              {result.missingSkills.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs uppercase tracking-wide text-graphite font-semibold">
-                      High-Demand Gaps ({result.missingSkills.length})
-                    </p>
-                    <span className="text-[11px] text-amber-700 font-medium">Recommended to Add</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {result.missingSkills.map((s) => (
-                      <span
-                        key={s}
-                        className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-800"
-                      >
-                        + {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Skill Gap Roadmap ─────────────────────────────────── */}
-              {result.skillGapRoadmap.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs uppercase tracking-wide text-graphite font-semibold">
-                    Personalised Skill Gap Roadmap
-                  </p>
-                  <div className="space-y-2">
-                    {result.skillGapRoadmap.map((item, idx) => (
-                      <div
-                        key={item.skill}
-                        className="rounded-lg border border-line overflow-hidden"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setOpenRoadmapIdx(openRoadmapIdx === idx ? null : idx)}
-                          className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-neutral-50 transition-colors"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className={`text-[10px] font-bold uppercase rounded px-1.5 py-0.5 ${
-                                item.priority === "high"
-                                  ? "bg-red-100 text-red-700"
-                                  : item.priority === "medium"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-neutral-100 text-neutral-600"
-                              }`}
-                            >
-                              {item.priority}
-                            </span>
-                            <span className="text-xs font-semibold text-ink">{item.skill}</span>
-                          </div>
-                          <svg
-                            className={`w-3.5 h-3.5 text-graphite transition-transform ${
-                              openRoadmapIdx === idx ? "rotate-180" : ""
-                            }`}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        {openRoadmapIdx === idx && (
-                          <div className="px-3 pb-3 pt-1 border-t border-line bg-neutral-50">
-                            <p className="text-xs text-ink leading-relaxed mb-2">{item.why}</p>
-                            <div className="flex flex-wrap gap-2">
-                              {item.resources.map((r) => (
-                                <a
-                                  key={r.url}
-                                  href={r.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
-                                >
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                  {r.label}
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Actionable Suggestions ────────────────────────────── */}
-              <div>
-                <p className="mb-2 text-xs uppercase tracking-wide text-graphite font-semibold">
-                  Optimization Recommendations
-                </p>
-                <div className="space-y-2">
-                  {result.suggestions.map((s, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 rounded-lg border border-neutral-100 bg-neutral-50/60 p-2.5 text-xs text-ink leading-relaxed"
-                    >
-                      <span className="text-blue-600 font-bold shrink-0 mt-0.5">•</span>
-                      <span>{s}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div>
+              <p className="mb-3 text-xs font-black uppercase tracking-widest">
+                Matched · {result.matchedSkills.length}
+              </p>
+              <p className="text-sm leading-relaxed">
+                {result.matchedSkills.join(", ") || "None detected."}
+              </p>
             </div>
-          )}
-        </Card>
+
+            <div>
+              <p className="mb-3 text-xs font-black uppercase tracking-widest">
+                Missing · {result.missingSkills.length}
+              </p>
+              <p className="text-sm leading-relaxed">
+                {result.missingSkills.join(", ") || "None — full coverage."}
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-3 text-xs font-black uppercase tracking-widest">
+                Recommendations
+              </p>
+              <ul className="space-y-3">
+                {result.suggestions.map((s, i) => (
+                  <li key={i} className="border-l-2 border-black pl-4 text-sm leading-relaxed">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

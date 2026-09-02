@@ -70,14 +70,18 @@ interface AppState {
   setActiveResumeText: (text: string | null) => void;
 }
 
+/** The slice of AppProvider state persisted server-side via /api/user. */
+export interface PersistedUserState {
+  voiceMode: boolean;
+  voiceLanguage: string;
+  speechProvider: SpeechProviderType;
+  voiceChecked: boolean;
+  accessibilityPrefs: AccessibilityPreferences;
+  userSkills: string[];
+  currentLocation: string | null;
+}
+
 const AppContext = createContext<AppState | null>(null);
-const STORAGE_KEY = "careerforge.user";
-const VOICE_MODE_KEY = "careerforge.voiceMode";
-const VOICE_LANG_KEY = "careerforge.voiceLang";
-const VOICE_CHECKED_KEY = "careerforge.voiceChecked";
-const ACCESS_PREFS_KEY = "careerforge.accessPrefs";
-const USER_SKILLS_KEY = "careerforge.userSkills";
-const LOCATION_KEY = "careerforge.userLocation";
 
 function extractDisplayName(email: string, name?: string): string {
   if (name && name.trim()) return name.trim();
@@ -88,8 +92,6 @@ function extractDisplayName(email: string, name?: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-
-const SPEECH_PROVIDER_KEY = "careerforge.speechProvider";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -110,36 +112,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [missingSkills, setMissingSkillsState] = useState<string[]>([]);
   const [activeResumeText, setActiveResumeTextState] = useState<string | null>(null);
 
+  // Hydrate from the server (replaces the old localStorage bootstrap).
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
-
-      const vm = window.localStorage.getItem(VOICE_MODE_KEY);
-      if (vm !== null) setVoiceModeState(vm === "true");
-
-      const vl = window.localStorage.getItem(VOICE_LANG_KEY);
-      if (vl) setVoiceLanguageState(vl);
-
-      const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
-      if (sp) setSpeechProviderState(sp as SpeechProviderType);
-
-      const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
-      if (vc !== null) setVoiceCheckedState(vc === "true");
-
-      const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
-      if (ap) setAccessibilityPrefsState(JSON.parse(ap));
-
-      const sk = window.localStorage.getItem(USER_SKILLS_KEY);
-      if (sk) setUserSkillsState(JSON.parse(sk));
-
-      const loc = window.localStorage.getItem(LOCATION_KEY);
-      if (loc) setCurrentLocationState(loc);
-    } catch {
-      // localStorage unavailable — proceed unauthenticated
-    }
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (res.ok) {
+          const { user: u, state } = (await res.json()) as {
+            user: User | null;
+            state: PersistedUserState | null;
+          };
+          if (!cancelled && u) setUser(u);
+          if (!cancelled && state) {
+            setVoiceModeState(state.voiceMode);
+            setVoiceLanguageState(state.voiceLanguage);
+            setSpeechProviderState(state.speechProvider);
+            setVoiceCheckedState(state.voiceChecked);
+            setAccessibilityPrefsState(state.accessibilityPrefs);
+            setUserSkillsState(state.userSkills);
+            setCurrentLocationState(state.currentLocation);
+          }
+        }
+      } catch {
+        // server/DB unavailable — proceed unauthenticated
+      }
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Debounced write-back of the persisted slice (replaces the old
+  // per-setter localStorage.setItem calls).
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      const state: PersistedUserState = {
+        voiceMode,
+        voiceLanguage,
+        speechProvider,
+        voiceChecked,
+        accessibilityPrefs,
+        userSkills,
+        currentLocation,
+      };
+      fetch("/api/user", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ user, state }),
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [
+    ready,
+    user,
+    voiceMode,
+    voiceLanguage,
+    speechProvider,
+    voiceChecked,
+    accessibilityPrefs,
+    userSkills,
+    currentLocation,
+  ]);
 
   // Apply visual accessibility preferences to document root
   useEffect(() => {
@@ -156,11 +193,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [accessibilityPrefs]);
 
-  const persist = (next: User | null) => {
-    setUser(next);
-    if (next) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else window.localStorage.removeItem(STORAGE_KEY);
-  };
+  // Setters just update state; the debounced effect above syncs to /api/user.
+  const persist = (next: User | null) => setUser(next);
 
   const setVoiceMode = (active: boolean) => {
     setVoiceModeState(active);
@@ -169,49 +203,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       interactionMode: active ? "voice" : "text",
       speechOutput: active,
     }));
-    try {
-      window.localStorage.setItem(VOICE_MODE_KEY, String(active));
-    } catch {}
   };
 
-  const setVoiceLanguage = (lang: string) => {
-    setVoiceLanguageState(lang);
-    try {
-      window.localStorage.setItem(VOICE_LANG_KEY, lang);
-    } catch {}
-  };
+  const setVoiceLanguage = (lang: string) => setVoiceLanguageState(lang);
 
-  const setVoiceChecked = (checked: boolean) => {
-    setVoiceCheckedState(checked);
-    try {
-      window.localStorage.setItem(VOICE_CHECKED_KEY, String(checked));
-    } catch {}
-  };
+  const setVoiceChecked = (checked: boolean) => setVoiceCheckedState(checked);
 
   const setAccessibilityPrefs = (prefs: Partial<AccessibilityPreferences>) => {
-    setAccessibilityPrefsState((prev) => {
-      const next = { ...prev, ...prefs };
-      try {
-        window.localStorage.setItem(ACCESS_PREFS_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    setAccessibilityPrefsState((prev) => ({ ...prev, ...prefs }));
   };
 
-  const setCurrentLocation = (loc: string | null) => {
-    setCurrentLocationState(loc);
-    try {
-      if (loc) window.localStorage.setItem(LOCATION_KEY, loc);
-      else window.localStorage.removeItem(LOCATION_KEY);
-    } catch {}
-  };
+  const setCurrentLocation = (loc: string | null) => setCurrentLocationState(loc);
 
-  const setUserSkills = (skills: string[]) => {
-    setUserSkillsState(skills);
-    try {
-      window.localStorage.setItem(USER_SKILLS_KEY, JSON.stringify(skills));
-    } catch {}
-  };
+  const setUserSkills = (skills: string[]) => setUserSkillsState(skills);
 
   const setMissingSkills = (skills: string[]) => {
     setMissingSkillsState(skills);
@@ -340,7 +344,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signOut = () => persist(null);
+  const signOut = () => {
+    persist(null);
+    fetch("/api/user", { method: "DELETE", credentials: "include" }).catch(() => {});
+  };
 
   const setTargetRole = (role: RoleId) => {
     if (!user) return;
@@ -354,12 +361,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setSpeechProvider = (provider: SpeechProviderType) => {
+  const setSpeechProvider = (provider: SpeechProviderType) =>
     setSpeechProviderState(provider);
-    try {
-      window.localStorage.setItem(SPEECH_PROVIDER_KEY, provider);
-    } catch {}
-  };
 
   const setConversationLanguageState = (state: Partial<ConversationLanguageState>) => {
     setConversationLanguageStateState((prev) => ({ ...prev, ...state }));

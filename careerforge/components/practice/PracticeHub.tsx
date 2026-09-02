@@ -840,19 +840,19 @@ export function PracticeHub() {
       </h4>
       <div className="grid gap-4 sm:grid-cols-3">
         {externalPracticeTools.map((tool) => (
-          <a key={tool.name} href={tool.url} target="_blank" rel="noopener noreferrer">
-            <Card className="h-full transition-colors hover:border-ink">
-              <p className="text-xs font-medium uppercase tracking-wide text-graphite">
-                {tool.role}
-              </p>
-              <p className="mt-2 font-display text-xl italic text-ink">{tool.name}</p>
-              <p className="mt-2 text-xs leading-relaxed text-graphite">
-                {tool.description}
-              </p>
-              <p className="mt-4 text-xs font-medium text-ink underline decoration-line underline-offset-4">
-                Launch Sandbox →
-              </p>
-            </Card>
+          <a
+            key={tool.name}
+            href={tool.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block border-2 border-black p-8 transition-colors hover:bg-black hover:text-white"
+          >
+            <p className="text-xs font-medium uppercase tracking-wide">{tool.role}</p>
+            <p className="mt-2 text-xl font-black">{tool.name}</p>
+            <p className="mt-2 text-xs leading-relaxed">{tool.description}</p>
+            <p className="mt-4 text-xs font-black uppercase tracking-widest underline underline-offset-4">
+              Launch Sandbox
+            </p>
           </a>
         ))}
       </div>

@@ -274,6 +274,31 @@ export function stopAllSpeechRecognition() {
   }
 }
 
+// ─── Command-Bar Mic Coordination ─────────────────────────────────────────────
+// The floating voice command bar (context/VoiceContext.tsx) is the one mic the
+// user explicitly controls. While it's active, every other recognizer parks —
+// the ambient activation probe, the dictator, chat/practice dictation — so a
+// click on START isn't instantly aborted by a competing SpeechRecognition.
+// ponytail: coordination flag, not a cure. The cure is one shared recognizer.
+let commandBarActive = false;
+const commandBarListeners = new Set<() => void>();
+
+export function isCommandBarActive(): boolean {
+  return commandBarActive;
+}
+
+export function setCommandBarActive(active: boolean): void {
+  if (commandBarActive === active) return;
+  commandBarActive = active;
+  if (active) stopAllSpeechRecognition();
+  commandBarListeners.forEach((fn) => fn());
+}
+
+export function subscribeCommandBar(listener: () => void): () => void {
+  commandBarListeners.add(listener);
+  return () => commandBarListeners.delete(listener);
+}
+
 export function speakText(
   text: string,
   options?: {
@@ -420,6 +445,12 @@ export function startSpeechRecognition(
     return null;
   }
 
+  // The user-controlled command bar owns the mic — don't contend for it.
+  if (commandBarActive) {
+    callbacksOrOptions.onListeningChange?.(false);
+    return null;
+  }
+
   // Singleton instance protection: abort previous
   stopAllSpeechRecognition();
 
@@ -492,8 +523,8 @@ export function startSpeechRecognition(
 
     recognition.onend = () => {
       onListeningChange(false);
-      // Safeguard 5: NEVER auto-restart if AI is speaking
-      if (running && continuous && !isSelfSpeaking) {
+      // Safeguard 5: NEVER auto-restart while AI is speaking or the command bar owns the mic
+      if (running && continuous && !isSelfSpeaking && !commandBarActive) {
         try {
           recognition.start();
         } catch {
