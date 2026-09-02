@@ -46,16 +46,16 @@ export interface Conversation {
 
 const STORAGE_KEY = "careerforge.conversations";
 
-// Clean prompt pills matching Photo 3
+// Starter prompts, grouped so the rail reads as a table of contents, not a toolbar
 const quickPills = [
-  { label: "🗺️ Check Roadmap", prompt: "Show me my complete career roadmap" },
-  { label: "📚 Top Courses", prompt: "Recommend the best free & curated courses for my role" },
-  { label: "🎯 Mock Interview", prompt: "I want to practice interview questions" },
-  { label: "📄 ATS Resume Audit", prompt: "Help me audit my resume for ATS compliance" },
-  { label: "📍 Local Tech Jobs", prompt: "Show local and remote jobs matching my target profile" },
-  { label: "💼 2026 Salary Trends", prompt: "What are the latest 2026 salary trends for my role?" },
-  { label: "🧠 Behavioral (STAR)", prompt: "Help me frame my past experience using the STAR method" },
-  { label: "🚀 Portfolio Projects", prompt: "Give me standout production project ideas for my portfolio" },
+  { label: "Review my roadmap", prompt: "Show me my complete career roadmap" },
+  { label: "Find courses for my role", prompt: "Recommend the best free & curated courses for my role" },
+  { label: "Run a mock interview", prompt: "I want to practice interview questions" },
+  { label: "Audit my resume for ATS", prompt: "Help me audit my resume for ATS compliance" },
+  { label: "Jobs near me", prompt: "Show local and remote jobs matching my target profile" },
+  { label: "2026 salary trends", prompt: "What are the latest 2026 salary trends for my role?" },
+  { label: "Frame my experience with STAR", prompt: "Help me frame my past experience using the STAR method" },
+  { label: "Portfolio project ideas", prompt: "Give me standout production project ideas for my portfolio" },
 ];
 
 export function AssistantHome({
@@ -131,14 +131,14 @@ export function AssistantHome({
   const [voiceLang, setVoiceLang] = useState<string>("auto");
   const wasVoiceActiveOnHideRef = useRef(false);
 
-<<<<<<< HEAD
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
     }, 3200);
   };
-=======
+
   // Cleanup timers & speech on unmount
   useEffect(() => {
     return () => {
@@ -148,7 +148,6 @@ export function AssistantHome({
       if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
     };
   }, []);
->>>>>>> 9aaaed9c59af16aada1046554f12ba42e6eba88d
 
   // ─── Voice Recognition with 3.5s Silence Auto-Send ─────────────────────────
   const clearSilenceTimers = useCallback(() => {
@@ -343,97 +342,6 @@ export function AssistantHome({
     });
   };
 
-<<<<<<< HEAD
-  // Cleanup timers & speech on unmount
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-      speechControllerRef.current?.stop();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
-    };
-  }, []);
-
-  // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab switched / minimized: pause voice detection temporarily
-        if (listening || voiceMode) {
-          wasVoiceActiveOnHideRef.current = true;
-          stopListening();
-          stopSpeaking();
-        }
-      } else {
-        // Tab restored / visible: resume voice detection & directly ask question
-        if (wasVoiceActiveOnHideRef.current || voiceMode) {
-          wasVoiceActiveOnHideRef.current = false;
-
-          let promptToSpeak = "";
-          const isGu = voiceLang.startsWith("gu");
-          const isHi = voiceLang.startsWith("hi");
-          const isFr = voiceLang.startsWith("fr");
-
-          if (resumeDraftState && !resumeDraftState.completed && resumeDraftState.step) {
-            const stepQ = getResumeStepPrompt(resumeDraftState.step, voiceLang);
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! ચાલો આગળ વધીએ. ${stepQ}`
-              : isHi
-              ? `वापसी पर स्वागत है! आइए आगे बढ़ें। ${stepQ}`
-              : isFr
-              ? `Bon retour ! Continuons. ${stepQ}`
-              : `Welcome back! Let's continue. ${stepQ}`;
-          } else {
-            promptToSpeak = isGu
-              ? `પાછા સ્વાગત છે! હું તમારો અવાજ સાંભળવા તૈયાર છું. તમે ક્યાંથી શરૂ કરવા માંગો છો?`
-              : isHi
-              ? `वापसी पर स्वागत है! मैं आपकी आवाज़ सुनने के लिए तैयार हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
-              : isFr
-              ? `Bon retour ! Je vous écoute. Comment puis-je vous aider aujourd'hui ?`
-              : `Welcome back! I am listening. How can I help you continue?`;
-          }
-
-          if (accessibilityPrefs?.speechOutput !== false) {
-            speakText(promptToSpeak, {
-              lang: voiceLang !== "auto" ? voiceLang : "en-US",
-              onEnd: () => {
-                startListening();
-              },
-            });
-          } else {
-            startListening();
-          }
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
-
-  // Update horizontal prompt scroll buttons
-  const checkPromptScroll = () => {
-    if (promptScrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = promptScrollRef.current;
-      setCanScrollLeft(scrollLeft > 4);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
-    }
-  };
-
-  useEffect(() => {
-    checkPromptScroll();
-    window.addEventListener("resize", checkPromptScroll);
-    return () => window.removeEventListener("resize", checkPromptScroll);
-  }, []);
-
-  const scrollPrompts = (direction: "left" | "right") => {
-    if (promptScrollRef.current) {
-      const offset = direction === "left" ? -280 : 280;
-      promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
-      setTimeout(checkPromptScroll, 320);
-=======
   const repeatLastResponse = () => {
     const textToRepeat =
       lastAssistantReply ||
@@ -454,7 +362,6 @@ export function AssistantHome({
       stopSpeaking();
       setSpeakingMsgId(null);
       setLiveSpokenText(null);
->>>>>>> 9aaaed9c59af16aada1046554f12ba42e6eba88d
     }
   };
 
@@ -463,13 +370,6 @@ export function AssistantHome({
     : user?.email
     ? user.email.split("@")[0]
     : "there";
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3200);
-  };
 
   const checkPromptScroll = () => {
     if (promptScrollRef.current) {
@@ -1037,11 +937,11 @@ export function AssistantHome({
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-[#FDFDFB]">
+    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-paper">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-neutral-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-ink px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
           {toastMessage}
         </div>
       )}
@@ -1056,20 +956,20 @@ export function AssistantHome({
 
       {/* ─── LEFT AI SIDEBAR (Vertical List of Chats) ───────────────────────── */}
       <aside
-        className={`flex flex-col border-r border-neutral-200 bg-white transition-all duration-200 z-20 ${
+        className={`flex flex-col border-r border-line bg-white transition-all duration-200 z-20 ${
           sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
       >
         {/* Top Action: New Chat */}
-        <div className="p-3.5 border-b border-neutral-200 space-y-3">
+        <div className="p-3.5 border-b border-line space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-              AI Assistant
+            <span className="font-display text-base italic text-ink">
+              Assistant
             </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 sm:hidden"
+              className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink sm:hidden"
               title="Close sidebar"
             >
               ✕
@@ -1079,7 +979,7 @@ export function AssistantHome({
           <button
             type="button"
             onClick={createNewConversation}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-neutral-900 py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-black transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-ink/90 transition-all cursor-pointer"
           >
             <span className="text-sm font-bold">+</span>
             <span>New Chat</span>
@@ -1087,19 +987,19 @@ export function AssistantHome({
         </div>
 
         {/* Vertical Navigation Sections */}
-        <div className="p-2 space-y-1 border-b border-neutral-100">
+        <div className="p-2 space-y-1 border-b border-line">
           <button
             type="button"
             onClick={() => setSidebarTab("all")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "all"
-                ? "bg-neutral-100 text-neutral-900 font-semibold"
-                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                ? "bg-mist text-ink font-semibold"
+                : "text-graphite hover:bg-paper hover:text-ink"
             }`}
           >
-            <ChatBubbleIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
             <span className="flex-1 text-left">All Recent Chats</span>
-            <span className="text-[11px] text-neutral-400 font-mono">
+            <span className="text-[11px] text-graphite/55">
               {conversations.filter((c) => !c.archived).length}
             </span>
           </button>
@@ -1109,13 +1009,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("pinned")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "pinned"
-                ? "bg-neutral-100 text-neutral-900 font-semibold"
-                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                ? "bg-mist text-ink font-semibold"
+                : "text-graphite hover:bg-paper hover:text-ink"
             }`}
           >
             <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span className="flex-1 text-left">Pinned &amp; Starred</span>
-            <span className="text-[11px] text-neutral-400 font-mono">
+            <span className="text-[11px] text-graphite/55">
               {conversations.filter((c) => c.pinned && !c.archived).length}
             </span>
           </button>
@@ -1125,13 +1025,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("archived")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "archived"
-                ? "bg-neutral-100 text-neutral-900 font-semibold"
-                : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                ? "bg-mist text-ink font-semibold"
+                : "text-graphite hover:bg-paper hover:text-ink"
             }`}
           >
-            <ArchiveIcon className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+            <ArchiveIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
             <span className="flex-1 text-left">Archived Chats</span>
-            <span className="text-[11px] text-neutral-400 font-mono">
+            <span className="text-[11px] text-graphite/55">
               {conversations.filter((c) => c.archived).length}
             </span>
           </button>
@@ -1139,12 +1039,12 @@ export function AssistantHome({
 
         {/* Vertical Conversation List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-            {sidebarTab === "pinned" ? "Pinned Discussions" : sidebarTab === "archived" ? "Archive" : "History"}
+          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-graphite/60">
+            {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "History"}
           </p>
 
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-xs text-neutral-400">
+            <div className="p-4 text-center text-xs text-graphite/55">
               {sidebarTab === "pinned"
                 ? "No pinned chats. Click the pin icon to keep important chats at top."
                 : sidebarTab === "archived"
@@ -1160,8 +1060,8 @@ export function AssistantHome({
                   onClick={() => setActiveConvId(conv.id)}
                   className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
                     isActive
-                      ? "bg-neutral-100 font-semibold text-neutral-900"
-                      : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                      ? "bg-mist font-semibold text-ink"
+                      : "text-graphite hover:bg-paper hover:text-ink"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
@@ -1175,7 +1075,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-amber-600 transition-colors"
+                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-amber-600 transition-colors"
                     >
                       <PinIcon filled={conv.pinned} className="w-3 h-3" />
                     </button>
@@ -1184,7 +1084,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-800 transition-colors"
+                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink transition-colors"
                     >
                       <ArchiveIcon className="w-3 h-3" />
                     </button>
@@ -1193,7 +1093,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-neutral-400 hover:bg-neutral-200 hover:text-red-600 transition-colors"
+                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-red-600 transition-colors"
                     >
                       <TrashIcon className="w-3 h-3" />
                     </button>
@@ -1209,12 +1109,12 @@ export function AssistantHome({
       <div className="flex flex-1 flex-col overflow-hidden">
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-4 py-2 gap-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-line bg-white px-3 sm:px-4 py-2 gap-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
               title="Toggle Sidebar"
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
@@ -1222,33 +1122,33 @@ export function AssistantHome({
               <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
-            <span className="text-xs font-semibold text-neutral-800 truncate max-w-[140px] sm:max-w-xs">
+            <span className="text-xs font-semibold text-ink truncate max-w-[140px] sm:max-w-xs">
               {activeConversation?.title || "Career Copilot"}
             </span>
 
             {/* Dynamic Real-Time Voice State Status Badge */}
             {speakingMsgId && (
-              <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700 animate-pulse flex items-center gap-1">
-                <span>🔊</span>
-                <span>AI is speaking...</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                Speaking
               </span>
             )}
             {!speakingMsgId && listening && (
-              <span className="rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[11px] font-semibold text-red-700 animate-pulse flex items-center gap-1">
-                <span>🎤</span>
-                <span>Listening...</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                Listening
               </span>
             )}
             {!speakingMsgId && !listening && busy && (
-              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700 animate-pulse flex items-center gap-1">
-                <span>⏳</span>
-                <span>Processing...</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
+                <span className="h-1.5 w-1.5 rounded-full bg-graphite/50" />
+                Thinking
               </span>
             )}
             {textFallbackActive && !listening && !speakingMsgId && (
-              <span className="rounded-full bg-neutral-100 border border-neutral-300 px-2 py-0.5 text-[11px] font-semibold text-neutral-700 flex items-center gap-1">
-                <span>⌨️</span>
-                <span>Text mode</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
+                <span className="h-1.5 w-1.5 rounded-full bg-graphite/40" />
+                Text mode
               </span>
             )}
           </div>
@@ -1261,7 +1161,7 @@ export function AssistantHome({
               onChange={(e) => setVoiceLanguage(e.target.value)}
               title="Select speech and assistant language"
               aria-label="Speech Language Selector"
-              className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer"
+              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer"
             >
               <option value="auto">🌐 Auto Detect Language</option>
               {LANGUAGE_LIST.map((l) => (
@@ -1277,7 +1177,7 @@ export function AssistantHome({
               onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
               title="Speech Provider Strategy"
               aria-label="Speech Provider Selector"
-              className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer hidden md:inline-block"
+              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer hidden md:inline-block"
             >
               <option value="auto">⚡ Auto (Web → Azure → Google)</option>
               <option value="web">🌐 Web Speech API (Free)</option>
@@ -1291,9 +1191,9 @@ export function AssistantHome({
               onClick={repeatLastResponse}
               title="Repeat last spoken response"
               aria-label="Repeat last spoken response"
-              className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition-colors cursor-pointer shadow-2xs"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium text-graphite hover:bg-paper hover:text-ink transition-colors cursor-pointer"
             >
-              <span className="text-sm">↻</span>
+              <SpeakerIcon className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Repeat</span>
             </button>
 
@@ -1304,9 +1204,9 @@ export function AssistantHome({
                 onClick={stopAllVoice}
                 title="Stop audio and listening immediately"
                 aria-label="Stop audio and listening"
-                className="flex items-center gap-1 rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-all cursor-pointer shadow-xs animate-pulse"
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer"
               >
-                <span>⏹</span>
+                <StopIcon className="w-3 h-3 text-white" />
                 <span>Stop</span>
               </button>
             )}
@@ -1317,31 +1217,31 @@ export function AssistantHome({
               onClick={toggleMute}
               title={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
               aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition-colors cursor-pointer shadow-2xs ${
+              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${
                 accessibilityPrefs.speechOutput
-                  ? "border-blue-200 bg-blue-50/70 text-blue-700 hover:bg-blue-100"
-                  : "border-neutral-200 bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+                  ? "border-accent/25 bg-accent/10 text-accent hover:bg-accent/20"
+                  : "border-line bg-mist text-graphite/80 hover:bg-mist"
               }`}
             >
-              <span>{accessibilityPrefs.speechOutput ? "🔊" : "🔇"}</span>
-              <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice On" : "Muted"}</span>
+              <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "" : "opacity-40"}`} />
+              <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice on" : "Muted"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
               title="Share conversation link or transcript"
               aria-label="Share Conversation"
             >
-              <ShareHeaderIcon className="w-3.5 h-3.5 text-neutral-600" />
+              <ShareHeaderIcon className="w-3.5 h-3.5 text-graphite" />
               <span className="hidden sm:inline">Share</span>
             </button>
 
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-xs"
+              className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:bg-paper cursor-pointer shadow-xs"
               title="Start new chat"
               aria-label="Start New Chat"
             >
@@ -1354,17 +1254,20 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-8 text-center space-y-4">
-                <h1 className="font-display text-3xl italic text-ink md:text-4xl tracking-tight">
-                  {userDisplayName ? `Hello, ${userDisplayName}` : "How can I help you today?"}
+              <div className="mb-10 max-w-xl space-y-5">
+                <h1 className="font-display text-4xl italic leading-[1.1] text-ink md:text-5xl">
+                  {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
+                  <span className="block text-graphite">Where should we start?</span>
                 </h1>
 
-                <p className="mx-auto max-w-md text-xs text-graphite leading-relaxed">
-                  I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type.
+                <p className="max-w-md text-sm leading-relaxed text-graphite">
+                  I can help you build or sharpen your resume, choose skills to learn,
+                  find projects worth doing, and track down jobs. Speak or type &mdash;
+                  whichever is easier.
                 </p>
 
                 {/* Primary Voice vs Text Entry Options */}
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -1403,10 +1306,10 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-xs font-semibold shadow-md transition-all cursor-pointer transform hover:-translate-y-0.5"
+                    className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/90 cursor-pointer"
                   >
-                    <span className="text-sm">🎙️</span>
-                    <span>Talk to me (Voice)</span>
+                    <MicIcon className="w-4 h-4 text-paper" />
+                    <span>Start talking</span>
                   </button>
 
                   <button
@@ -1414,10 +1317,9 @@ export function AssistantHome({
                     onClick={() => {
                       textareaRef.current?.focus();
                     }}
-                    className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-800 px-5 py-2.5 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-graphite underline decoration-line underline-offset-4 transition-colors hover:text-ink cursor-pointer"
                   >
-                    <span className="text-sm">⌨️</span>
-                    <span>Type to me (Text)</span>
+                    <span>Type instead</span>
                   </button>
                 </div>
               </div>
@@ -1432,10 +1334,10 @@ export function AssistantHome({
                     key={m.id}
                     className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-neutral-400 px-1">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-graphite/55 px-1">
                       <span>{isUser ? userDisplayName : "CareerForge AI"}</span>
                       {m.engine && !isUser && (
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[9px] font-mono text-neutral-600 border border-neutral-200">
+                        <span className="text-[10px] text-graphite/45">
                           {m.engine}
                         </span>
                       )}
@@ -1443,16 +1345,16 @@ export function AssistantHome({
                         <button
                           type="button"
                           onClick={() => toggleSpeech(m.id, m.text)}
-                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all cursor-pointer ${
+                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
                             speakingMsgId === m.id
-                              ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300 shadow-2xs"
-                              : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+                              ? "bg-accent/10 text-accent border border-accent/25"
+                              : "text-graphite/80 hover:bg-mist hover:text-ink"
                           }`}
                           title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
                         >
                           {speakingMsgId === m.id ? (
                             <>
-                              <StopIcon className="w-2.5 h-2.5 text-blue-600" />
+                              <StopIcon className="w-2.5 h-2.5 text-accent" />
                               <span>Stop</span>
                             </>
                           ) : (
@@ -1463,13 +1365,13 @@ export function AssistantHome({
                           )}
                         </button>
                       )}
-                      {m.time && <span>&bull; {m.time}</span>}
+                      {m.time && <span className="text-graphite/45">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
                       {m.attachedDocName && (
-                        <div className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs text-neutral-700 w-fit">
-                          <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                        <div className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-2.5 py-1 text-xs text-graphite w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
                           <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
                         </div>
                       )}
@@ -1477,8 +1379,8 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink text-paper rounded-tr-xs shadow-sm font-normal"
-                            : "border border-neutral-200/80 bg-white text-ink rounded-tl-xs shadow-xs"
+                            ? "bg-ink text-paper rounded-tr-xs"
+                            : "bg-white text-ink rounded-tl-xs border border-line/60"
                         }`}
                       >
                         <p className="whitespace-pre-line">{m.text}</p>
@@ -1486,27 +1388,27 @@ export function AssistantHome({
 
                       {/* Interactive Workspace Action */}
                       {m.intent?.feature && (
-                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
+                        <div className="rounded-xl border border-line bg-paper p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="flex h-2 w-2 rounded-full bg-blue-500" />
-                              <span className="text-xs font-semibold text-neutral-900">
+                              <span className="flex h-2 w-2 rounded-full bg-accent" />
+                              <span className="text-xs font-semibold text-ink">
                                 {m.intent.featureTitle || "Workspace Tool"}
                               </span>
                             </div>
                             {m.redirecting && redirectCountdown !== null && (
-                              <span className="text-[11px] font-semibold text-amber-700 animate-pulse">
-                                Opening in 3s…
+                              <span className="text-[11px] font-medium text-graphite">
+                                Opening in 3s
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-200/60">
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-line">
                             {m.redirecting && (
                               <button
                                 type="button"
                                 onClick={cancelRedirect}
-                                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 hover:text-ink transition-colors cursor-pointer"
+                                className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors cursor-pointer"
                               >
                                 Stay in Chat
                               </button>
@@ -1514,7 +1416,7 @@ export function AssistantHome({
                             <button
                               type="button"
                               onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-sm cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-white hover:bg-ink/90 transition-colors shadow-sm cursor-pointer"
                             >
                               <span>Open {m.intent.featureTitle || "Tool"}</span>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1531,14 +1433,14 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-neutral-400 px-1">
+                  <div className="mb-1 text-[11px] font-medium text-graphite/55 px-1">
                     CareerForge AI is thinking…
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-neutral-200 bg-white px-4 py-3 shadow-xs">
+                  <div className="rounded-2xl rounded-tl-xs border border-line bg-white px-4 py-3 shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-neutral-400 animate-bounce" />
+                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce" />
                     </div>
                   </div>
                 </div>
@@ -1548,7 +1450,7 @@ export function AssistantHome({
         </div>
 
         {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS MATCHING PHOTO 3 ─────────── */}
-        <div className="border-t border-neutral-200/80 bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
+        <div className="border-t border-line bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
           <div className="mx-auto max-w-3xl space-y-3">
             
             {/* Live Spoken Text & Captions Visualizer for Accessibility */}
@@ -1557,16 +1459,17 @@ export function AssistantHome({
                 role="region"
                 aria-label="Live Voice Captions"
                 aria-live="polite"
-                className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/90 px-3.5 py-2 text-xs text-blue-900 shadow-sm animate-in fade-in slide-in-from-bottom-2"
+                className="flex items-center justify-between rounded-xl border border-accent/25 bg-accent/10 px-3.5 py-2 text-xs text-accent shadow-sm animate-in fade-in slide-in-from-bottom-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600 animate-ping" />
+                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-ping" />
                   <div className="truncate">
-                    <span className="font-semibold text-blue-950">
-                      {listening ? "Listening (Voice): " : "Spoken Output: "}
+                    <span className="font-semibold text-accent">
+                      {listening ? "Listening" : "Speaking"}
+                      <span className="mx-1.5 text-accent/40">/</span>
                     </span>
-                    <span className="font-normal text-blue-800">
-                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening...") : liveSpokenText}
+                    <span className="font-normal text-accent">
+                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening") : liveSpokenText}
                     </span>
                   </div>
                 </div>
@@ -1575,7 +1478,7 @@ export function AssistantHome({
                   <button
                     type="button"
                     onClick={stopAllVoice}
-                    className="rounded-md bg-blue-200/80 px-2 py-0.5 text-[11px] font-semibold text-blue-900 hover:bg-blue-300 transition-colors cursor-pointer"
+                    className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/25 transition-colors cursor-pointer"
                   >
                     Dismiss
                   </button>
@@ -1596,20 +1499,20 @@ export function AssistantHome({
             {/* AI Rounded Card Box */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-neutral-300 bg-neutral-50/70 p-3 shadow-sm focus-within:border-neutral-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-neutral-900/5 transition-all"
+              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-line bg-paper p-3 shadow-sm focus-within:border-graphite focus-within:bg-white focus-within:ring-2 focus-within:ring-ink/5 transition-colors"
             >
               {/* Attached Document Preview Badge */}
               {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-800 animate-in fade-in shadow-2xs">
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-line bg-white px-3 py-1.5 text-xs text-ink animate-in fade-in shadow-2xs">
                   <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
                     <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-neutral-400 font-mono">(Ready for AI audit)</span>
+                    <span className="text-[10px] text-graphite/55">Ready to review</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-neutral-400 hover:text-red-600 cursor-pointer"
+                    className="rounded p-1 text-graphite/55 hover:text-red-600 cursor-pointer"
                     title="Remove attachment"
                   >
                     ✕
@@ -1642,11 +1545,11 @@ export function AssistantHome({
                     ? `Ask anything about ${attachedFile.name}...`
                     : "Message CareerForge AI or attach a document..."
                 }
-                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-ink placeholder:text-graphite/55 focus:outline-none"
               />
 
               {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-neutral-200/50 mt-1">
+              <div className="flex items-center justify-between pt-2 border-t border-line mt-1">
                 {/* Left Controls: Clean Attach & Unlimited Voice */}
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1654,12 +1557,12 @@ export function AssistantHome({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parsingDoc}
                     title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-neutral-500 border-t-transparent animate-spin" />
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-graphite border-t-transparent animate-spin" />
                     ) : (
-                      <PaperclipIcon className="w-3.5 h-3.5 text-neutral-500" />
+                      <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
                     )}
                     <span className="hidden sm:inline">Attach</span>
                   </button>
@@ -1670,8 +1573,8 @@ export function AssistantHome({
                     onClick={toggleListening}
                     className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-red-500 text-white animate-pulse shadow-sm"
-                        : "text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+                        ? "bg-ink text-paper"
+                        : "text-graphite hover:bg-mist hover:text-ink"
                     }`}
                     title={
                       listening
@@ -1679,7 +1582,7 @@ export function AssistantHome({
                         : "Voice Dictation in any language (Auto-sends on pause)"
                     }
                   >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-white animate-bounce" : "text-neutral-500"}`} />
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-paper" : "text-graphite/80"}`} />
                     <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
                   </button>
 
@@ -1696,8 +1599,8 @@ export function AssistantHome({
                   disabled={busy || (!input.trim() && !attachedFile)}
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
                     input.trim() || attachedFile
-                      ? "bg-neutral-900 text-white hover:bg-black scale-100 cursor-pointer"
-                      : "bg-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
+                      ? "bg-ink text-white hover:bg-ink/90 scale-100 cursor-pointer"
+                      : "bg-mist text-graphite/55 cursor-not-allowed opacity-60"
                   }`}
                   title="Send prompt (or press Enter)"
                 >
@@ -1714,10 +1617,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("left")}
                 disabled={!canScrollLeft}
                 aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white/95 shadow-md backdrop-blur-xs transition-all ${
+                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
                   canScrollLeft
-                    ? "opacity-100 hover:bg-neutral-100 hover:scale-105 cursor-pointer text-neutral-800"
-                    : "opacity-0 pointer-events-none text-neutral-300"
+                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
+                    : "opacity-0 pointer-events-none text-graphite/55"
                 }`}
               >
                 <ChevronLeftIcon className="w-4 h-4" />
@@ -1735,7 +1638,7 @@ export function AssistantHome({
                     key={pill.label}
                     type="button"
                     onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-900 hover:text-neutral-900 hover:bg-neutral-50 transition-all shadow-2xs cursor-pointer whitespace-nowrap active:scale-95"
+                    className="shrink-0 rounded-full border border-line bg-white px-3.5 py-1.5 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer whitespace-nowrap"
                   >
                     {pill.label}
                   </button>
@@ -1748,10 +1651,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("right")}
                 disabled={!canScrollRight}
                 aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white/95 shadow-md backdrop-blur-xs transition-all ${
+                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
                   canScrollRight
-                    ? "opacity-100 hover:bg-neutral-100 hover:scale-105 cursor-pointer text-neutral-800"
-                    : "opacity-0 pointer-events-none text-neutral-300"
+                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
+                    : "opacity-0 pointer-events-none text-graphite/55"
                 }`}
               >
                 <ChevronRightIcon className="w-4 h-4" />
