@@ -12,4 +12,6 @@ tsconfig.tsbuildinfo
 *.exe
 cloudflared*
 start-tunnel.js
-
+__pycache__/
+*.pyc
+*.pyo

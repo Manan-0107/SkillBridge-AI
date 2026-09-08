@@ -668,7 +668,7 @@ export function AssistantHome({
                 if (voiceMode && !textFallbackActive) {
                   setTimeout(() => {
                     if (!isAISpeakingRef.current) startListening();
-                  }, 300);
+                  }, 650);
                 }
               },
               onError: () => {
@@ -876,7 +876,7 @@ export function AssistantHome({
             if (voiceMode && !textFallbackActive) {
               setTimeout(() => {
                 if (!isAISpeakingRef.current) startListening();
-              }, 300);
+              }, 650);
             }
           },
           onError: () => {
@@ -1171,6 +1171,7 @@ export function AssistantHome({
               ))}
             </select>
 
+
             {/* Speech Provider Dropdown */}
             <select
               value={speechProvider}
@@ -1184,6 +1185,7 @@ export function AssistantHome({
               <option value="azure">☁️ Microsoft Azure Speech</option>
               <option value="google">☁️ Google Cloud Speech</option>
             </select>
+
 
             {/* Repeat Button */}
             <button
