@@ -23,15 +23,20 @@ import {
   getFieldPromptMessage,
 } from "@/lib/voice";
 
-// ─── Profile Questionnaire Definitions ─────────────────────────────────────────
+// ─── Profile Questionnaire & Section Definitions ──────────────────────────────
 
-export type ProfileQuestionId = "name" | "targetRole" | "skills" | "email";
+export type ProfileQuestionId = "name" | "email" | "password" | "targetRole" | "skills";
 
 export interface ProfileQuestion {
   id: ProfileQuestionId;
   label: string;
   stepNumber: number;
   prompts: {
+    en: string;
+    gu: string;
+    hi: string;
+  };
+  retryPrompts: {
     en: string;
     gu: string;
     hi: string;
@@ -50,25 +55,77 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
     label: "Full Name",
     stepNumber: 1,
     prompts: {
-      en: "Welcome to CareerForge! What is your full name?",
-      gu: "કરિયરફોર્જમાં આપનું સ્વાગત છે! તમારું પૂરું નામ શું છે?",
-      hi: "करियरफोर्ज में आपका स्वागत है! आपका पूरा नाम क्या है?",
+      en: "Welcome to CareerForge! Step 1: What is your full name?",
+      gu: "કરિયરફોર્જમાં આપનું સ્વાગત છે! સ્ટેપ ૧: તમારું પૂરું નામ શું છે?",
+      hi: "करियरफोर्ज में आपका स्वागत है! स्टेप १: आपका पूरा नाम क्या है?",
+    },
+    retryPrompts: {
+      en: "No problem, let's try again. What is your full name?",
+      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારું પૂરું નામ શું છે?",
+      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपका पूरा नाम क्या है?",
     },
     confirmPrompts: {
       en: (ans) => `Got it, you said: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
       gu: (ans) => `મેં સાંભળ્યું: ${ans}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
       hi: (ans) => `मैंने सुना: ${ans}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
     },
-    selector: '#auth-name-input, input[name*="name" i], input[id*="name" i], input[placeholder*="name" i]',
+    selector: '#auth-name-input, input[name*="name" i], input[id*="name" i]',
+  },
+  {
+    id: "email",
+    label: "Contact Email",
+    stepNumber: 2,
+    prompts: {
+      en: "Step 2: What is your contact email address?",
+      gu: "સ્ટેપ ૨: તમારું ઇમેઇલ સરનામું શું છે?",
+      hi: "स्टेप २: आपका ईमेल पता क्या है?",
+    },
+    retryPrompts: {
+      en: "No problem, let's try again. What is your contact email address?",
+      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારું ઇમેઇલ સરનામું શું છે?",
+      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपका ईमेल पता क्या है?",
+    },
+    confirmPrompts: {
+      en: (ans) => `Got it, your email is: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: (ans) => `તમારું ઇમેઇલ: ${ans}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: (ans) => `आपका ईमेल: ${ans}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+    },
+    selector: '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]',
+  },
+  {
+    id: "password",
+    label: "Password",
+    stepNumber: 3,
+    prompts: {
+      en: "Step 3: Please speak your password or PIN for your account.",
+      gu: "સ્ટેપ ૩: કૃપા કરીને તમારા એકાઉન્ટ માટે પાસવર્ડ અથવા પિન બોલો.",
+      hi: "स्टेप ३: कृपया अपने खाते के लिए पासवर्ड या पिन बोलें।",
+    },
+    retryPrompts: {
+      en: "No problem, let's try again. Please speak your password or PIN.",
+      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારો પાસવર્ડ અથવા પિન બોલો.",
+      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। कृपया अपना पासवर्ड या पिन बोलें।",
+    },
+    confirmPrompts: {
+      en: (ans) => `Got it, password recorded. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: (ans) => `પાસવર્ડ નોંધાઈ ગયો. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: (ans) => `पासवर्ड दर्ज हुआ। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+    },
+    selector: '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]',
   },
   {
     id: "targetRole",
     label: "Target Career Role",
-    stepNumber: 2,
+    stepNumber: 4,
     prompts: {
       en: "What is your target career or dream job role?",
       gu: "તમારો ઇચ્છિત કરિયર રોલ અથવા જોબ ટાઇટલ શું છે?",
       hi: "आपका लक्षित करियर रोल या पद क्या है?",
+    },
+    retryPrompts: {
+      en: "No problem, let's try again. What is your target career or dream job role?",
+      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારો ઇચ્છિત કરિયર રોલ શું છે?",
+      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपका लक्षित पद क्या है?",
     },
     confirmPrompts: {
       en: (ans) => `Got it, your target role is: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
@@ -80,11 +137,16 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
   {
     id: "skills",
     label: "Core Skills",
-    stepNumber: 3,
+    stepNumber: 5,
     prompts: {
       en: "What are two or three of your core technical skills or strengths?",
       gu: "તમારી મુખ્ય ટેકનિકલ સ્કિલ્સ અથવા શક્તિઓ કઈ છે?",
       hi: "आपके मुख्य तकनीकी कौशल या खूबियां क्या हैं?",
+    },
+    retryPrompts: {
+      en: "No problem, let's try again. What are two or three of your core skills?",
+      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારી ટેકનિકલ સ્કિલ્સ કઈ છે?",
+      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपके मुख्य कौशल क्या हैं?",
     },
     confirmPrompts: {
       en: (ans) => `Got it, your skills are: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
@@ -92,22 +154,6 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
       hi: (ans) => `आपके कौशल: ${ans}। क्या यह सही है? 'हाँ' या 'नहीं' बोलें।`,
     },
     selector: 'input[name*="skill" i], input[id*="skill" i], input[placeholder*="skill" i]',
-  },
-  {
-    id: "email",
-    label: "Contact Email",
-    stepNumber: 4,
-    prompts: {
-      en: "What is your contact email address for job alerts and account access?",
-      gu: "તમારું ઇમેઇલ સરનામું શું છે?",
-      hi: "आपका ईमेल पता क्या है?",
-    },
-    confirmPrompts: {
-      en: (ans) => `Got it, your email is: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
-      gu: (ans) => `તમારું ઇમેઇલ: ${ans}. શું આ સાચું છે? 'હા' અથવા 'ના' બોલો.`,
-      hi: (ans) => `आपका ईमेल: ${ans}। क्या यह सही है? 'हाँ' या 'नहीं' बोलें।`,
-    },
-    selector: '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]',
   },
 ];
 
@@ -118,14 +164,24 @@ interface StoredInterviewState {
   targetRole?: string;
   skills?: string;
   email?: string;
+  password?: string;
   completedQuestions: ProfileQuestionId[];
 }
 
-function loadStoredInterview(): StoredInterviewState {
+function loadStoredInterview(user?: any): StoredInterviewState {
   if (typeof window === "undefined") return { completedQuestions: [] };
   try {
     const raw = localStorage.getItem(INTERVIEW_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    const parsed: StoredInterviewState = raw ? JSON.parse(raw) : { completedQuestions: [] };
+
+    // If user is already logged in with an active account, auto-mark auth steps as completed
+    if (user?.email) {
+      if (!parsed.completedQuestions.includes("email")) parsed.completedQuestions.push("email");
+      if (user.name && !parsed.completedQuestions.includes("name")) parsed.completedQuestions.push("name");
+      if (!parsed.completedQuestions.includes("password")) parsed.completedQuestions.push("password");
+      if (user.targetRole && !parsed.completedQuestions.includes("targetRole")) parsed.completedQuestions.push("targetRole");
+    }
+    return parsed;
   } catch {}
   return { completedQuestions: [] };
 }
@@ -137,11 +193,24 @@ function saveStoredInterview(state: StoredInterviewState) {
   } catch {}
 }
 
-function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[]): ProfileQuestion | null {
+function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[], user?: any): ProfileQuestion | null {
   for (const q of PROFILE_QUESTIONS) {
-    if (!completedQuestions.includes(q.id)) {
-      return q;
+    if (completedQuestions.includes(q.id)) {
+      continue;
     }
+    // If user is already signed in, skip auth questions
+    if (user && (q.id === "name" || q.id === "email" || q.id === "password")) {
+      continue;
+    }
+    // If on AuthGate sign-in mode (no name input in DOM), skip name
+    if (q.id === "name" && typeof document !== "undefined") {
+      const nameInput = document.querySelector('#auth-name-input');
+      const emailInput = document.querySelector('#auth-email-input');
+      if (emailInput && !nameInput) {
+        continue;
+      }
+    }
+    return q;
   }
   return null;
 }
@@ -160,7 +229,6 @@ export function GlobalVoiceDictator() {
     setUserSkills,
     missingSkills,
     setTargetRole,
-    signIn,
   } = useApp();
 
   const [active, setActive] = useState(false);
@@ -177,9 +245,9 @@ export function GlobalVoiceDictator() {
   const [isAiAnswering, setIsAiAnswering] = useState(false);
 
   // ─── Questionnaire & Verification State ─────────────────────────────────────
-  const [interviewState, setInterviewState] = useState<StoredInterviewState>(loadStoredInterview);
+  const [interviewState, setInterviewState] = useState<StoredInterviewState>(() => loadStoredInterview(user));
   const [currentQuestion, setCurrentQuestion] = useState<ProfileQuestion | null>(() =>
-    getNextRemainingQuestion(loadStoredInterview().completedQuestions)
+    getNextRemainingQuestion(loadStoredInterview(user).completedQuestions, user)
   );
   const [pendingVerification, setPendingVerification] = useState<{
     question: ProfileQuestion;
@@ -211,9 +279,9 @@ export function GlobalVoiceDictator() {
 
   // ─── Hydrate Pre-verified Fields to DOM on Mount & Refresh ───────────────────
   useEffect(() => {
-    const stored = loadStoredInterview();
+    const stored = loadStoredInterview(user);
     setInterviewState(stored);
-    const nextQ = getNextRemainingQuestion(stored.completedQuestions);
+    const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
     setCurrentQuestion(nextQ);
 
     // Pre-populate input elements if on login/profile page
@@ -225,7 +293,7 @@ export function GlobalVoiceDictator() {
         }
       }
       if (stored.email) {
-        const emailInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[3].selector);
+        const emailInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[1].selector);
         if (emailInput && !emailInput.value) {
           setNativeInputValue(emailInput, stored.email);
         }
@@ -233,7 +301,7 @@ export function GlobalVoiceDictator() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   // ─── Track Active Focused Input / Textarea ──────────────────────────────────
   useEffect(() => {
@@ -257,7 +325,7 @@ export function GlobalVoiceDictator() {
           (target instanceof HTMLTextAreaElement ? "Text Area" : `${target.type || "text"} field`);
         setFocusedFieldLabel(label);
 
-        // If not in the middle of a questionnaire verification prompt, show field hint
+        // If not verifying, show field hint
         if (!pendingVerificationRef.current) {
           const prompt = getFieldPromptMessage(label, target.type, currentLangRef.current);
           setAiSpeechPrompt(prompt);
@@ -324,6 +392,54 @@ export function GlobalVoiceDictator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, accessibilityPrefs?.speechOutput]);
 
+  // ─── Microphone Speech Recognition Starter ──────────────────────────────────
+  const startListeningMic = useCallback(() => {
+    if (!isSpeechRecognitionSupported()) return;
+
+    controllerRef.current?.stop();
+    const controller = startSpeechRecognition(
+      {
+        onTranscript: (transcript: string, isFinal?: boolean) => {
+          processSpokenText(transcript, !!isFinal);
+        },
+        onListeningChange: (isList: boolean) => {
+          setListening(isList);
+        },
+        onError: (err: string) => {
+          console.warn("[VoiceDictator] Error:", err);
+          setListening(false);
+        },
+      },
+      { lang: currentLangRef.current || "en-US", continuous: true }
+    );
+
+    controllerRef.current = controller;
+  }, []);
+
+  // ─── Speech Synthesis with Acoustic Echo Cancellation & Microphone Loop ─────
+  const speakAndListen = useCallback(
+    (textToSay: string, lang?: string) => {
+      stopSpeaking();
+      controllerRef.current?.stop();
+      setListening(false);
+
+      const speechLang = lang || currentLangRef.current || "en-US";
+      speakText(textToSay, {
+        lang: speechLang,
+        onEnd: () => {
+          // Acoustic dissipation cooldown (800ms) to ensure laptop speaker reverb cleared
+          setTimeout(() => {
+            playAccessibleChime("focus");
+            if (activeRef.current) {
+              startListeningMic();
+            }
+          }, 800);
+        },
+      });
+    },
+    [startListeningMic]
+  );
+
   // ─── Ask AI Assistant for Dynamic Guidance (Claude/ChatGPT Caliber) ──────────
   const askAiAssistant = useCallback(
     async (userQuestion: string, detectedLang: string) => {
@@ -368,32 +484,7 @@ export function GlobalVoiceDictator() {
         setIsAiAnswering(false);
       }
     },
-    [user, userSkills, missingSkills, currentLocation, accessibilityPrefs, setAccessibilityPrefs, showStatus]
-  );
-
-  // ─── Speech Synthesis with Acoustic Echo Cancellation & Microphone Loop ─────
-  const speakAndListen = useCallback(
-    (textToSay: string, lang?: string) => {
-      stopSpeaking();
-      controllerRef.current?.stop();
-      setListening(false);
-
-      const speechLang = lang || currentLangRef.current || "en-US";
-      speakText(textToSay, {
-        lang: speechLang,
-        onEnd: () => {
-          // Acoustic dissipation cooldown (800ms) to ensure laptop speaker reverb cleared
-          setTimeout(() => {
-            playAccessibleChime("focus");
-            if (activeRef.current) {
-              startListeningMic();
-            }
-          }, 800);
-        },
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [user, userSkills, missingSkills, currentLocation, accessibilityPrefs, setAccessibilityPrefs, showStatus, speakAndListen]
   );
 
   // ─── Find Appropriate Target DOM Element for Live Typing ────────────────────
@@ -520,8 +611,12 @@ export function GlobalVoiceDictator() {
           playAccessibleChime("success");
           const verifiedAnswer = pending.candidateAnswer;
           const verifiedQuestion = pending.question;
+
+          // ── ERASE PREVIOUS WRITTEN THING IN VOICE ASSISTANT MEMORY ──
           setPendingVerification(null);
           pendingVerificationRef.current = null;
+          setLiveTranscript("");
+          setInterimTranscript("");
 
           // Update interview state and persist to localStorage
           const prevStored = interviewStateRef.current;
@@ -535,12 +630,14 @@ export function GlobalVoiceDictator() {
           interviewStateRef.current = updatedState;
           saveStoredInterview(updatedState);
 
-          // Update app-level stores
+          // Update app-level stores & form inputs
           if (verifiedQuestion.id === "name" && verifiedAnswer) {
-            // Also update input if present
             const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
             if (el) setNativeInputValue(el, verifiedAnswer);
           } else if (verifiedQuestion.id === "email" && verifiedAnswer) {
+            const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
+            if (el) setNativeInputValue(el, verifiedAnswer);
+          } else if (verifiedQuestion.id === "password" && verifiedAnswer) {
             const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
             if (el) setNativeInputValue(el, verifiedAnswer);
           } else if (verifiedQuestion.id === "targetRole" && verifiedAnswer) {
@@ -552,35 +649,57 @@ export function GlobalVoiceDictator() {
             setUserSkills(parsedSkills);
           }
 
-          // Check for NEXT REMAINING question
-          const nextQ = getNextRemainingQuestion(newCompleted);
+          // ── GO TO NEXT SECTION & STORE NEW THING ──
+          const nextQ = getNextRemainingQuestion(newCompleted, user);
           setCurrentQuestion(nextQ);
           currentQuestionRef.current = nextQ;
 
           if (nextQ) {
-            // Focus target element for next question
+            // Signal AuthGate to visually activate and navigate to the next section
+            if (nextQ.id === "name" || nextQ.id === "email" || nextQ.id === "password") {
+              window.dispatchEvent(
+                new CustomEvent("careerforge:auth-section", { detail: { section: nextQ.id } })
+              );
+            }
+
+            // Focus and scroll next input element into view
             const nextEl = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(nextQ.selector);
             if (nextEl) {
+              nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
               nextEl.focus();
               focusedElementRef.current = nextEl;
+              // Ensure next field starts empty for new speech if not already confirmed
+              if (!newCompleted.includes(nextQ.id)) {
+                setNativeInputValue(nextEl, "");
+              }
             }
 
             const promptText = isGujarati
-              ? `${verifiedQuestion.label} કન્ફર્મ થયું! આગળનો પ્રશ્ન: ${nextQ.prompts.gu}`
+              ? `${verifiedQuestion.label} કન્ફર્મ થયું! આગળનો વિભાગ: ${nextQ.prompts.gu}`
               : isHindi
-              ? `${verifiedQuestion.label} की पुष्टि हुई! अगला सवाल: ${nextQ.prompts.hi}`
-              : `${verifiedQuestion.label} confirmed! Next question: ${nextQ.prompts.en}`;
+              ? `${verifiedQuestion.label} की पुष्टि हुई! अगला सेक्शन: ${nextQ.prompts.hi}`
+              : `${verifiedQuestion.label} confirmed! Next section: ${nextQ.prompts.en}`;
 
             setAiSpeechPrompt(promptText);
-            showStatus(`🎙️ Step ${nextQ.stepNumber} of 4: ${nextQ.label}`, 4500);
+            showStatus(`🎙️ Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4500);
             speakAndListen(promptText);
           } else {
+            // If on auth gate and just finished password, auto-submit login/signup
+            if (verifiedQuestion.id === "password") {
+              const submitBtn = document.querySelector<HTMLButtonElement>(
+                'button[type="submit"], input[type="submit"], button#submit-btn'
+              );
+              if (submitBtn) {
+                submitBtn.click();
+              }
+            }
+
             // All questions verified!
             const allDoneMsg = isGujarati
-              ? "અભિનંદન! તમારા બધા પ્રશ્નો વેરિફાય થઈ ગયા છે. તમારું પ્રોફાઇલ તૈયાર છે!"
+              ? "અભિનંદન! તમારા બધા પ્રશ્નો વેરિફાય થઈ ગયા છે. તમારું એકાઉન્ટ અને પ્રોફાઇલ તૈયાર છે!"
               : isHindi
               ? "बधाई हो! आपके सभी सवाल सत्यापित हो गए हैं। आपकी प्रोफ़ाइल तैयार है!"
-              : "Awesome! All profile questions are verified. Your CareerForge profile is ready!";
+              : "Awesome! All sections are verified. Your CareerForge profile is ready!";
 
             setAiSpeechPrompt(allDoneMsg);
             showStatus(`🎉 ${allDoneMsg}`, 5000);
@@ -590,26 +709,34 @@ export function GlobalVoiceDictator() {
         }
 
         if (isNo) {
-          // Clear field and re-prompt question
+          playAccessibleChime("stop");
           const targetQ = pending.question;
+
+          // ── ERASE PREVIOUS WRITTEN THING FROM MEMORY ──
           setPendingVerification(null);
           pendingVerificationRef.current = null;
+          setLiveTranscript("");
+          setInterimTranscript("");
 
-          const targetEl = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(targetQ.selector);
+          // ── ERASE WRITTEN INPUT IN FIELD ──
+          const targetEl =
+            document.querySelector<HTMLInputElement | HTMLTextAreaElement>(targetQ.selector) ||
+            focusedElementRef.current;
           if (targetEl) {
             setNativeInputValue(targetEl, "");
             targetEl.focus();
             focusedElementRef.current = targetEl;
           }
 
+          // ── AGAIN ASK THE SAME QUESTION ──
           const retryMsg = isGujarati
-            ? `કોઈ વાંધો નહીં. કૃપા કરીને તમારું ${targetQ.label} ફરીથી બોલો.`
+            ? targetQ.retryPrompts.gu
             : isHindi
-            ? `कोई बात नहीं। कृपया अपना ${targetQ.label} दोबारा बोलें।`
-            : `No problem. Please speak your ${targetQ.label} again.`;
+            ? targetQ.retryPrompts.hi
+            : targetQ.retryPrompts.en;
 
           setAiSpeechPrompt(retryMsg);
-          showStatus(`🎙️ ${retryMsg}`, 4000);
+          showStatus(`🎙️ Retrying: ${targetQ.label}`, 4000);
           speakAndListen(retryMsg);
           return;
         }
@@ -715,7 +842,7 @@ export function GlobalVoiceDictator() {
           candidateAnswer = normalizeSpokenEmail(clean);
         }
 
-        // Live type into the target element
+        // Live type into target element
         const targetEl = resolveTargetElement();
         if (targetEl) {
           setNativeInputValue(targetEl, candidateAnswer);
@@ -770,32 +897,8 @@ export function GlobalVoiceDictator() {
         askAiAssistant(clean, detectedLang);
       }
     },
-    [askAiAssistant, resolveTargetElement, setTargetRole, setUserSkills, setVoiceLanguage, showStatus, speakAndListen]
+    [askAiAssistant, resolveTargetElement, setTargetRole, setUserSkills, setVoiceLanguage, showStatus, speakAndListen, user]
   );
-
-  // ─── Microphone Speech Recognition Starter ──────────────────────────────────
-  const startListeningMic = useCallback(() => {
-    if (!isSpeechRecognitionSupported()) return;
-
-    controllerRef.current?.stop();
-    const controller = startSpeechRecognition(
-      {
-        onTranscript: (transcript: string, isFinal?: boolean) => {
-          processSpokenText(transcript, !!isFinal);
-        },
-        onListeningChange: (isList: boolean) => {
-          setListening(isList);
-        },
-        onError: (err: string) => {
-          console.warn("[VoiceDictator] Error:", err);
-          setListening(false);
-        },
-      },
-      { lang: currentLangRef.current || "en-US", continuous: true }
-    );
-
-    controllerRef.current = controller;
-  }, [processSpokenText]);
 
   // ─── Start & Stop Voice Assistant ───────────────────────────────────────────
   const startVoiceDictation = useCallback(() => {
@@ -809,18 +912,26 @@ export function GlobalVoiceDictator() {
     activeRef.current = true;
     setVoiceMode(true);
 
-    // Check if there is an unverified profile question left to ask!
-    const stored = loadStoredInterview();
-    const nextQ = getNextRemainingQuestion(stored.completedQuestions);
+    // Check if there is an unverified profile question left to ask
+    const stored = loadStoredInterview(user);
+    const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
 
     if (nextQ) {
       setCurrentQuestion(nextQ);
       currentQuestionRef.current = nextQ;
 
+      // Switch active section in AuthGate if applicable
+      if (nextQ.id === "name" || nextQ.id === "email" || nextQ.id === "password") {
+        window.dispatchEvent(
+          new CustomEvent("careerforge:auth-section", { detail: { section: nextQ.id } })
+        );
+      }
+
       // Focus field for this question
       setTimeout(() => {
         const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(nextQ.selector);
         if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
           el.focus();
           focusedElementRef.current = el;
         }
@@ -831,10 +942,10 @@ export function GlobalVoiceDictator() {
       const promptText = isGu ? nextQ.prompts.gu : isHi ? nextQ.prompts.hi : nextQ.prompts.en;
 
       setAiSpeechPrompt(promptText);
-      showStatus(`🎙️ Step ${nextQ.stepNumber} of 4: ${nextQ.label}`, 4000);
+      showStatus(`🎙️ Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4000);
       speakAndListen(promptText);
     } else {
-      // All questions were already verified!
+      // All questions were already verified
       const isGu = currentLangRef.current === "gu-IN";
       const isHi = currentLangRef.current === "hi-IN";
       const welcomeBack = isGu
@@ -847,7 +958,7 @@ export function GlobalVoiceDictator() {
       showStatus("🎙️ Voice Assistant Active", 3500);
       speakAndListen(welcomeBack);
     }
-  }, [setVoiceMode, showStatus, speakAndListen]);
+  }, [setVoiceMode, showStatus, speakAndListen, user]);
 
   const stopVoiceDictation = useCallback(() => {
     playAccessibleChime("stop");
@@ -889,8 +1000,8 @@ export function GlobalVoiceDictator() {
         if (wasActiveBeforeBlurRef.current) {
           wasActiveBeforeBlurRef.current = false;
           // Check for remaining questions on return
-          const stored = loadStoredInterview();
-          const nextQ = getNextRemainingQuestion(stored.completedQuestions);
+          const stored = loadStoredInterview(user);
+          const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
           if (nextQ) {
             const isGu = currentLangRef.current.startsWith("gu");
             const isHi = currentLangRef.current.startsWith("hi");
@@ -898,7 +1009,7 @@ export function GlobalVoiceDictator() {
               ? `પાછા સ્વાગત છે! આગળનો પ્રશ્ન: ${nextQ.prompts.gu}`
               : isHi
               ? `वापसी पर स्वागत है! अगला सवाल: ${nextQ.prompts.hi}`
-              : `Welcome back! Continuing profile setup: ${nextQ.prompts.en}`;
+              : `Welcome back! Continuing setup: ${nextQ.prompts.en}`;
             setAiSpeechPrompt(questionPrompt);
             speakAndListen(questionPrompt);
           } else {
@@ -912,7 +1023,7 @@ export function GlobalVoiceDictator() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [listening, showStatus, speakAndListen, startListeningMic]);
+  }, [listening, showStatus, speakAndListen, startListeningMic, user]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -967,7 +1078,7 @@ export function GlobalVoiceDictator() {
             {/* Profile Questionnaire Progress Indicator */}
             {completedCount < totalSteps && (
               <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-emerald-50/80 px-2.5 py-1 text-[11px] font-medium text-emerald-900 border border-emerald-200/80">
-                <span>📋 Profile Setup Progress:</span>
+                <span>📋 Form Setup Progress:</span>
                 <span className="font-bold text-emerald-800">
                   {completedCount} / {totalSteps} verified
                 </span>
@@ -998,7 +1109,7 @@ export function GlobalVoiceDictator() {
             {/* Focused Target Field Indicator */}
             {focusedFieldLabel && (
               <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-200/60">
-                <span>🎯 Active Input:</span>
+                <span>🎯 Active Section:</span>
                 <span className="font-semibold text-neutral-900 truncate max-w-[180px]">
                   {focusedFieldLabel}
                 </span>

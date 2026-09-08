@@ -90,6 +90,22 @@ export function AuthGate() {
     setError("");
   }, [mode]);
 
+  // Listen for voice-guided section transitions (Name -> Email -> Password)
+  useEffect(() => {
+    const handleAuthSection = (e: Event) => {
+      const custom = e as CustomEvent<{ section: "name" | "email" | "password" }>;
+      if (custom.detail?.section) {
+        const sec = custom.detail.section;
+        setActiveSection(sec);
+        if (sec === "name") nameInputRef.current?.focus();
+        if (sec === "email") emailInputRef.current?.focus();
+        if (sec === "password") passwordInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("careerforge:auth-section", handleAuthSection);
+    return () => window.removeEventListener("careerforge:auth-section", handleAuthSection);
+  }, []);
+
   // Clean up any active field speech recognition when unmounting
   useEffect(() => {
     return () => {
