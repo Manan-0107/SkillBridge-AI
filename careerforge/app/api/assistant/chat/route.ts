@@ -12,6 +12,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { spawn } from "child_process";
+import path from "path";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
@@ -63,6 +65,62 @@ interface RequestBody {
   resumeDraftState?: ResumeDraftState;
 }
 
+/**
+ * Call Python AI Assistant Engine:
+ * 1. Queries running FastAPI server on http://127.0.0.1:8000/api/chat
+ * 2. Falls back to direct Python CLI execution via run_cli.py
+ */
+async function callPythonAIEngine(body: RequestBody): Promise<any> {
+  // Step 1: Fast HTTP call to Python FastAPI backend
+  try {
+    const res = await fetch("http://127.0.0.1:8000/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.reply) {
+        return data;
+      }
+    }
+  } catch (httpErr) {
+    // FastAPI server not listening or starting up; proceed to CLI fallback
+  }
+
+  // Step 2: Direct Python CLI Subprocess Execution
+  return new Promise((resolve) => {
+    try {
+      const scriptPath = path.join(process.cwd(), "python_ai", "run_cli.py");
+      const py = spawn("python", [scriptPath]);
+      let stdout = "";
+
+      py.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+
+      py.on("close", (code) => {
+        if (code === 0 && stdout.trim()) {
+          try {
+            const parsed = JSON.parse(stdout);
+            resolve(parsed);
+            return;
+          } catch (e) {}
+        }
+        resolve(null);
+      });
+
+      py.on("error", () => resolve(null));
+
+      py.stdin.write(JSON.stringify(body));
+      py.stdin.end();
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json();
@@ -79,6 +137,16 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Messages array required" }, { status: 400 });
+    }
+
+    // ─── 0. Primary Cognitive Engine: Python AI Assistant Brain ───────────────
+    try {
+      const pythonResponse = await callPythonAIEngine(body);
+      if (pythonResponse && pythonResponse.reply && pythonResponse.reply.trim().length > 10) {
+        return NextResponse.json(pythonResponse);
+      }
+    } catch (pyErr) {
+      console.warn("[Assistant API] Python AI Brain error:", pyErr);
     }
 
     const lastMessage = messages[messages.length - 1]?.text || "";

@@ -2,11 +2,11 @@
 
 import { useApp } from "@/lib/store";
 import { FeatureId } from "@/lib/intent";
+import { GoogleTranslateWidget } from "@/components/translation/GoogleTranslateWidget";
 
 const links: { id: FeatureId; label: string }[] = [
   { id: "resume", label: "Resume" },
   { id: "roadmap", label: "Roadmap" },
-  { id: "courses", label: "Courses" },
   { id: "practice", label: "Practice" },
   { id: "local", label: "Local" },
 ];
@@ -58,6 +58,7 @@ export function TopNav({
         </nav>
 
         <div className="flex items-center gap-3">
+          <GoogleTranslateWidget />
           {user?.picture ? (
             <img
               src={user.picture}

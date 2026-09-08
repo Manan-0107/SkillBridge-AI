@@ -35,9 +35,15 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentLanguage = "en-US";
 let isSelfSpeaking = false;
+let lastSpeechEndedAt = 0;
+let lastSpokenText = "";
+
+export function getLastSpokenText(): string {
+  return lastSpokenText;
+}
 
 export function isAIAudioPlaying(): boolean {
-  return isSelfSpeaking;
+  return isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700;
 }
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
@@ -315,9 +321,12 @@ export function speakText(
 
   if (!cleanText) {
     isSelfSpeaking = false;
+    lastSpeechEndedAt = Date.now();
     options?.onEnd?.();
     return;
   }
+
+  lastSpokenText = cleanText.toLowerCase();
 
   // Automatically detect language if not explicitly provided
   const targetLang = options?.lang || detectTextLanguage(cleanText);
@@ -347,6 +356,7 @@ export function speakText(
 
   const finalizeSpeech = () => {
     isSelfSpeaking = false;
+    lastSpeechEndedAt = Date.now();
     activeUtterance = null;
   };
 
@@ -413,9 +423,9 @@ export function startSpeechRecognition(
     return null;
   }
 
-  // Safeguard: NEVER listen while AI is speaking
-  if (isSelfSpeaking) {
-    console.warn("[Voice] Cannot start speech recognition while AI is speaking.");
+  // Safeguard: NEVER listen while AI is speaking or within 700ms cooldown
+  if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700) {
+    console.warn("[Voice Guard] Cannot start speech recognition during AI speech or cooldown.");
     callbacksOrOptions.onListeningChange?.(false);
     return null;
   }
@@ -448,16 +458,9 @@ export function startSpeechRecognition(
       onListeningChange(true);
     };
 
-    // ── Instant Barge-In / Interruption: cancel AI speech when user speaks ──
-    recognition.onspeechstart = () => {
-      if (isSelfSpeaking) {
-        stopSpeaking();
-      }
-    };
-
     recognition.onresult = (event: any) => {
-      // Safeguard 3: If AI is speaking, DROP ALL RESULTS IMMEDIATELY
-      if (isSelfSpeaking) {
+      // Safeguard: If AI is speaking or in post-speech cooldown, DROP ALL RESULTS
+      if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700) {
         return;
       }
 
@@ -475,11 +478,25 @@ export function startSpeechRecognition(
       if (final) {
         const cleanFinal = final.trim();
         if (!cleanFinal) return;
+
+        // Anti-Echo Signature Filter: if transcribed text is from the assistant's own voice, drop it!
+        const lowerFinal = cleanFinal.toLowerCase();
+        if (
+          lastSpokenText &&
+          (lastSpokenText.includes(lowerFinal) ||
+            (lowerFinal.length > 8 && lastSpokenText.slice(0, 60).includes(lowerFinal.slice(0, 20))))
+        ) {
+          console.warn("[Voice Guard] Filtered acoustic speaker feedback:", cleanFinal);
+          return;
+        }
+
         const detected = detectTextLanguage(cleanFinal);
         currentLanguage = detected;
         onTranscript(cleanFinal, true);
       } else if (interim) {
-        onTranscript(interim, false);
+        if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 700) {
+          onTranscript(interim, false);
+        }
       }
     };
 
@@ -711,4 +728,33 @@ export function getFieldPromptMessage(
   if (isRole) return "Please speak your target role or job title.";
   return `Please speak to fill ${fieldLabel || "this field"}.`;
 }
+
+/**
+ * Letter-by-letter vocal feedback for blind users typing or entering data.
+ */
+export function speakLetter(char: string, lang?: string) {
+  if (!isSpeechSynthesisSupported() || !char) return;
+  try {
+    let textToSay = char;
+    if (char === " ") textToSay = "Space";
+    else if (char === "\n" || char === "Enter") textToSay = "Enter";
+    else if (char === "Backspace") textToSay = "Backspace";
+    else if (char.length === 1 && /[a-zA-Z]/.test(char)) {
+      textToSay = char.toUpperCase();
+    }
+    const utterance = new SpeechSynthesisUtterance(textToSay);
+    utterance.lang = lang || currentLanguage || "en-US";
+    utterance.rate = 1.25;
+    window.speechSynthesis.speak(utterance);
+  } catch {}
+}
+
+/**
+ * Spells out a word character-by-character for auditory confirmation for visually impaired users.
+ */
+export function spellOutWord(word: string): string {
+  if (!word) return "";
+  return word.trim().split("").map((c) => (c === " " ? "space" : c.toUpperCase())).join(" - ");
+}
+
 

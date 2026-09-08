@@ -172,6 +172,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ─── 4. Sarvam AI Multilingual & Indic Speech-to-Text Fallback ──────────
+    const sarvamKey = process.env.SARVAM_API_KEY;
+    if (sarvamKey && sarvamKey.trim().length > 5) {
+      try {
+        const sarvamFormData = new FormData();
+        sarvamFormData.append("file", audioBlob, "audio.wav");
+        sarvamFormData.append("model", "saarika:v2");
+        if (language) sarvamFormData.append("language_code", language.includes("-") ? language : `${language}-IN`);
+
+        const res = await fetch("https://api.sarvam.ai/speech-to-text", {
+          method: "POST",
+          headers: { "api-subscription-key": sarvamKey },
+          body: sarvamFormData,
+          signal: AbortSignal.timeout(8000),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const recognizedText = data.transcript || "";
+          if (recognizedText.trim()) {
+            const detectedLang = detectLanguageFromText(recognizedText);
+            return NextResponse.json({
+              text: recognizedText.trim(),
+              language: data.language_code || detectedLang,
+              confidence: 0.94,
+              provider: "sarvam_saarika",
+            });
+          }
+        }
+      } catch (sarvamErr) {
+        console.warn("[/api/speech/transcribe] Sarvam AI fallback failed:", sarvamErr);
+      }
+    }
+
     return NextResponse.json(
       {
         text: "",

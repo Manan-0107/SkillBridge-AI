@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "py:dev": "python python_ai/server.py",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

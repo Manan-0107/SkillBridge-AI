@@ -667,7 +667,7 @@ export function AssistantHome({
                 if (voiceMode && !textFallbackActive) {
                   setTimeout(() => {
                     if (!isAISpeakingRef.current) startListening();
-                  }, 300);
+                  }, 650);
                 }
               },
               onError: () => {
@@ -875,7 +875,7 @@ export function AssistantHome({
             if (voiceMode && !textFallbackActive) {
               setTimeout(() => {
                 if (!isAISpeakingRef.current) startListening();
-              }, 300);
+              }, 650);
             }
           },
           onError: () => {
@@ -1168,20 +1168,6 @@ export function AssistantHome({
                   {l.flag} {l.nativeName} ({l.name})
                 </option>
               ))}
-            </select>
-
-            {/* Speech Provider Dropdown */}
-            <select
-              value={speechProvider}
-              onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
-              title="Speech Provider Strategy"
-              aria-label="Speech Provider Selector"
-              className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer hidden md:inline-block"
-            >
-              <option value="auto">⚡ Auto (Web → Azure → Google)</option>
-              <option value="web">🌐 Web Speech API (Free)</option>
-              <option value="azure">☁️ Microsoft Azure Speech</option>
-              <option value="google">☁️ Google Cloud Speech</option>
             </select>
 
             {/* Repeat Button */}

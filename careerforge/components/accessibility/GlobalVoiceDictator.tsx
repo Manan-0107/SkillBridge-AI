@@ -14,6 +14,7 @@ import {
   speakText,
   stopSpeaking,
   isSpeaking,
+  speakLetter,
   SUPPORTED_LANGUAGES,
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
@@ -21,6 +22,7 @@ import {
   normalizeSpokenName,
   getFieldPromptMessage,
 } from "@/lib/voice";
+import { BlindAccessibleFieldGuide } from "./BlindAccessibleFieldGuide";
 
 export function GlobalVoiceDictator() {
   const {
@@ -44,6 +46,7 @@ export function GlobalVoiceDictator() {
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [voiceBannerOpen, setVoiceBannerOpen] = useState(true);
+  const [blindGuideOpen, setBlindGuideOpen] = useState(false);
 
   // ─── Interactive AI Voice Agent Dialogue State ──────────────────────────────
   const [aiSpeechPrompt, setAiSpeechPrompt] = useState<string | null>(null);
@@ -129,22 +132,48 @@ export function GlobalVoiceDictator() {
     };
   }, []);
 
-  // ─── 2. Keyboard Shortcut (Alt + V) to Toggle Voice Anywhere ────────────────
+  // ─── 2. Keyboard Shortcuts: Alt+V (Voice) & Alt+B (Blind Field Guide) & Keystroke Readback ────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle Voice Dictation (Alt + V)
       if (e.altKey && (e.key === "v" || e.key === "V")) {
         e.preventDefault();
         toggleVoiceDictation();
+        return;
+      }
+      // Toggle Blind Accessibility Field Assistant (Alt + B)
+      if (e.altKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        setBlindGuideOpen((prev) => !prev);
+        return;
       }
       if (e.key === "Escape" && active) {
         stopVoiceDictation();
+        return;
+      }
+
+      // Letter-by-letter vocal readback when user is typing in any text input or textarea
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+        !e.altKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        accessibilityPrefs?.speechOutput !== false
+      ) {
+        if (e.key && e.key.length === 1) {
+          speakLetter(e.key, currentLangRef.current);
+        } else if (e.key === "Backspace" || e.key === "Enter") {
+          speakLetter(e.key, currentLangRef.current);
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, accessibilityPrefs?.speechOutput]);
 
   // ─── 3. Ask AI Agent for Dynamic Assistance in the User's Language ──────────
   const askAiAssistant = useCallback(
@@ -1072,6 +1101,18 @@ export function GlobalVoiceDictator() {
             <span>{active ? "Listening..." : "Voice Start"}</span>
           </button>
 
+          {/* Blind Accessibility Field Guide Button */}
+          <button
+            type="button"
+            onClick={() => setBlindGuideOpen(true)}
+            className="flex items-center gap-1 rounded-full bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1.5 text-xs font-bold text-emerald-900 border border-emerald-300 cursor-pointer transition-colors shadow-2xs"
+            title="Interactive Voice Field Guide for Blind Users (Alt + B)"
+            aria-label="Open Blind Accessibility Voice Field Guide"
+          >
+            <span>🦯</span>
+            <span>Blind Guide</span>
+          </button>
+
           {/* Quick Help Button */}
           <button
             type="button"
@@ -1154,6 +1195,12 @@ export function GlobalVoiceDictator() {
           </div>
         </div>
       </aside>
+
+      {/* Interactive Blind Accessible Field Guide (Yes/No Verification & Spelled Out Letters) */}
+      <BlindAccessibleFieldGuide
+        isOpen={blindGuideOpen}
+        onClose={() => setBlindGuideOpen(false)}
+      />
     </>
   );
 }
