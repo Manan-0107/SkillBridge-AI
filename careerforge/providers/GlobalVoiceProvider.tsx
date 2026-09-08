@@ -171,10 +171,9 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
   const { voiceLanguage, setVoiceLanguage } = useApp();
 
   const voice = useVoiceCommand({
-    // Stay enabled through the probe itself, and afterward for as long as
-    // we're in voice mode. Once resolved to text mode, disable — the mic
-    // should not keep running in the background.
-    enabled: isPreferenceLoading || isVoiceMode,
+    // Only enabled during the initial preference probe if needed;
+    // GlobalVoiceDictator handles continuous accessible speech recognition to prevent dual-mic collision.
+    enabled: isPreferenceLoading,
     lang: voiceLanguage || "en-US",
     onSpeechDetected: resolveAsVoiceMode,
     onFallbackTriggered: resolveAsTextMode,
@@ -218,10 +217,14 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
     voiceRef.current?.start();
   }, []);
 
-  // Kick off the activation flow once, on mount (home page entry).
+  // Microphone listening is coordinated cleanly by GlobalVoiceDictator
   useEffect(() => {
-    void runActivationFlow();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only fetch stored preference, do not launch competing mic probe
+    void fetchStoredPreference().then((fallback) => {
+      if (fallback === true) {
+        setIsVoiceMode(false);
+      }
+    });
   }, []);
 
   // Re-run on auth changes: a different user signing in must get *their*

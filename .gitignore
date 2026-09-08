@@ -16,3 +16,5 @@ careerforge/start-tunnel.js
 __pycache__/
 *.pyc
 *.pyo
+*.anon_profiles.json
+.anon_profiles.json
