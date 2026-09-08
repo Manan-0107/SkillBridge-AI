@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { isAIAudioPlaying, isCommandBarActive, subscribeCommandBar } from "@/lib/voice";
+import { isAIAudioPlaying, isSpeaking, isCommandBarActive, subscribeCommandBar } from "@/lib/voice";
 
 // ---------------------------------------------------------------------------
 // Minimal Web Speech API typings (not consistently shipped in lib.dom.d.ts)
@@ -144,6 +144,14 @@ export function useVoiceCommand(
     ownsCommandBar = false,
   } = options;
 
+  // Fresh callback references to prevent stale closures
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+  const onSpeechDetectedRef = useRef(onSpeechDetected);
+  onSpeechDetectedRef.current = onSpeechDetected;
+  const onFallbackTriggeredRef = useRef(onFallbackTriggered);
+  onFallbackTriggeredRef.current = onFallbackTriggered;
+
   // Park this recognizer while the command bar owns the mic (unless we *are* it).
   const commandBarActive = useSyncExternalStore(
     subscribeCommandBar,
@@ -181,10 +189,12 @@ export function useVoiceCommand(
     if (fallbackFiredRef.current) return;
     fallbackFiredRef.current = true;
     intentionalStopRef.current = true;
-    recognitionRef.current?.stop();
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
     setIsListening(false);
-    onFallbackTriggered?.();
-  }, [onFallbackTriggered]);
+    onFallbackTriggeredRef.current?.();
+  }, []);
 
   const registerStrike = useCallback(() => {
     strikesRef.current += 1;
@@ -222,23 +232,15 @@ export function useVoiceCommand(
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Debug: trace exactly what the speech engine emits, before any guard drops it.
-      const latest = event.results[event.results.length - 1];
-      console.log(
-        "[useVoiceCommand] onresult:",
-        JSON.stringify(latest?.[0]?.transcript ?? ""),
-        `final=${latest?.isFinal ?? false}`,
-        `aiAudioPlaying=${isAIAudioPlaying()}`,
-        `parked=${parkedRef.current}`
-      );
-
       // Ignore microphone input while AI audio or speech synthesis is playing
-      if (isAIAudioPlaying()) {
+      if (isSpeaking() || isAIAudioPlaying()) {
         return;
       }
 
+      const latest = event.results[event.results.length - 1];
+
       if (!heardSpeechSinceStartRef.current) {
-        onSpeechDetected?.();
+        onSpeechDetectedRef.current?.();
       }
       heardSpeechSinceStartRef.current = true;
       // A successful result resets the strike streak — failures must be
@@ -255,11 +257,15 @@ export function useVoiceCommand(
           interimChunk += result[0].transcript;
         }
       }
-      if (finalChunk) {
-        setTranscript((prev) => `${prev} ${finalChunk}`.trim());
-        onResult?.(finalChunk.trim());
+
+      if (finalChunk.trim()) {
+        const cleanFinal = finalChunk.trim();
+        setTranscript(cleanFinal);
+        setInterimTranscript("");
+        onResultRef.current?.(cleanFinal);
+      } else if (interimChunk.trim()) {
+        setInterimTranscript(interimChunk.trim());
       }
-      setInterimTranscript(interimChunk);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -291,7 +297,6 @@ export function useVoiceCommand(
       // Recognition ended without us asking it to. If it ended having heard
       // nothing at all in this session, that's silence — count it as a
       // strike, UNLESS onerror already registered one for this same cycle.
-      // Either way, restart to simulate persistent listening.
       if (!heardSpeechSinceStartRef.current && !strikeRegisteredThisCycleRef.current) {
         registerStrike();
       }
@@ -299,8 +304,7 @@ export function useVoiceCommand(
         try {
           recognition.start();
         } catch {
-          // start() throws if called while already starting; safe to ignore,
-          // the next onend cycle will retry.
+          // start() throws if called while already starting; safe to ignore
         }
       }
     };
@@ -309,15 +313,18 @@ export function useVoiceCommand(
   }, [
     enabled,
     lang,
-    onResult,
-    onSpeechDetected,
     registerStrike,
     resetStrikes,
     triggerFallback,
   ]);
 
   const start = useCallback(() => {
-    if (!enabled || parkedRef.current || fallbackFiredRef.current) return;
+    if (!enabled || parkedRef.current) return;
+    // Explicit start always resets the strike/fallback barrier
+    fallbackFiredRef.current = false;
+    strikesRef.current = 0;
+    setStrikes(0);
+
     const Ctor = resolveSpeechRecognitionCtor();
     if (!Ctor) {
       setIsSupported(false);
@@ -327,6 +334,7 @@ export function useVoiceCommand(
     setIsSupported(true);
     setIsRequestingPermission(true);
     intentionalStopRef.current = false;
+    setInterimTranscript("");
 
     if (!recognitionRef.current) {
       recognitionRef.current = buildRecognition();
@@ -334,8 +342,7 @@ export function useVoiceCommand(
     try {
       recognitionRef.current?.start();
     } catch {
-      // Already running — ignore. Some browsers throw InvalidStateError
-      // when start() is called on an already-active recognizer.
+      // Already running — ignore
       setIsRequestingPermission(false);
     }
   }, [buildRecognition, enabled, triggerFallback]);
@@ -345,6 +352,7 @@ export function useVoiceCommand(
     recognitionRef.current?.stop();
     setIsListening(false);
     setIsRequestingPermission(false);
+    setInterimTranscript("");
   }, []);
 
   useEffect(() => {

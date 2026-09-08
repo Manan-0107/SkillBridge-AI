@@ -275,21 +275,30 @@ function buildFallbackRoadmap(missingSkills: string[], role: string): SkillGapIt
   });
 }
 
+import { sanitizeHtmlAndSvg } from "@/lib/security/aiValidation";
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > 1024 * 1024) {
+      return NextResponse.json({ error: "Payload too large. Maximum size is 1MB." }, { status: 413 });
+    }
+
     const body = await req.json();
-    const { resumeText, role } = body as {
+    const { resumeText: rawResumeText, role } = body as {
       resumeText: string;
       role: string;
     };
 
-    if (!resumeText?.trim() || !role) {
+    if (!rawResumeText?.trim() || !role) {
       return NextResponse.json(
         { error: "resumeText and role are required" },
         { status: 400 }
       );
     }
+
+    const resumeText = sanitizeHtmlAndSvg(rawResumeText);
 
     // Run all 3 engines in parallel
     const [heuristicRaw, githubRaw, aiRaw] = await Promise.allSettled([

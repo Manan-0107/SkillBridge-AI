@@ -25,6 +25,7 @@ try:
 except ImportError:
     BeautifulSoup = None
 
+
 USER_AGENT = "CareerForge-Assistant/2.0 (contact@careerforge.local; bot/educational; MCP-Tools)"
 
 
@@ -96,6 +97,7 @@ class MCPToolRegistry:
         if is_who:
             clean_q = re.sub(r"^(who is|what is|tell me about|explain)\s*", "", clean_q, flags=re.IGNORECASE)
             clean_q = clean_q.strip(" ?.")
+
 
         results = []
         try:

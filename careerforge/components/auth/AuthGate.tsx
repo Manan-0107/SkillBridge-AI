@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, useRef, useEffect, useCallback } from "react";
+import { FormEvent, useState, useRef, useEffect } from "react";
 import { useApp } from "@/lib/store";
 import { hasGoogleClientId, requestGoogleProfile } from "@/lib/googleAuth";
 import {
@@ -16,6 +16,8 @@ import {
   playAccessibleChime,
   isSpeechRecognitionSupported,
 } from "@/lib/voice";
+import { VoiceSessionManager } from "@/lib/voice/VoiceSessionManager";
+import { VoiceDiagnosticsPanel } from "@/components/voice/VoiceDiagnosticsPanel";
 
 const COUNTRY_CODES = [
   { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
@@ -52,7 +54,13 @@ export function AuthGate() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Active section tracking (name -> email -> password)
+  // Always-On Voice UI State
+  const [vuiStatus, setVuiStatus] = useState<{ state: string; message: string }>({
+    state: "connecting",
+    message: "Connecting to always-on voice assistant...",
+  });
+
+  // Active section tracking
   const [activeSection, setActiveSection] = useState<"name" | "email" | "password">(
     mode === "signup" ? "name" : "email"
   );
@@ -84,186 +92,177 @@ export function AuthGate() {
   const [phoneStep, setPhoneStep] = useState<"input" | "otp">("input");
   const [phoneOtp, setPhoneOtp] = useState("");
 
-  // Validation flags for visual step progression
-  const isNameDone = name.trim().length >= 2;
-  const isEmailDone = email.includes("@") && email.length >= 5;
-  const isPasswordDone = password.length >= 6;
-
-  // Broadcast section change without forcing focus lock
-  const switchSection = useCallback((sec: "name" | "email" | "password", shouldFocus = false) => {
-    setActiveSection(sec);
-    if (shouldFocus) {
-      if (sec === "name") nameInputRef.current?.focus();
-      else if (sec === "email") emailInputRef.current?.focus();
-      else if (sec === "password") passwordInputRef.current?.focus();
-    }
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("careerforge:auth-section-active", {
-          detail: { section: sec, mode }
-        })
-      );
-    }
-  }, [mode]);
-
   useEffect(() => {
     // When switching mode, reset active section
-    const initialSec = mode === "signup" ? "name" : "email";
-    setActiveSection(initialSec);
+    setActiveSection(mode === "signup" ? "name" : "email");
     setError("");
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("careerforge:auth-mode-change", { detail: { mode } })
-      );
-      window.dispatchEvent(
-        new CustomEvent("careerforge:auth-section-active", {
-          detail: { section: initialSec, mode }
-        })
-      );
-    }
   }, [mode]);
 
-  // Sync form field values to GlobalVoiceDictator so AI state is never out of sync
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("careerforge:auth-values-update", {
-          detail: {
-            name: name.trim(),
-            email: email.trim(),
-            password,
-            isNameDone,
-            isEmailDone,
-            isPasswordDone,
-            activeSection,
-          },
-        })
-      );
-    }
-  }, [name, email, password, isNameDone, isEmailDone, isPasswordDone, activeSection]);
-
-  // Listen for external section transition requests from voice commands
+  // Listen for voice-guided section transitions and real-time voice typing sync
   useEffect(() => {
     const handleAuthSection = (e: Event) => {
-      const custom = e as CustomEvent<{ section: "name" | "email" | "password"; focus?: boolean }>;
+      const custom = e as CustomEvent<{ section: "name" | "email" | "password" }>;
       if (custom.detail?.section) {
         const sec = custom.detail.section;
         setActiveSection(sec);
-        if (custom.detail.focus) {
-          if (sec === "name") nameInputRef.current?.focus();
-          else if (sec === "email") emailInputRef.current?.focus();
-          else if (sec === "password") passwordInputRef.current?.focus();
+        if (sec === "name") nameInputRef.current?.focus();
+        if (sec === "email") emailInputRef.current?.focus();
+        if (sec === "password") passwordInputRef.current?.focus();
+      }
+    };
+
+    const handleAuthValue = (e: Event) => {
+      const custom = e as CustomEvent<{ field: "name" | "email" | "password"; value: string }>;
+      if (custom.detail?.field && typeof custom.detail?.value === "string") {
+        if (custom.detail.field === "name") setName(custom.detail.value);
+        if (custom.detail.field === "email") setEmail(custom.detail.value);
+        if (custom.detail.field === "password") setPassword(custom.detail.value);
+      }
+    };
+
+    const handleVuiStatus = (e: Event) => {
+      const custom = e as CustomEvent<{ state: string; message: string }>;
+      if (custom.detail) {
+        setVuiStatus(custom.detail);
+      }
+    };
+
+    const handleAuthComplete = async (e: Event) => {
+      const custom = e as CustomEvent<{ payload: { fullName?: string; email?: string; password?: string } }>;
+      const { fullName, email: userEmail, password: userPassword } = custom.detail?.payload || {};
+      if (userEmail && userPassword) {
+        setLoading(true);
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: userEmail.trim(),
+              password: userPassword,
+              name: fullName ? fullName.trim() : undefined,
+              mode: "signup",
+            }),
+          });
+          const data = await res.json();
+          if (data.success && data.user) {
+            playAccessibleChime("success");
+            await signIn(data.user.email, data.user.name);
+          }
+        } catch (err) {
+          console.error("Auto voice account creation error:", err);
+        } finally {
+          setLoading(false);
         }
       }
     };
+
     window.addEventListener("careerforge:auth-section", handleAuthSection);
-    return () => window.removeEventListener("careerforge:auth-section", handleAuthSection);
+    window.addEventListener("careerforge:auth-value", handleAuthValue);
+    window.addEventListener("careerforge:vui-status", handleVuiStatus);
+    window.addEventListener("careerforge:auth-complete", handleAuthComplete);
+
+    // Hydrate existing verified profile from anonymous storage if available
+    try {
+      const raw = localStorage.getItem("careerforge_interview_state");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.name) setName(parsed.name);
+        if (parsed.email) setEmail(parsed.email);
+      }
+    } catch {}
+
+    fetch("/api/profile/anonymous")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.ok && data.profile) {
+          if (data.profile.name) setName(data.profile.name);
+          if (data.profile.email) setEmail(data.profile.email);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      window.removeEventListener("careerforge:auth-section", handleAuthSection);
+      window.removeEventListener("careerforge:auth-value", handleAuthValue);
+      window.removeEventListener("careerforge:vui-status", handleVuiStatus);
+      window.removeEventListener("careerforge:auth-complete", handleAuthComplete);
+    };
   }, []);
 
   // Clean up any active field speech recognition when unmounting
   useEffect(() => {
+    const manager = VoiceSessionManager.getInstance();
+
+    manager.registerFieldCommitter("name", (fieldId, val) => {
+      const clean = normalizeSpokenName(val);
+      setName(clean);
+      playAccessibleChime("success");
+      setDictatingField(null);
+      setTimeout(() => {
+        setActiveSection("email");
+        emailInputRef.current?.focus();
+      }, 300);
+      return true;
+    });
+
+    manager.registerFieldCommitter("email", (fieldId, val) => {
+      const clean = normalizeSpokenEmail(val);
+      setEmail(clean);
+      playAccessibleChime("success");
+      setDictatingField(null);
+      setTimeout(() => {
+        setActiveSection("password");
+        passwordInputRef.current?.focus();
+      }, 300);
+      return true;
+    });
+
+    manager.registerFieldCommitter("password", (fieldId, val) => {
+      setPassword(val);
+      playAccessibleChime("success");
+      setDictatingField(null);
+      return true;
+    });
+
     return () => {
+      manager.unregisterFieldCommitter("name");
+      manager.unregisterFieldCommitter("email");
+      manager.unregisterFieldCommitter("password");
       if (fieldControllerRef.current) {
         fieldControllerRef.current.stop();
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-        }
       }
     };
   }, []);
 
-  // ─── Per-Field Voice Dictation Handler ──────────────────────────────────────
-  const toggleFieldDictation = (field: "name" | "email" | "password") => {
+  // ─── Per-Field Voice Dictation Handler via VoiceSessionManager ──────────────
+  const toggleFieldDictation = async (field: "name" | "email" | "password") => {
+    const manager = VoiceSessionManager.getInstance();
+    await manager.initialize();
+
     if (dictatingField === field) {
       // Stop dictation
       fieldControllerRef.current?.stop();
       fieldControllerRef.current = null;
       setDictatingField(null);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-      }
       return;
     }
 
-    if (!isSpeechRecognitionSupported()) {
-      setError("Speech recognition is not supported in this browser. Please type directly.");
-      return;
-    }
-
-    // Stop previous controller if running
-    fieldControllerRef.current?.stop();
-    switchSection(field, true);
+    // Set focus and state
+    setActiveSection(field);
     setDictatingField(field);
     playAccessibleChime("start");
 
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("careerforge:field-dictation-start", { detail: { field } })
-      );
-    }
+    // Focus target input
+    if (field === "name") nameInputRef.current?.focus();
+    if (field === "email") emailInputRef.current?.focus();
+    if (field === "password") passwordInputRef.current?.focus();
 
-    const controller = startSpeechRecognition({
-      lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
-      onListeningChange: (isListening) => {
-        if (!isListening && dictatingField === field) {
-          setDictatingField(null);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-          }
-        }
-      },
-      onTranscript: (transcript: string, isFinal?: boolean) => {
-        const clean = transcript.trim();
-        if (!clean) return;
-
-        if (field === "name") {
-          const val = normalizeSpokenName(clean);
-          setName(val);
-          if (isFinal) {
-            playAccessibleChime("success");
-            setDictatingField(null);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-            }
-            // Auto advance to email
-            setTimeout(() => {
-              switchSection("email", true);
-            }, 300);
-          }
-        } else if (field === "email") {
-          const val = normalizeSpokenEmail(clean);
-          setEmail(val);
-          if (isFinal) {
-            playAccessibleChime("success");
-            setDictatingField(null);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-            }
-            // Auto advance to password
-            setTimeout(() => {
-              switchSection("password", true);
-            }, 300);
-          }
-        } else if (field === "password") {
-          setPassword(clean);
-          if (isFinal) {
-            playAccessibleChime("success");
-            setDictatingField(null);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-            }
-          }
-        }
-      },
-      onError: () => {
-        setDictatingField(null);
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("careerforge:field-dictation-end"));
-        }
-      },
+    // Start authoritative voice interaction
+    manager.startInteraction({
+      fieldId: field,
+      mode: "FIELD_DICTATION",
+      expectedType: field,
     });
-
-    fieldControllerRef.current = controller;
   };
 
   // ─── Direct Form Submit with /api/auth/login API Integration ───────────────
@@ -272,17 +271,20 @@ export function AuthGate() {
     setError("");
 
     if (mode === "signup" && name.trim().length < 2) {
-      switchSection("name", true);
+      setActiveSection("name");
+      nameInputRef.current?.focus();
       return setError("Please enter your full name (at least 2 characters).");
     }
 
     if (!email.includes("@")) {
-      switchSection("email", true);
+      setActiveSection("email");
+      emailInputRef.current?.focus();
       return setError("Enter a valid email address.");
     }
 
     if (password.length < 6) {
-      switchSection("password", true);
+      setActiveSection("password");
+      passwordInputRef.current?.focus();
       return setError("Password needs at least 6 characters.");
     }
 
@@ -307,14 +309,10 @@ export function AuthGate() {
       }
 
       playAccessibleChime("success");
+      // Persist authenticated user to App Store
       await signIn(data.user.email, data.user.name);
     } catch (err: any) {
-      if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-        setError(err.message);
-      } else {
-        // Safe offline fallback
-        await signIn(email.trim(), mode === "signup" ? name.trim() : undefined);
-      }
+      setError(err.message || "An error occurred during authentication.");
     } finally {
       setLoading(false);
     }
@@ -331,17 +329,15 @@ export function AuthGate() {
         body: JSON.stringify({ mode: "guest" }),
       });
       const data = await res.json();
-      if (data?.success && data.user) {
+      if (data.success && data.user) {
         playAccessibleChime("success");
         await signIn(data.user.email, data.user.name);
-        return;
       }
     } catch {
-      // fallback
+      await signIn("alex.rivera@example.com", "Alex Rivera");
     } finally {
       setLoading(false);
     }
-    await signIn("alex.rivera@example.com", "Alex Rivera");
   };
 
   // ─── Google Auth Flow ───────────────────────────────────────────────────────
@@ -423,6 +419,11 @@ export function AuthGate() {
     signInWithPhone(fullPhone, phoneName.trim() || undefined);
   };
 
+  // Validation flags for visual step progression
+  const isNameDone = name.trim().length >= 2;
+  const isEmailDone = email.includes("@") && email.length >= 5;
+  const isPasswordDone = password.length >= 6;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-8 sm:px-6 sm:py-12">
       <div className="w-full max-w-md space-y-6">
@@ -436,6 +437,57 @@ export function AuthGate() {
 
         {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
+          {/* ─── Always-On Voice Accessibility Status Banner ─────────────── */}
+          <div
+            role="status"
+            aria-live="polite"
+            className="mb-5 flex items-center justify-between rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 to-blue-50/90 p-3 shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span
+                  className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    vuiStatus.state === "speaking"
+                      ? "animate-ping bg-blue-500"
+                      : vuiStatus.state === "listening"
+                      ? "animate-ping bg-emerald-500"
+                      : "bg-amber-400"
+                  }`}
+                />
+                <span
+                  className={`relative inline-flex h-3 w-3 rounded-full ${
+                    vuiStatus.state === "speaking"
+                      ? "bg-blue-600"
+                      : vuiStatus.state === "listening"
+                      ? "bg-emerald-600"
+                      : "bg-amber-500"
+                  }`}
+                />
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
+                  <span>🎙️ Always-On Voice Assistant</span>
+                  <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 border border-indigo-200">
+                    {vuiStatus.state}
+                  </span>
+                </p>
+                <p className="text-[11px] text-neutral-600">
+                  {vuiStatus.message}
+                </p>
+              </div>
+            </div>
+            {vuiStatus.state === "speaking" && (
+              <button
+                type="button"
+                onClick={() => (window as any).vuiClient?.interruptPlayback()}
+                className="text-[10px] font-semibold text-neutral-600 underline hover:text-neutral-900 cursor-pointer"
+                title="Interrupt assistant speaking"
+              >
+                Interrupt
+              </button>
+            )}
+          </div>
+
           {/* Mode Switcher: Create Account vs Sign In */}
           <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
             <button
@@ -468,8 +520,11 @@ export function AuthGate() {
                 <>
                   <button
                     type="button"
-                    onClick={() => switchSection("name", true)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setActiveSection("name");
+                      nameInputRef.current?.focus();
+                    }}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                       activeSection === "name"
                         ? "bg-neutral-900 text-white shadow-xs"
                         : isNameDone
@@ -486,8 +541,11 @@ export function AuthGate() {
 
               <button
                 type="button"
-                onClick={() => switchSection("email", true)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                onClick={() => {
+                  setActiveSection("email");
+                  emailInputRef.current?.focus();
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                   activeSection === "email"
                     ? "bg-neutral-900 text-white shadow-xs"
                     : isEmailDone
@@ -503,8 +561,11 @@ export function AuthGate() {
 
               <button
                 type="button"
-                onClick={() => switchSection("password", true)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                onClick={() => {
+                  setActiveSection("password");
+                  passwordInputRef.current?.focus();
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                   activeSection === "password"
                     ? "bg-neutral-900 text-white shadow-xs"
                     : isPasswordDone
@@ -536,7 +597,7 @@ export function AuthGate() {
                     type="button"
                     onClick={() => toggleFieldDictation("name")}
                     title="Dictate Full Name with Voice"
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
                       dictatingField === "name"
                         ? "bg-red-500 text-white animate-pulse"
                         : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
@@ -555,11 +616,8 @@ export function AuthGate() {
                     aria-label="Full Name"
                     className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                     value={name}
-                    onFocus={() => switchSection("name")}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      if (error) setError("");
-                    }}
+                    onFocus={() => setActiveSection("name")}
+                    onChange={(e) => setName(e.target.value)}
                     placeholder="Alex Rivera"
                     required
                   />
@@ -588,7 +646,7 @@ export function AuthGate() {
                   type="button"
                   onClick={() => toggleFieldDictation("email")}
                   title="Dictate Email Address with Voice"
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
                     dictatingField === "email"
                       ? "bg-red-500 text-white animate-pulse"
                       : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
@@ -607,11 +665,8 @@ export function AuthGate() {
                   aria-label="Email Address"
                   className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                   value={email}
-                  onFocus={() => switchSection("email")}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (error) setError("");
-                  }}
+                  onFocus={() => setActiveSection("email")}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="alex.rivera@example.com"
                   required
                 />
@@ -639,7 +694,7 @@ export function AuthGate() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 underline cursor-pointer"
+                    className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 underline"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -647,7 +702,7 @@ export function AuthGate() {
                     type="button"
                     onClick={() => toggleFieldDictation("password")}
                     title="Dictate Password with Voice"
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
                       dictatingField === "password"
                         ? "bg-red-500 text-white animate-pulse"
                         : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
@@ -667,11 +722,8 @@ export function AuthGate() {
                   aria-label="Password"
                   className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                   value={password}
-                  onFocus={() => switchSection("password")}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (error) setError("");
-                  }}
+                  onFocus={() => setActiveSection("password")}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters"
                   required
                 />
@@ -722,7 +774,7 @@ export function AuthGate() {
               type="button"
               onClick={handleGoogleAuth}
               disabled={googleBusy}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5 cursor-pointer"
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
             >
               <GoogleMark />
               <span className="text-xs font-semibold">Google</span>
@@ -735,7 +787,7 @@ export function AuthGate() {
                 setError("");
                 setGithubModalOpen(true);
               }}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5 cursor-pointer"
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
             >
               <GithubMark />
               <span className="text-xs font-semibold">GitHub</span>
@@ -749,7 +801,7 @@ export function AuthGate() {
                 setPhoneStep("input");
                 setPhoneModalOpen(true);
               }}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5 cursor-pointer"
+              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
             >
               <PhoneMark />
               <span className="text-xs font-semibold">Phone</span>
@@ -826,13 +878,13 @@ export function AuthGate() {
                   <button
                     type="button"
                     onClick={() => setGoogleModalOpen(false)}
-                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50 cursor-pointer"
+                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700 cursor-pointer"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
                   >
                     Allow &amp; Continue
                   </button>
@@ -895,13 +947,13 @@ export function AuthGate() {
                   <button
                     type="button"
                     onClick={() => setGithubModalOpen(false)}
-                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50 cursor-pointer"
+                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-neutral-800 cursor-pointer"
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-neutral-800"
                   >
                     Authorize CareerForge
                   </button>
@@ -980,13 +1032,13 @@ export function AuthGate() {
                       <button
                         type="button"
                         onClick={() => setPhoneModalOpen(false)}
-                        className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50 cursor-pointer"
+                        className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="rounded-lg bg-emerald-600 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="rounded-lg bg-emerald-600 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
                       >
                         <span>Send Code</span>
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1028,13 +1080,13 @@ export function AuthGate() {
                       <button
                         type="button"
                         onClick={() => setPhoneStep("input")}
-                        className="text-xs font-medium text-neutral-500 hover:text-neutral-800 cursor-pointer"
+                        className="text-xs font-medium text-neutral-500 hover:text-neutral-800"
                       >
                         ← Change number
                       </button>
                       <button
                         type="submit"
-                        className="rounded-lg bg-emerald-600 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
+                        className="rounded-lg bg-emerald-600 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors"
                       >
                         Verify &amp; Sign In
                       </button>
@@ -1046,6 +1098,9 @@ export function AuthGate() {
           </div>
         </div>
       )}
+
+      {/* Real-time Voice Diagnostics HUD */}
+      <VoiceDiagnosticsPanel />
     </div>
   );
 }

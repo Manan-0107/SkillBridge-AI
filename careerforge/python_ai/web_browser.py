@@ -9,10 +9,6 @@ import urllib.request
 import urllib.parse
 import json
 import re
-import urllib.request
-import urllib.parse
-import json
-import re
 from typing import Dict, Any, List, Optional
 
 try:
@@ -24,6 +20,7 @@ try:
     from bs4 import BeautifulSoup
 except ImportError:
     BeautifulSoup = None
+
 
 
 class WebBrowser:

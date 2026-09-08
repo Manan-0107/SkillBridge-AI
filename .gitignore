@@ -17,3 +17,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.lnk
+*.anon_profiles.json
+.anon_profiles.json

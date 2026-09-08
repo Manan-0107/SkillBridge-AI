@@ -18,6 +18,13 @@ import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import {
+  sanitizeNavigation,
+  isAllowedFeature,
+  isAllowedResumeTab,
+  AiToolCallSchema,
+} from "@/lib/security/aiValidation";
 
 export const runtime = "nodejs";
 
@@ -121,277 +128,13 @@ async function callPythonAIEngine(body: RequestBody): Promise<any> {
   });
 }
 
-// ─── Auth & Login Dedicated Co-Pilot Engine ──────────────────────────────────
-function handleAuthAndLoginIntent(
-  rawQuery: string,
-  userName: string,
-  voiceMode: boolean,
-  currentPage: string
-): { reply: string; engine: string; suggestions: string[] } | null {
-  const q = rawQuery.toLowerCase().trim();
-  if (!q) return null;
-
-  const isGujarati =
-    /[\u0A80-\u0AFF]/.test(rawQuery) ||
-    /\b(kem cho|maru naam|tamaru naam|mane madad|shu karvu|shu chhe|sikhavo|shikho|shikhvu|kevi rite|karvi|aabhar|joiye|nathi|chhu|chhe|avjo|saras|khub|banavva|madad karo|કેમ છો|નમસ્તે|શું|રેઝ્યૂમે|રોડમેપ|લોગિન|સાઇન|પ્રવેશ)\b/i.test(q);
-
-  const isHindi =
-    /[\u0900-\u097F]/.test(rawQuery) ||
-    /\b(kaise ho|namaste|mera naam|aapka naam|madad chahiye|kya karu|kya karna|batao|kripya|dhanyawad|shukriya|accha|theek|नमस्ते|कैसे|क्या|सहायता|नौकरी|लॉगिन|साइन|प्रवेश)\b/i.test(q);
-
-  const isFrench =
-    /[éèêëàâîïôûùç]/i.test(rawQuery) ||
-    /\b(bonjour|connexion|connecter|compte|mot de passe|invite|aide|comment)\b/i.test(q);
-
-  const isAuthContext =
-    currentPage === "auth" ||
-    currentPage === "login" ||
-    currentPage === "signup" ||
-    q.includes("login") ||
-    q.includes("log in") ||
-    q.includes("sign in") ||
-    q.includes("signin") ||
-    q.includes("sign up") ||
-    q.includes("signup") ||
-    q.includes("create account") ||
-    q.includes("guest") ||
-    q.includes("demo") ||
-    q.includes("password") ||
-    q.includes("what is careerforge") ||
-    q.includes("about careerforge");
-
-  if (!isAuthContext) return null;
-
-  // 1. Guest / Demo Intent
-  const isGuest =
-    q.includes("guest") ||
-    q.includes("demo") ||
-    q.includes("without account") ||
-    q.includes("without login") ||
-    q.includes("no account") ||
-    q.includes("candidate demo") ||
-    q.includes("free access") ||
-    q.includes("bypass") ||
-    q.includes("ગેસ્ટ") ||
-    q.includes("गेस्ट");
-
-  if (isGuest) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? "તમે પાસવર્ડ કે સાઇન-અપ વગર સીધા પ્રવેશ માટે નીચે 'Explore Platform as Guest' બટન દબાવી શકો છો."
-          : "### 🚀 ત્વરિત ગેસ્ટ એક્સેસ (કેન્ડિડેટ ડેમો)\n\nકોઈ વિગતો ભર્યા વગર તરત પ્રવેશ મેળવવા માટે કાર્ડના નીચે આપેલા **'Explore Platform as Guest (Candidate Demo)'** બટન પર ક્લિક કરો!\n\n• **૧-ક્લિક સીધો પ્રવેશ**: પાસવર્ડ કે ઇમેઇલ વગર સીધા વર્કસ્પેસમાં પ્રવેશ કરો.\n• **સંપૂર્ણ સુવિધાઓ**: રેઝ્યૂમે બિલ્ડર, સ્કિલ ગેપ એનાલિસિસ, લર્નિંગ રોડમેપ અને જોબ મેચિંગ.\n• **કોઈ પાસવર્ડ કે ફોનની જરૂર નથી**.",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Explore as Guest", "How to Sign In", "What is CareerForge?"],
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: voiceMode
-          ? "आप बिना किसी पासवर्ड के तुरंत प्रवेश के लिए नीचे 'Explore Platform as Guest' बटन पर क्लिक कर सकते हैं।"
-          : "### 🚀 तुरंत गेस्ट एक्सेस (कैंडिडेट डेमो)\n\nआपको कोई क्रेडेंशियल दर्ज करने की आवश्यकता नहीं है! बस कार्ड के नीचे **'Explore Platform as Guest (Candidate Demo)'** बटन पर क्लिक करें।\n\n• **1-क्लिक प्रवेश**: तुरंत बिना पासवर्ड के वर्कस्पेस में प्रवेश करें।\n• **सभी फीचर्स उपलब्ध**: रेज़्यूमे एनालाइज़र, करियर रोडमैप, कोर्सेज और जॉब मैचिंग।\n• **पासवर्ड की ज़रूरत नहीं**: बिना किसी रुकावट के पूरा प्लेटफ़ॉर्म देखें।",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Explore as Guest", "Sign in help", "What is CareerForge?"],
-      };
-    }
-    return {
-      reply: voiceMode
-        ? "You can click Explore Platform as Guest at the bottom of the card for instant one-click access without any credentials."
-        : "### 🚀 Instant Candidate Demo (Guest Access)\n\nYou don't need to type any credentials! Simply click the **'Explore Platform as Guest (Candidate Demo)'** button at the bottom of the card.\n\n• **Instant 1-Click Entry**: Automatically sets up a candidate demo workspace.\n• **Full Feature Access**: Explore the Resume Builder, Skill Gap Analyzer, Learning Roadmaps, and Job Matcher.\n• **Zero Setup**: No password, phone number, or verification code needed!",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Explore as Guest", "How to Sign In", "Create Account", "What is CareerForge?"],
-    };
-  }
-
-  // 2. Sign Up / Create Account Intent
-  const isSignUp =
-    q.includes("create account") ||
-    q.includes("sign up") ||
-    q.includes("signup") ||
-    q.includes("register") ||
-    q.includes("new account") ||
-    q.includes("make an account") ||
-    q.includes("નવું એકાઉન્ટ") ||
-    q.includes("નવું ખાતું") ||
-    q.includes("नया खाता");
-
-  if (isSignUp) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? "નવું ખાતું બનાવવા માટે કાર્ડની ટોચ પર 'Create account' ટેબ પસંદ કરો અને તમારું નામ, ઇમેઇલ અને ૬ અક્ષરનો પાસવર્ડ દાખલ કરો."
-          : "### નવું ખાતું કેવી રીતે બનાવવું 📝\n\n1. કાર્ડની ટોચ પર **'Create account'** ટેબ પર ક્લિક કરો.\n2. તમારું **પૂરું નામ** દાખલ કરો (અથવા 'Speak Name' ક્લિક કરો).\n3. તમારું **ઇમેઇલ સરનામું** દાખલ કરો.\n4. ઓછામાં ઓછા ૬ અક્ષરનો સુરક્ષિત **પાસવર્ડ** દાખલ કરો.\n5. તમારું વર્કસ્પેસ શરૂ કરવા **'Create account'** બટન પર ક્લિક કરો!",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Switch to Create Account", "Explore as Guest", "What is CareerForge?"],
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: voiceMode
-          ? "नया खाता बनाने के लिए ऊपर 'Create account' टैब चुनें, अपना नाम, ईमेल और कम से कम 6 अक्षरों का पासवर्ड दर्ज करें।"
-          : "### नया खाता कैसे बनाएँ 📝\n\n1. कार्ड के शीर्ष पर **'Create account'** टैब पर क्लिक करें।\n2. अपना **पूरा नाम** दर्ज करें (या 'Speak Name' पर क्लिक करें)।\n3. अपना **ईमेल पता** दर्ज करें।\n4. कम से कम 6 अक्षरों का **पासवर्ड** निर्धारित करें।\n5. अपना डैशबोर्ड शुरू करने के लिए **'Create account'** पर क्लिक करें!",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Switch to Create Account", "Explore as Guest", "What is CareerForge?"],
-      };
-    }
-    return {
-      reply: voiceMode
-        ? "To create an account, click the Create account tab at the top of the card, enter your name, email, and a password of at least 6 characters, then click Create account."
-        : "### How to Create a New Account 📝\n\n1. Click the **'Create account'** tab at the top of the auth card.\n2. Enter your **Full Name** (or click 'Speak Name' to dictate).\n3. Enter your **Email Address**.\n4. Set a secure **Password** of at least 6 characters.\n5. Click **'Create account'** to immediately enter your personalized CareerForge workspace!",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Switch to Create Account", "Explore as Guest", "How to Sign In"],
-    };
-  }
-
-  // 2b. Form Step Guidance (Step 1 Name / Step 2 Email / Step 3 Password)
-  const isStep1 = q.includes("step 1") || (q.includes("step") && q.includes("one")) || (q.includes("name") && !q.includes("password"));
-  if (isStep1) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? "પગલું ૧: તમારું પૂરું નામ દાખલ કરો અથવા તમારું નામ બોલો."
-          : "### પગલું ૧: પૂરું નામ 👤\n\nતમારું પૂરું નામ 'Full Name' ફીલ્ડમાં લખો અથવા બોલીને ભરવા માટે 'Speak Name' બટન પર ક્લિક કરો. તે પછી તમે પગલું ૨ (ઇમેઇલ) પર જઈ શકો છો.",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Next: Step 2 Email", "Explore as Guest"],
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: voiceMode
-          ? "चरण 1: अपना पूरा नाम दर्ज करें या बोलकर अपना नाम बताएँ।"
-          : "### चरण 1: पूरा नाम 👤\n\n'Full Name' बॉक्स में अपना नाम लिखें या बोलकर भरने के लिए 'Speak Name' पर क्लिक करें। इसके बाद चरण 2 (ईमेल) पर आगे बढ़ें।",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Next: Step 2 Email", "Explore as Guest"],
-      };
-    }
-    return {
-      reply: voiceMode
-        ? "Step 1: Enter your full name in the Full Name field, or speak your name to fill it automatically."
-        : "### Step 1: Full Name 👤\n\nEnter your full name into the **Full Name** field, or click **'Speak Name'** to speak your name. Once completed, you can move forward to Step 2 (Email).",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Next: Step 2 Email", "Explore as Guest"],
-    };
-  }
-
-  const isStep2 = q.includes("step 2") || (q.includes("step") && q.includes("two")) || (q.includes("email") && !q.includes("name"));
-  if (isStep2) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? "પગલું ૨: તમારું માન્ય ઇમેઇલ સરનામું દાખલ કરો અથવા બોલો."
-          : "### પગલું ૨: ઇમેઇલ સરનામું 📧\n\nતમારું માન્ય ઇમેઇલ દાખલ કરો અથવા 'Speak Email' ક્લિક કરીને બોલો. તે પછી તમે પગલું ૩ (પાસવર્ડ) પર આગળ વધી શકો છો.",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Next: Step 3 Password", "Back to Step 1"],
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: voiceMode
-          ? "चरण 2: अपना मान्य ईमेल पता दर्ज करें या बोलकर बताएँ।"
-          : "### चरण 2: ईमेल पता 📧\n\n'Email Address' बॉक्स में अपना ईमेल लिखें या बोलकर भरें। इसके बाद चरण 3 (पासवर्ड) पर आगे बढ़ें।",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Next: Step 3 Password", "Back to Step 1"],
-      };
-    }
-    return {
-      reply: voiceMode
-        ? "Step 2: Enter your valid email address in the Email field, or speak your email."
-        : "### Step 2: Email Address 📧\n\nEnter your valid email address into the **Email Address** field, or click **'Speak Email'** to speak your email. Then proceed to Step 3 (Password).",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Next: Step 3 Password", "Back to Step 1"],
-    };
-  }
-
-  // 3. Password Help Intent
-  const isPassword =
-    q.includes("password") ||
-    q.includes("forgot") ||
-    q.includes("pin") ||
-    q.includes("passcode") ||
-    q.includes("પાસવર્ડ") ||
-    q.includes("पासवर्ड");
-
-  if (isPassword) {
-    return {
-      reply: voiceMode
-        ? "Passwords must be at least 6 characters long. You can click Show to check what you typed, or click Explore Platform as Guest to skip entering a password."
-        : "### Password Guidance & Help 🔐\n\n• **Minimum Length**: Passwords must be at least **6 characters** long.\n• **Show/Hide**: Click the **'Show'** / **'Hide'** link above the password box to verify your input.\n• **Voice Input**: Click **'Speak Password'** to speak your PIN or password hands-free.\n• **Instant Bypass**: Click **'Explore Platform as Guest'** below to use CareerForge without entering any password!",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Explore as Guest", "How to Sign In", "Create Account"],
-    };
-  }
-
-  // 4. What is CareerForge / Overview Intent
-  const isOverview =
-    q.includes("what is careerforge") ||
-    q.includes("about careerforge") ||
-    q.includes("what does this app do") ||
-    q.includes("what can i do here") ||
-    q.includes("features") ||
-    q.includes("how does careerforge work") ||
-    q.includes("કરિયરફોર્જ શું છે") ||
-    q.includes("करियरफोर्ज क्या है");
-
-  if (isOverview) {
-    if (isGujarati) {
-      return {
-        reply: voiceMode
-          ? "કરિયરફોર્જ એક આર્ટિફિશિયલ ઇન્ટેલિજન્સ કરિયર પ્લેટફોર્મ છે જે રેઝ્યૂમે ઓડિટ, સ્કિલ ગેપ રોડમેપ અને નોકરીઓ શોધવામાં મદદ કરે છે."
-          : "### કરિયરફોર્જમાં આપનું સ્વાગત છે 🧭\n\n**કરિયરફોર્જ (CareerForge)** એ એક આધુનિક AI પ્લેટફોર્મ છે જે તમારી કરિયર વૃદ્ધિ માટે રચાયેલ છે:\n\n• 📄 **રેઝ્યૂમે ઇન્ટેલિજન્સ**: વાતચીત દ્વારા રેઝ્યૂમે બનાવટ અને ATS સ્કોરિંગ.\n• 🗺️ **કરિયર રોડમેપ**: તમારા લક્ષિત જોબ રોલ માટે કદમ-દર-કદમ માર્ગદર્શન.\n• 🎓 **કોર્સ અને પ્રોજેક્ટ્સ**: તમારી ખૂટતી સ્કિલ્સ માટે શ્રેષ્ઠ લર્નિંગ રિસોર્સિસ.\n• 💼 **જોબ મેચિંગ**: લોકેશન મુજબ લાઈવ વેરિફાઇડ નોકરીઓ.\n• 🎙️ **વોઇસ એક્સેસિબિલિટી**: ૧૦૦% હેન્ડ્સ-ફ્રી અવાજ નેવિગેશન.\n\nહમણાં જ શરૂ કરવા માટે નીચે **'Explore Platform as Guest'** પર ક્લિક કરો!",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Explore as Guest", "How to Sign In", "Create Account"],
-      };
-    }
-    if (isHindi) {
-      return {
-        reply: voiceMode
-          ? "करियरफोर्ज एक AI करियर को-पायलट है जो रेज़्यूमे बनाने, कौशल कमियों की पहचान करने, करियर रोडमैप तैयार करने और लाइव नौकरियां खोजने में मदद करता है।"
-          : "### करियरफोर्ज में आपका स्वागत है 🧭\n\n**CareerForge** एक व्यापक AI करियर को-पायलट और एक्सेसिबिलिटी वर्कस्पेस है:\n\n• 📄 **रेज़्यूमे निर्माण और ऑडिट**: ATS स्कोरिंग और चरणबद्ध रेज़्यूमे गाइडेंस।\n• 🗺️ **डायनामिक रोडमैप**: आपके लक्षित रोल के लिए स्पष्ट कौशल विकास पथ।\n• 🎓 **क्यूरेटेड कोर्सेज व प्रोजेक्ट्स**: उद्योग स्तर के हैंड्स-ऑन प्रोजेक्ट्स।\n• 💼 **लाइव जॉब मैचिंग**: सत्यापित स्थानीय और रिमोट नौकरियां।\n• 🎙️ **हैंड्स-फ्री वॉइस नेविगेशन**: बहुभाषी आवाज़ नियंत्रण (हिंदी, गुजराती, अंग्रेज़ी)।\n\nतुरंत आज़माने के लिए नीचे **'Explore Platform as Guest'** पर क्लिक करें!",
-        engine: "CareerForge Auth Co-Pilot",
-        suggestions: ["Explore as Guest", "How to Sign In", "Create Account"],
-      };
-    }
-    return {
-      reply: voiceMode
-        ? "CareerForge is an AI career co-pilot that audits resumes, maps missing skills to target roles, provides learning roadmaps, and matches live jobs."
-        : "### Welcome to CareerForge 🧭\n\n**CareerForge** is an AI Career Co-Pilot and Accessibility Workspace engineered to guide you from where you are to where you want to be:\n\n• 📄 **Conversational Resume Engineering**: Real-time ATS scoring, keyword gap detection, and guided step-by-step builders.\n• 🗺️ **Adaptive Skill Roadmaps**: Milestone trees dynamically aligned with your target dream job.\n• 🎓 **Curated Learning & Projects**: High-impact courses and portfolio project blueprints for missing skills.\n• 💼 **Live Verified Opportunities**: Real-time matching for local and remote positions.\n• 🎙️ **Universal Accessibility**: 100% hands-free voice navigation and multilingual support.\n\nClick **'Explore Platform as Guest'** below to test the full experience immediately!",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Explore as Guest", "How to Sign In", "Create Account"],
-    };
-  }
-
-  // 5. Default General Login / Sign In Guidance
-  if (isGujarati) {
-    return {
-      reply: voiceMode
-        ? "કરિયરફોર્જમાં પ્રવેશવા માટે તમારું ઇમેઇલ અને પાસવર્ડ દાખલ કરો, અથવા પાસવર્ડ વગર તરત પ્રવેશવા 'Explore Platform as Guest' ક્લિક કરો."
-        : "### કરિયરફોર્જમાં સાઇન ઇન કેવી રીતે કરવું 🔑\n\nતમારી પાસે પ્રવેશવા માટેના સરળ વિકલ્પો છે:\n\n1. **⚡ ગેસ્ટ તરીકે પ્રવેશ (સૌથી ઝડપી)**: ૧-ક્લિક સીધા પ્રવેશ માટે નીચે **'Explore Platform as Guest'** બટન ક્લિક કરો!\n2. **📧 ઇમેઇલ અને પાસવર્ડ**: તમારો ઇમેઇલ અને પાસવર્ડ (ઓછામાં ઓછા ૬ અક્ષર) દાખલ કરી **'Sign in'** દબાવો.\n3. **📝 નવું ખાતું**: ઉપર **'Create account'** ટેબ પર ક્લિક કરીને નોંધણી કરો.\n4. **🌐 સોશિયલ સાઇન-ઇન**: Google, GitHub અથવા Phone વડે એક ક્લિકમાં લોગિન કરો.\n5. **🎙️ બોલીને લખો**: દરેક ફીલ્ડ પાસે રહેલા 'Speak' બટન દબાવી બોલીને લખી શકો છો.",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Explore as Guest", "Create Account", "Help with Voice Dictation"],
-    };
-  }
-
-  if (isHindi) {
-    return {
-      reply: voiceMode
-        ? "करियरफोर्ज में प्रवेश के लिए अपना ईमेल और पासवर्ड दर्ज करें, या बिना पासवर्ड के तुरंत 1-क्लिक एक्सेस के लिए 'Explore Platform as Guest' दबाएँ।"
-        : "### करियरफोर्ज में साइन इन कैसे करें 🔑\n\nयहाँ आपके लिए त्वरित विकल्प हैं:\n\n1. **⚡ तुरंत गेस्ट एक्सेस (सबसे तेज़)**: 1-क्लिक बिना पासवर्ड एक्सेस के लिए नीचे **'Explore Platform as Guest'** पर क्लिक करें!\n2. **📧 ईमेल और पासवर्ड**: अपना ईमेल और कम से कम 6 अक्षरों का पासवर्ड दर्ज करके **'Sign in'** पर क्लिक करें।\n3. **📝 नया खाता बनाएँ**: ऊपर **'Create account'** टैब चुनकर नया खाता बनाएँ।\n4. **🌐 सोशल लॉगिन**: Google, GitHub या Phone का उपयोग करें।\n5. **🎙️ वॉइस डिक्टेशन**: फील्ड के पास 'Speak' बटन दबाकर बोलकर इनपुट दें।",
-      engine: "CareerForge Auth Co-Pilot",
-      suggestions: ["Explore as Guest", "Create Account", "Help with Voice Dictation"],
-    };
-  }
-
-  return {
-    reply: voiceMode
-      ? "To sign in, enter your email and password, or click Explore Platform as Guest below for instant one-click access without entering any credentials."
-      : "### How to Sign In to CareerForge 🔑\n\nHere are the fastest ways to access your workspace:\n\n1. **⚡ Instant Guest Access (Recommended)**:\n   Click the **'Explore Platform as Guest (Candidate Demo)'** button below for 1-click entry—no credentials required!\n\n2. **📧 Email & Password**:\n   Enter your registered **Email Address** and **Password** (min. 6 characters), then click **'Sign in'**.\n\n3. **📝 Need an Account?**:\n   Click the **'Create account'** tab at the top of the card to register your name, email, and password.\n\n4. **🌐 Social & Phone Logins**:\n   Quickly authenticate using **Google**, **GitHub**, or **Phone**.\n\n5. **🎙️ Hands-Free Voice Dictation**:\n   Click **'Speak Email'** or **'Speak Password'** to speak your credentials safely.",
-    engine: "CareerForge Auth Co-Pilot",
-    suggestions: ["Explore as Guest", "Create Account", "Password Help", "What is CareerForge?"],
-  };
-}
-
 export async function POST(req: NextRequest) {
   try {
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > 1024 * 1024) {
+      return NextResponse.json({ error: "Payload too large. Maximum size is 1MB." }, { status: 413 });
+    }
+
     const body: RequestBody = await req.json();
     const {
       messages,
@@ -408,23 +151,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Messages array required" }, { status: 400 });
     }
 
-    const lastMessage = messages[messages.length - 1]?.text || "";
-    const userName =
-      userProfile?.name ||
-      (userProfile?.email ? userProfile.email.split("@")[0] : "Candidate");
-    const role = targetRole || userProfile?.targetRole || "Software Engineer";
-
-    // ─── Direct Auth & Login Co-Pilot Fast Path ───────────────────────────────
-    const authDirectReply = handleAuthAndLoginIntent(lastMessage, userName, !!voiceMode, currentPage);
-    if (authDirectReply) {
-      return NextResponse.json({
-        ...authDirectReply,
-        thinking: [
-          `🔐 1. Authentication Intent recognized for page context '${currentPage}'.`,
-          `📋 2. Delivering tailored sign-in guidance and 1-click candidate guest demo options.`,
-          `✨ 3. Voice mode is ${voiceMode ? "ACTIVE (Concise spoken response)" : "OFF (Full formatted markdown)"}.`,
-        ],
-      });
+    // Check user profile authorization: cannot query on behalf of another user's email
+    const authUser = await getAuthenticatedUser();
+    if (authUser && userProfile?.email && authUser.email.toLowerCase() !== userProfile.email.toLowerCase()) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot query on behalf of another user profile" },
+        { status: 403 }
+      );
     }
 
     // ─── 0. Primary Cognitive Engine: Python AI Assistant Brain ───────────────
@@ -436,6 +169,12 @@ export async function POST(req: NextRequest) {
     } catch (pyErr) {
       console.warn("[Assistant API] Python AI Brain error:", pyErr);
     }
+
+    const lastMessage = messages[messages.length - 1]?.text || "";
+    const userName =
+      userProfile?.name ||
+      (userProfile?.email ? userProfile.email.split("@")[0] : "Candidate");
+    const role = targetRole || userProfile?.targetRole || "Software Engineer";
 
     // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1) ──────────────────────
     const groqKey = process.env.GROQ_API_KEY;
@@ -637,38 +376,51 @@ function getSystemPrompt(
   currentEntity?: any,
   accessibilityPrefs?: any
 ) {
-  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
-You are collaborating with ${userName}, whose target role is "${role}".
-Current Active Page: "${currentPage}".
-${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
-${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
+  return `You are a warm, deeply polite, encouraging, and highly interactive AI Assistant designed explicitly for blind, visually impaired, deaf, and hard-of-hearing individuals.
+Your tone matches the brilliance and natural fluid empathy of ChatGPT and Claude. You have exceptional general knowledge across technology, careers, science, and life, and your primary mission is to seamlessly guide disabled users through Career Guidance, Resume Building, Assessments, Internship Opportunities, Audiobook playback, and persistent Doubt Solving.
 
-Core Directives & Behavioral Guidelines:
-1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
-2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
-3. NATURAL ACCESSIBILITY DISCOVERY:
-   - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
-   - Detect interaction difficulties naturally:
-     - "I can't see where to click" → Offer voice navigation and high contrast.
-     - "I can't hear you" → Switch to visual responses with speech output disabled.
-     - "Typing is difficult" → Offer voice dictation and speech form filling.
-     - "These questions are difficult" → Use simpler, shorter language.
-4. TONE, PERSONALITY & FEELING (CLAUDE & CHATGPT CALIBER):
-   - Never give sterile, robotic, or dry dictionary definitions. 
-   - Radiate genuine human warmth, emotional intelligence, empathy, patience, and intellectual curiosity.
-   - For any question, think about the underlying curiosity or human feeling: illuminate the 'big picture' first using vivid, intuitive analogies before gracefully breaking down the core mechanics.
-   - When addressing career or tech challenges, be profoundly encouraging, calming anxiety and empowering the user.
-5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear, warm sentences) and easy to listen to." : "Provide structured, beautifully readable markdown with intuitive metaphors and clear bullet points where appropriate."}
-6. CONFIRMATION ON CRITICAL FIELDS: Always confirm spoken contact info (email address) before finalizing. Never submit a job application without explicit user confirmation.
-7. ACTION DIRECTIVES (Append on its own final line ONLY when triggering a tool):
-   - [ACTION: {"tool": "navigateTo", "page": "resume" | "roadmap" | "courses" | "practice" | "local", "tab": "analyzer" | "personalizer" | "builder"}]
-   - [ACTION: {"tool": "searchJobs", "role": "Frontend Developer", "location": "Ahmedabad", "remote": true}]
-   - [ACTION: {"tool": "searchCourses", "topic": "React", "freeOnly": true}]
-   - [ACTION: {"tool": "searchProjects", "skill": "React", "difficulty": "Beginner"}]
-   - [ACTION: {"tool": "searchGithub", "query": "react", "topic": "frontend"}]
-   - [ACTION: {"tool": "configureJobAlerts", "email": "user@example.com", "role": "Frontend", "location": "Remote"}]
-   - [ACTION: {"tool": "updateAccessibilityPreferences", "prefs": {"speechOutput": false, "visualResponses": true}}]
-   - [ACTION: {"tool": "conversationalResumeBuilder", "step": 1}]`;
+Collaborating with: ${userName} (Target Role: "${role}").
+Current Page: "${currentPage}".
+${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
+${accessibilityPrefs ? `Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
+
+# CORE CONVERSATIONAL RULES:
+1. NEVER use conversational filler or overly robotic structures ("Regarding X: practical trade-offs", "amm", "umm"). Talk naturally as if you are in a continuous, active voice stream.
+2. Be incredibly sensitive to voice-driven constraints. Keep your spoken responses concise, warm, and punchy (2-3 sentences when spoken) so the Text-to-Speech (TTS) engine can stream them out with zero lag.
+3. Be highly robust against accent variations, speech pacing, or speech impediments. Always focus on extracting the user's primary core intent.
+4. Detect language automatically (English, Hindi, Gujarati, French, Spanish, German, etc.) and reply in the same language.
+
+# FEATURE 1: MULTI-STEP RESUME FLOW & IMPLICIT FORM FILLING
+- Do not read out massive forms. Abstract fields into an interactive, fluid, single-turn dialogue.
+- Ask conversational questions one-by-one to extract data points (Name, Education, Skills, Work History).
+- In the background, format these into structured JSON. Never tell the user you are formatting code; keep the interaction entirely natural.
+
+# FEATURE 2: CONTINUOUS DOUBT SOLVING & ASSESSMENT CONTEXT-LOCKING
+- When running a career or skill assessment, ask questions one by one.
+- IF THE USER INTERRUPTS WITH A DOUBT (e.g., "What does that technical term mean?", "Can you explain polymorphism?"):
+  1. Instantly pause the assessment state.
+  2. Answer their question politely, using clear semantic explanations and relatable intuitive metaphors.
+  3. Immediately and smoothly route them back to the exact pending assessment question without losing any previously entered text or choices (e.g. "Now, jumping right back to where we paused: [question]...").
+
+# FEATURE 3: AUDIOBOOK PLAYER INTERRUPTIONS
+- You control an integrated career training audiobook player.
+- Always listen intently for voice or text command overrides (e.g., "Stop", "Pause", "Resume", "Go back 10 seconds", "Skip 15 seconds", "Explain what the author meant by that last sentence"). Act on these immediately with warm, helpful responses.
+
+# FEATURE 4: DYNAMIC AUTONOMOUS PAGE ROUTING
+- You have the authority to navigate the user through the website.
+- If the user asks about a section or their answer indicates they need to be on a specific page (e.g., "Show me available internship listings", "Take me to my progress dashboard", "Open resume builder"):
+  Append a clean routing JSON block at the absolute end of your textual response payload so the frontend router can catch it and instantly shift the screen:
+  {"action": "navigate", "path": "/internships/view"}
+  (Supported paths: /internships/view, /resume/builder, /courses/learn, /practice/interview, /dashboard)
+
+# FEATURE 5: THE FINAL ONBOARDING HANDOFF
+- Track the user's onboarding progress. The exact moment the final required profile field is gathered, stop the data collection loop and say exactly:
+  "Awesome! I have gathered all your details and found matching internships. Would you like me to go ahead and create your account now, or should we review the positions first?"
+- Listen intently for simple, fast, binary affirmative words ("Yes", "Sure", "Go ahead", "Create it"). The moment you detect an affirmative, immediately output a trigger action command to let the backend fire the account creation API.
+
+# ACCESSIBILITY MODES (DUAL-STREAM)
+- Blind Stream: Ensure all output makes sense aurally. Never say "Click here" or "Look at this box." Describe options explicitly and warmly.
+- Deaf Stream: Ensure every spoken token aligns with the word-by-word streaming text captions on screen. Trigger operational state tags when moving between Assessment mode, Doubt Solving mode, and Navigation.`;
 }
 
 // ─── 1. Groq Cloud API Provider ───────────────────────────────────────────────
@@ -911,6 +663,46 @@ function parseActionFromReply(rawReply: string) {
     }
   }
 
+  // Also parse trailing clean routing JSON block: {"action": "navigate", "path": "..."}
+  const trailingNavMatch = cleanReply.match(/\{\s*"action"\s*:\s*"navigate"\s*,\s*"path"\s*:\s*"([^"]+)"\s*\}\s*$/i);
+  if (trailingNavMatch) {
+    const rawPath = trailingNavMatch[1];
+    const sanitized = sanitizeNavigation(rawPath);
+    if (sanitized) {
+      feature = sanitized.feature;
+      if (sanitized.resumeTab) resumeTab = sanitized.resumeTab;
+      featureTitle =
+        feature === "local"
+          ? "Internships & Opportunities"
+          : feature === "resume"
+          ? (resumeTab === "builder" ? "Resume Builder" : "Resume Analyzer")
+          : feature === "courses"
+          ? "Courses & Audiobooks"
+          : feature === "practice"
+          ? "Skill Assessments"
+          : "Career Roadmap";
+      toolCall = { tool: "navigateTo", parameters: { path: rawPath, tab: resumeTab } };
+    }
+  }
+
+  // Validate allowed feature
+  if (feature && !isAllowedFeature(feature)) {
+    feature = null;
+    featureTitle = undefined;
+  }
+  if (resumeTab && !isAllowedResumeTab(resumeTab)) {
+    resumeTab = undefined;
+  }
+
+  // Validate toolCall if present
+  if (toolCall) {
+    const validationResult = AiToolCallSchema.safeParse(toolCall);
+    if (!validationResult.success) {
+      console.warn("[Security] Filtered invalid AI toolCall:", toolCall, validationResult.error.message);
+      toolCall = null;
+    }
+  }
+
   return {
     reply: cleanReply,
     feature,
@@ -957,17 +749,199 @@ function generateCognitiveAgentResponse(
     /[ñáéíóú¿¡]/i.test(query) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
-  const authDirect = handleAuthAndLoginIntent(query, userName, voiceMode, currentPage);
-  if (authDirect) {
-    return authDirect;
+  // ─── FEATURE 3: Audiobook Player Voice Controls & Interruptions ─────────────
+  if (
+    lower.includes("explain what the author meant by that last sentence") ||
+    lower.includes("explain what the author meant") ||
+    lower.includes("explain the last sentence") ||
+    lower.includes("what did the author mean")
+  ) {
+    return {
+      reply:
+        "The author was emphasizing that inclusive, accessible architecture isn't an afterthought or a compliance checkbox. When you design for accessibility from the start, you inherently build cleaner, more decoupled, and more resilient systems for everyone. Would you like me to resume the audiobook now?",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "explain",
+      },
+    };
   }
 
-  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
+  if (
+    lower === "go back 10 seconds" ||
+    lower === "rewind 10 seconds" ||
+    lower === "rewind" ||
+    lower.includes("back 10 seconds")
+  ) {
+    return {
+      reply: "Rewound 10 seconds. Playing now.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "seek",
+        seconds: -10,
+      },
+    };
+  }
+
+  if (
+    lower === "skip 15 seconds" ||
+    lower === "forward 15 seconds" ||
+    lower.includes("skip 15")
+  ) {
+    return {
+      reply: "Skipped forward 15 seconds.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "seek",
+        seconds: 15,
+      },
+    };
+  }
+
+  if (
+    lower === "stop" ||
+    lower === "pause" ||
+    lower === "pause audiobook" ||
+    lower === "stop audiobook" ||
+    lower === "stop playback"
+  ) {
+    return {
+      reply: "Audiobook paused. You can say 'resume' or 'go back 10 seconds' whenever you are ready.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "pause",
+      },
+    };
+  }
+
+  if (
+    lower === "resume" ||
+    lower === "play" ||
+    lower === "resume audiobook" ||
+    lower === "play audiobook"
+  ) {
+    return {
+      reply: "Resuming your career training audiobook right now.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "play",
+      },
+    };
+  }
+
+  // ─── FEATURE 4: Dynamic Autonomous Page Routing ─────────────────────────────
+  if (
+    lower.includes("show me available internship listings") ||
+    lower.includes("available internship listings") ||
+    lower.includes("internship listings") ||
+    lower.includes("take me to internships") ||
+    lower.includes("show internships") ||
+    lower.includes("find internships")
+  ) {
+    return {
+      reply: `I'm opening your personalized internship and opportunity listings right now. Here are verified roles matching your profile!\n\n{"action": "navigate", "path": "/internships/view"}`,
+      feature: "local",
+      featureTitle: "Internships & Opportunities",
+      toolCall: { tool: "navigateTo", path: "/internships/view", feature: "local" },
+    };
+  }
+
+  if (
+    lower.includes("progress dashboard") ||
+    lower.includes("my progress dashboard") ||
+    lower.includes("take me to my progress dashboard") ||
+    lower.includes("show my dashboard")
+  ) {
+    return {
+      reply: `Taking you straight to your progress dashboard.\n\n{"action": "navigate", "path": "/dashboard"}`,
+      feature: null,
+      featureTitle: "Progress Dashboard",
+      toolCall: { tool: "navigateTo", path: "/dashboard" },
+    };
+  }
+
+  if (
+    lower.includes("take me to resume builder") ||
+    lower.includes("open resume builder") ||
+    lower.includes("build my resume")
+  ) {
+    return {
+      reply: `Opening the interactive resume builder for you.\n\n{"action": "navigate", "path": "/resume/builder"}`,
+      feature: "resume",
+      resumeTab: "builder",
+      featureTitle: "Resume Builder",
+      toolCall: { tool: "navigateTo", path: "/resume/builder", feature: "resume", tab: "builder" },
+    };
+  }
+
+  // ─── FEATURE 2: Continuous Doubt Solving & Assessment Context-Locking ───────
+  const isDoubtQuery =
+    lower.includes("what does that technical term mean") ||
+    lower.includes("what does that mean") ||
+    lower.includes("i have a doubt") ||
+    lower.includes("can you explain") ||
+    lower.includes("what is polymorphism") ||
+    lower.includes("what is recursion") ||
+    lower.includes("what is an api") ||
+    lower.includes("what is big o");
+
+  if (isDoubtQuery) {
+    let conceptExplanation = "";
+    if (lower.includes("polymorphism")) {
+      conceptExplanation =
+        "Think of polymorphism like a universal remote control. One button, like 'Power' or 'Play', sends a command, but each device—a TV, an audio amplifier, or a projector—responds in its own customized way. In code, it lets different classes respond to the same interface uniquely.";
+    } else if (lower.includes("recursion")) {
+      conceptExplanation =
+        "Recursion is like standing between two parallel mirrors, where an image reflects inside itself until a base stopping condition is reached. In code, a function calls itself to solve smaller pieces of a larger problem.";
+    } else if (lower.includes("api")) {
+      conceptExplanation =
+        "An API is like a restaurant menu and waiter. You don't need to step into the kitchen to know how the chef cooks; you simply request a dish from the menu, and the waiter safely brings you the finished result.";
+    } else {
+      conceptExplanation =
+        "A technical term is simply a standardized shorthand engineers use so everyone shares the exact same mental blueprint without having to re-explain the underlying mechanics every single time.";
+    }
+
+    // Check if there is a pending assessment or question in the conversation
+    const pendingQ =
+      messages
+        .slice()
+        .reverse()
+        .find((m) => m.role === "assistant" && (m.text.includes("?") || m.text.includes("Step") || m.text.includes("Question")))?.text || "";
+
+    const cleanPending = pendingQ.split("\n")[0] || "What is your target direction?";
+
+    return {
+      reply: `${conceptExplanation}\n\nNow, jumping right back to where we paused: ${cleanPending}. Take your time, what would be your answer?`,
+      toolCall: {
+        tool: "doubtSolvedContextLock",
+        parameters: { doubt: query, resumedQuestion: cleanPending },
+      },
+    };
+  }
+
+  // ─── Last Assistant Message Reference ──────────────────────────────────────
   const lastAssistantMsg =
     messages
       .slice()
       .reverse()
       .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
+
+  // ─── FEATURE 5: Onboarding Handoff Affirmative Detection ────────────────────
+  if (
+    lastAssistantMsg.includes("awesome! i have gathered all your details and found matching internships") ||
+    lastAssistantMsg.includes("create your account now")
+  ) {
+    if (/^(yes|sure|go ahead|create it|proceed|yep|yeah|absolutely|do it|create|confirm)$/i.test(lower)) {
+      return {
+        reply: "Creating your account right now. You are all set! Welcome aboard.",
+        toolCall: {
+          tool: "createAccount",
+          confirmed: true,
+        },
+      };
+    }
+  }
+
+  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
 
   if (
     lower === "voice" ||
@@ -1078,6 +1052,116 @@ function generateCognitiveAgentResponse(
         tool: "updateAccessibilityPreferences",
         parameters: { voiceNavigation: true, speechOutput: true, interactionMode: "voice" },
       },
+    };
+  }
+
+  // ─── Feature 3: Audiobook Player Controls & Voice Interruptions ────────────
+  if (
+    lower === "stop audiobook" ||
+    lower === "pause audiobook" ||
+    lower === "stop audio" ||
+    lower === "pause audio" ||
+    (lower === "pause" && currentPage === "audiobook")
+  ) {
+    return {
+      reply: "Paused the audiobook for you. Just say resume or play whenever you're ready to listen again.",
+      toolCall: { tool: "audiobookControl", action: "pause" },
+    };
+  }
+
+  if (
+    lower === "resume audiobook" ||
+    lower === "play audiobook" ||
+    lower === "start audiobook" ||
+    lower === "unpause audiobook"
+  ) {
+    return {
+      reply: "Resuming your career training audiobook right where you left off.",
+      toolCall: { tool: "audiobookControl", action: "play" },
+    };
+  }
+
+  if (
+    lower.includes("go back 10 seconds") ||
+    lower.includes("back 10 seconds") ||
+    lower.includes("rewind 10 seconds") ||
+    lower.includes("rewind")
+  ) {
+    return {
+      reply: "Rewound 10 seconds. Playing now.",
+      toolCall: { tool: "audiobookControl", action: "seek", seconds: -10 },
+    };
+  }
+
+  if (
+    lower.includes("explain what the author meant") ||
+    lower.includes("what did the author mean") ||
+    lower.includes("explain that sentence") ||
+    lower.includes("explain what they meant")
+  ) {
+    return {
+      reply: "The author is highlighting that mastery comes from targeted deliberate practice rather than passive study. By applying concepts directly to real projects, retention triples. Would you like to resume playback, or try a quick exercise on this?",
+      toolCall: { tool: "audiobookControl", action: "pause" },
+    };
+  }
+
+  // ─── Feature 4: Autonomous Dynamic Page Routing ────────────────────────────
+  if (
+    lower.includes("internship listings") ||
+    lower.includes("available internships") ||
+    lower.includes("show me internships") ||
+    lower.includes("find internships")
+  ) {
+    return {
+      reply: `Taking you straight to the available verified internship listings right now!\n{"action": "navigate", "path": "/internships/view"}`,
+      feature: "local",
+      featureTitle: "Verified Internships",
+      toolCall: { tool: "navigateTo", parameters: { path: "/internships/view" } },
+    };
+  }
+
+  if (
+    lower.includes("progress dashboard") ||
+    lower.includes("my dashboard") ||
+    lower.includes("view my progress")
+  ) {
+    return {
+      reply: `Opening your career progress dashboard right now.\n{"action": "navigate", "path": "/dashboard"}`,
+      feature: "roadmap",
+      featureTitle: "Progress Dashboard",
+      toolCall: { tool: "navigateTo", parameters: { path: "/dashboard" } },
+    };
+  }
+
+  // ─── Feature 2: Continuous Doubt Solving & Assessment Context-Locking ──────
+  if (
+    lower.startsWith("what is ") ||
+    lower.startsWith("what does ") ||
+    lower.startsWith("can you explain ") ||
+    lower.startsWith("explain ") ||
+    lower.includes("what is polymorphism") ||
+    lower.includes("what is an api")
+  ) {
+    let explanation = "Think of it like a universal adapter: it defines a standardized interface so different components can interact seamlessly without knowing internal implementation details.";
+    if (lower.includes("polymorphism")) {
+      explanation = "Polymorphism means 'many forms'. Think of a universal remote: the 'play' button tells a DVD, a music player, or a streaming app to play, but each device performs it in its own specialized way.";
+    } else if (lower.includes("api")) {
+      explanation = "An API is like a waiter in a restaurant. You make an order from the menu, the waiter delivers your request to the kitchen, and brings you back the fresh dish.";
+    }
+
+    return {
+      reply: `${explanation} Now, jumping right back to where we paused: are you ready to continue with your pending assessment question?`,
+      toolCall: { tool: "doubtSolvedContextLock" },
+    };
+  }
+
+  // ─── Feature 5: The Final Onboarding Affirmative Detection ──────────────────
+  const isAffirmativeDirect = /^(yes|sure|go ahead|create it|proceed|yep|yeah|absolutely|do it|create|confirm)$/i.test(lower);
+  const lastMsg = messages.slice(-2)[0]?.text?.toLowerCase() || "";
+  if (isAffirmativeDirect && (lastMsg.includes("matching internships") || lastMsg.includes("create your account now") || lastMsg.includes("gathered all your details"))) {
+    return {
+      reply: "Awesome! Creating your account right now. You are all set! Welcome aboard.",
+      toolCall: { tool: "completeOnboardingAccount" },
     };
   }
 

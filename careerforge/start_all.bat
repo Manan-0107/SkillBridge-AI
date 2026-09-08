@@ -1,5 +1,7 @@
 @echo off
-echo Starting CareerForge Python AI Brain and Next.js Dev Server...
+echo Starting CareerForge Always-On Voice Server, Python AI Brain, and Next.js Dev Server...
+start "CareerForge Voice Streaming Hub" cmd /k "node server/voice-stream-server.mjs"
 start "CareerForge Python AI Brain" cmd /k "python python_ai/server.py"
 start "CareerForge Next.js Dev" cmd /k "npm run dev"
-echo Both servers started!
+echo All servers launched!
+
