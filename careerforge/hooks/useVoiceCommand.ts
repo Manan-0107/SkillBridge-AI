@@ -16,8 +16,8 @@
  * so every tab/component can react to the same listening + fallback state.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { isAIAudioPlaying } from "@/lib/voice";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isAIAudioPlaying, isCommandBarActive, subscribeCommandBar } from "@/lib/voice";
 
 // ---------------------------------------------------------------------------
 // Minimal Web Speech API typings (not consistently shipped in lib.dom.d.ts)
@@ -109,6 +109,12 @@ export interface UseVoiceCommandOptions {
   onSpeechDetected?: () => void;
   /** Whether the hook should actively try to keep the mic listening. */
   enabled?: boolean;
+  /**
+   * Marks this instance as the user-controlled command bar. It keeps the mic
+   * even when `setCommandBarActive(true)` parks every other recognizer; other
+   * instances (probe, dictator) should leave this `false`.
+   */
+  ownsCommandBar?: boolean;
 }
 
 export interface UseVoiceCommandReturn {
@@ -129,8 +135,25 @@ export interface UseVoiceCommandReturn {
 export function useVoiceCommand(
   options: UseVoiceCommandOptions = {}
 ): UseVoiceCommandReturn {
-  const { lang = "en-US", onFallbackTriggered, onResult, onSpeechDetected, enabled = true } =
-    options;
+  const {
+    lang = "en-US",
+    onFallbackTriggered,
+    onResult,
+    onSpeechDetected,
+    enabled = true,
+    ownsCommandBar = false,
+  } = options;
+
+  // Park this recognizer while the command bar owns the mic (unless we *are* it).
+  const commandBarActive = useSyncExternalStore(
+    subscribeCommandBar,
+    isCommandBarActive,
+    () => false
+  );
+  const parked = !ownsCommandBar && commandBarActive;
+  const parkedRef = useRef(parked);
+  parkedRef.current = parked;
+  const wasParkedRef = useRef(false);
 
   const [isSupported, setIsSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -199,6 +222,16 @@ export function useVoiceCommand(
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Debug: trace exactly what the speech engine emits, before any guard drops it.
+      const latest = event.results[event.results.length - 1];
+      console.log(
+        "[useVoiceCommand] onresult:",
+        JSON.stringify(latest?.[0]?.transcript ?? ""),
+        `final=${latest?.isFinal ?? false}`,
+        `aiAudioPlaying=${isAIAudioPlaying()}`,
+        `parked=${parkedRef.current}`
+      );
+
       // Ignore microphone input while AI audio or speech synthesis is playing
       if (isAIAudioPlaying()) {
         return;
@@ -253,7 +286,7 @@ export function useVoiceCommand(
         return;
       }
 
-      if (fallbackFiredRef.current || !enabled) return;
+      if (fallbackFiredRef.current || !enabled || parkedRef.current) return;
 
       // Recognition ended without us asking it to. If it ended having heard
       // nothing at all in this session, that's silence — count it as a
@@ -284,7 +317,7 @@ export function useVoiceCommand(
   ]);
 
   const start = useCallback(() => {
-    if (!enabled || fallbackFiredRef.current) return;
+    if (!enabled || parkedRef.current || fallbackFiredRef.current) return;
     const Ctor = resolveSpeechRecognitionCtor();
     if (!Ctor) {
       setIsSupported(false);
@@ -332,7 +365,7 @@ export function useVoiceCommand(
         recognitionRef.current?.stop();
         setIsListening(false);
       } else {
-        if (enabled && !fallbackFiredRef.current) {
+        if (enabled && !fallbackFiredRef.current && !parkedRef.current) {
           intentionalStopRef.current = false;
           try {
             recognitionRef.current?.start();
@@ -348,6 +381,20 @@ export function useVoiceCommand(
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [enabled]);
+
+  // Stop when the command bar takes the mic; resume once it releases — but only
+  // if we were actually parked, so this never auto-starts a fresh instance.
+  useEffect(() => {
+    if (parked) {
+      wasParkedRef.current = true;
+      intentionalStopRef.current = true;
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else if (wasParkedRef.current) {
+      wasParkedRef.current = false;
+      if (enabled && !fallbackFiredRef.current) start();
+    }
+  }, [parked, enabled, start]);
 
   return {
     isSupported,

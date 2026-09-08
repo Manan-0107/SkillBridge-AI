@@ -16,6 +16,7 @@
  *   picture       text,
  *   auth_provider text not null default 'email',
  *   target_role   text,
+ *   state         jsonb not null default '{}'::jsonb,  -- AppProvider prefs (voice/accessibility/skills/location)
  *   created_at    timestamptz not null default now(),
  *   updated_at    timestamptz not null default now()
  * );
@@ -33,6 +34,9 @@
  *   analysis_json   jsonb,
  *   uploaded_at     timestamptz not null default now()
  * );
+ *
+ * -- Existing deployments: add the column in-place
+ * alter table users add column if not exists state jsonb not null default '{}'::jsonb;
  *
  * -- Row-level security (optional but recommended for production)
  * alter table users enable row level security;
@@ -52,6 +56,7 @@ export interface DbUser {
   picture: string | null;
   auth_provider: string;
   target_role: string | null;
+  state: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
