@@ -37,13 +37,74 @@ let currentLanguage = "en-US";
 let isSelfSpeaking = false;
 let lastSpeechEndedAt = 0;
 let lastSpokenText = "";
+const recentSpokenPhrases: { text: string; time: number }[] = [];
 
 export function getLastSpokenText(): string {
   return lastSpokenText;
 }
 
+export function registerSpokenPhrase(text: string) {
+  if (!text) return;
+  const clean = text.toLowerCase().trim();
+  recentSpokenPhrases.push({ text: clean, time: Date.now() });
+  if (recentSpokenPhrases.length > 30) recentSpokenPhrases.shift();
+  lastSpokenText = clean;
+}
+
+/**
+ * Checks if a recognized transcript is an acoustic feedback echo of the AI assistant's own voice.
+ * Prevents the AI assistant from detecting its own speech output through device speakers.
+ */
+export function isSelfVoiceEcho(transcript: string): boolean {
+  if (!transcript || !transcript.trim()) return false;
+  const cleanT = transcript.toLowerCase().trim();
+  const now = Date.now();
+
+  // 1. Any incoming audio while AI is speaking or within 800ms cooldown is self-voice echo
+  if (isSelfSpeaking || now - lastSpeechEndedAt < 800) {
+    return true;
+  }
+
+  // 2. Compare against recent AI phrases spoken in the last 35 seconds
+  const recent = recentSpokenPhrases.filter((p) => now - p.time < 35000);
+  const tWords = cleanT.split(/\s+/).filter((w) => w.length >= 2);
+
+  for (const { text: phrase } of recent) {
+    // Exact substring match
+    if (phrase.includes(cleanT) || cleanT.includes(phrase)) {
+      return true;
+    }
+
+    // Token overlap: if 40%+ of words in transcript are found in the AI phrase
+    if (tWords.length > 0) {
+      const pWords = new Set(phrase.split(/\s+/).filter((w) => w.length >= 2));
+      const matchCount = tWords.filter((w) => pWords.has(w)).length;
+      if (matchCount / tWords.length >= 0.4) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function isAIAudioPlaying(): boolean {
-  return isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700;
+  return isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800;
+}
+
+let blindGuideActive = false;
+
+export function isBlindGuideActive(): boolean {
+  return blindGuideActive;
+}
+
+export function setBlindGuideActive(active: boolean): void {
+  if (blindGuideActive === active) return;
+  blindGuideActive = active;
+  if (active) {
+    stopAllSpeechRecognition();
+    stopSpeaking();
+  }
 }
 
 // ─── 1. Automatic Language Detection from Text ─────────────────────────────────
@@ -326,9 +387,12 @@ export function speakText(
   stopAllSpeechRecognition();
   isSelfSpeaking = true;
 
-  // Cancel any ongoing speech
+  // Cancel any ongoing speech and ensure synthesis engine is active
   try {
     window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   } catch {}
 
   // Strip Markdown & action directives
@@ -351,7 +415,8 @@ export function speakText(
     return;
   }
 
-  lastSpokenText = cleanText.toLowerCase();
+  // Register the spoken phrase in the self-voice echo blacklist
+  registerSpokenPhrase(cleanText);
 
   // Automatically detect language if not explicitly provided
   const targetLang = options?.lang || detectTextLanguage(cleanText);
@@ -379,7 +444,10 @@ export function speakText(
     utterance.voice = matchingVoice;
   }
 
+  let ended = false;
   const finalizeSpeech = () => {
+    if (ended) return;
+    ended = true;
     isSelfSpeaking = false;
     lastSpeechEndedAt = Date.now();
     activeUtterance = null;
@@ -401,8 +469,21 @@ export function speakText(
     options?.onError?.(e);
   };
 
+  // Safety fallback timeout: prevent state hang if browser fails to trigger onend
+  const safetyTimeoutMs = Math.max(3500, (cleanText.length / 10) * 1000 + 3000);
+  setTimeout(() => {
+    if (!ended && isSelfSpeaking) {
+      console.warn("[Voice Guard] Utterance safety timer triggered.");
+      finalizeSpeech();
+      options?.onEnd?.();
+    }
+  }, safetyTimeoutMs);
+
   try {
     window.speechSynthesis.speak(utterance);
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   } catch (err) {
     finalizeSpeech();
     options?.onError?.(err);
@@ -424,6 +505,7 @@ export type SpeechRecognitionController = {
 export interface SpeechRecognitionOptions {
   lang?: string;
   continuous?: boolean;
+  isBlindGuide?: boolean;
   onTranscript: (text: string, isFinal?: boolean) => void;
   onListeningChange?: (listening: boolean) => void;
   onError?: (error: string) => void;
@@ -436,10 +518,12 @@ export function startSpeechRecognition(
         onTranscript: (text: string, isFinal: boolean) => void;
         onListeningChange?: (listening: boolean) => void;
         onError?: (error: string) => void;
+        isBlindGuide?: boolean;
       },
   optionsArg?: {
     lang?: string;
     continuous?: boolean;
+    isBlindGuide?: boolean;
   }
 ): SpeechRecognitionController | null {
   if (!isSpeechRecognitionSupported()) {
@@ -448,14 +532,25 @@ export function startSpeechRecognition(
     return null;
   }
 
-  // Safeguard: NEVER listen while AI is speaking or within 700ms cooldown
-  if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700) {
-    console.warn("[Voice Guard] Cannot start speech recognition during AI speech or cooldown.");
+  // Safeguard 1: NEVER listen while AI is speaking or within 800ms post-speech echo cooldown
+  if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
+    console.warn("[Voice Guard] Cannot start speech recognition during AI speech or echo cooldown.");
     callbacksOrOptions.onListeningChange?.(false);
     return null;
   }
 
-  // The user-controlled command bar owns the mic — don't contend for it.
+  const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions || "isBlindGuide" in callbacksOrOptions;
+  const isBlindGuide = isOptionsObject
+    ? !!(callbacksOrOptions as SpeechRecognitionOptions).isBlindGuide
+    : !!optionsArg?.isBlindGuide;
+
+  // Safeguard 2: While Blind Guide is active, background mics must stay parked
+  if (blindGuideActive && !isBlindGuide) {
+    callbacksOrOptions.onListeningChange?.(false);
+    return null;
+  }
+
+  // Safeguard 3: The user-controlled command bar owns the mic — don't contend for it
   if (commandBarActive) {
     callbacksOrOptions.onListeningChange?.(false);
     return null;
@@ -464,7 +559,6 @@ export function startSpeechRecognition(
   // Singleton instance protection: abort previous
   stopAllSpeechRecognition();
 
-  const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions;
   const lang = (isOptionsObject ? (callbacksOrOptions as SpeechRecognitionOptions).lang : optionsArg?.lang) || currentLanguage || "en-US";
   const continuous = isOptionsObject
     ? (callbacksOrOptions as SpeechRecognitionOptions).continuous !== false
@@ -490,8 +584,8 @@ export function startSpeechRecognition(
     };
 
     recognition.onresult = (event: any) => {
-      // Safeguard: If AI is speaking or in post-speech cooldown, DROP ALL RESULTS
-      if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 700) {
+      // Safeguard: If AI is speaking or in post-speech cooldown (800ms), DROP ALL RESULTS
+      if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
         return;
       }
 
@@ -510,14 +604,9 @@ export function startSpeechRecognition(
         const cleanFinal = final.trim();
         if (!cleanFinal) return;
 
-        // Anti-Echo Signature Filter: if transcribed text is from the assistant's own voice, drop it!
-        const lowerFinal = cleanFinal.toLowerCase();
-        if (
-          lastSpokenText &&
-          (lastSpokenText.includes(lowerFinal) ||
-            (lowerFinal.length > 8 && lastSpokenText.slice(0, 60).includes(lowerFinal.slice(0, 20))))
-        ) {
-          console.warn("[Voice Guard] Filtered acoustic speaker feedback:", cleanFinal);
+        // Anti-Echo Self-Voice Filter: Drop if transcript is the AI assistant's own question
+        if (isSelfVoiceEcho(cleanFinal)) {
+          console.warn("[Voice Guard] Suppressed self-voice acoustic echo:", cleanFinal);
           return;
         }
 
@@ -525,8 +614,10 @@ export function startSpeechRecognition(
         currentLanguage = detected;
         onTranscript(cleanFinal, true);
       } else if (interim) {
-        if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 700) {
-          onTranscript(interim, false);
+        if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 800) {
+          if (!isSelfVoiceEcho(interim)) {
+            onTranscript(interim, false);
+          }
         }
       }
     };
@@ -540,8 +631,8 @@ export function startSpeechRecognition(
 
     recognition.onend = () => {
       onListeningChange(false);
-      // Safeguard 5: NEVER auto-restart while AI is speaking or the command bar owns the mic
-      if (running && continuous && !isSelfSpeaking && !commandBarActive) {
+      // Safeguard: NEVER auto-restart while AI is speaking or while blind guide is active for background mics
+      if (running && continuous && !isSelfSpeaking && !commandBarActive && (!blindGuideActive || isBlindGuide)) {
         try {
           recognition.start();
         } catch {

@@ -48,6 +48,15 @@ export function GlobalVoiceDictator() {
   const [voiceBannerOpen, setVoiceBannerOpen] = useState(true);
   const [blindGuideOpen, setBlindGuideOpen] = useState(false);
 
+  // When Blind Guide opens, instantly park GlobalVoiceDictator
+  useEffect(() => {
+    if (blindGuideOpen) {
+      controllerRef.current?.stop();
+      setListening(false);
+      stopSpeaking();
+    }
+  }, [blindGuideOpen]);
+
   // ─── Interactive AI Voice Agent Dialogue State ──────────────────────────────
   const [aiSpeechPrompt, setAiSpeechPrompt] = useState<string | null>(null);
   const [pendingFieldTarget, setPendingFieldTarget] = useState<"email" | "name" | "password" | "search" | "general" | null>(null);
@@ -132,6 +141,9 @@ export function GlobalVoiceDictator() {
       // Toggle Blind Accessibility Field Assistant (Alt + B)
       if (e.altKey && (e.key === "b" || e.key === "B")) {
         e.preventDefault();
+        controllerRef.current?.stop();
+        setListening(false);
+        stopSpeaking();
         setBlindGuideOpen((prev) => !prev);
         return;
       }
@@ -1151,7 +1163,12 @@ export function GlobalVoiceDictator() {
           {/* Blind Accessibility Field Guide Button */}
           <button
             type="button"
-            onClick={() => setBlindGuideOpen(true)}
+            onClick={() => {
+              controllerRef.current?.stop();
+              setListening(false);
+              stopSpeaking();
+              setBlindGuideOpen(true);
+            }}
             className="flex items-center gap-1 rounded-full bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1.5 text-xs font-bold text-emerald-900 border border-emerald-300 cursor-pointer transition-colors shadow-2xs"
             title="Interactive Voice Field Guide for Blind Users (Alt + B)"
             aria-label="Open Blind Accessibility Voice Field Guide"
