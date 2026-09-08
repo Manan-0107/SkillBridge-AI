@@ -1090,6 +1090,102 @@ export function normalizeSpokenName(raw: string): string {
     .join(" ");
 }
 
+// ─── 6c. Spoken Password & PIN Normalizer ─────────────────────────────────────
+/**
+ * Normalizes spoken passwords and PINs:
+ * - Collapses separated spoken digits (e.g. "1 2 3 4" -> "1234")
+ * - Converts verbal numbers ("one two three four five six" -> "123456")
+ * - Handles Indian/international words ("double zero", "triple one", Indic digits ૦-૯ / ०-९)
+ * - Converts spoken symbols ("at the rate" -> "@", "hash" -> "#", "dollar" -> "$", "star" -> "*")
+ * - Strips conversational prefixes ("my password is", "password is", "maro password che")
+ * - Strips all accidental whitespace between digits/characters so passwords are clean and continuous
+ */
+export function normalizeSpokenPassword(raw: string): string {
+  if (!raw) return "";
+  let text = raw.trim();
+
+  // 1. Strip conversational prefixes
+  text = text.replace(
+    /^(?:my password is|my pin is|password is|pin is|enter password|enter pin|set password|password|pin|મારો પાસવર્ડ છે|મારો પાસવર્ડ|પાસવર્ડ છે|પાસવર્ડ|પિન|मेरा पासवर्ड है|मेरा पासवर्ड|पासवर्ड है|पासवर्ड|पिन|mon mot de passe est|mi contraseña es)\s*/i,
+    ""
+  );
+
+  // 2. Strip conversational suffixes
+  text = text.replace(
+    /\s*(?:is my password|is my pin|as my password|as my pin|છે|હશે|લખી લો|है)$/i,
+    ""
+  );
+
+  // 3. Indian & international spoken phrases ("double zero", "triple one", etc.)
+  text = text
+    .replace(/\bdouble\s+zero\b/gi, "00")
+    .replace(/\bdouble\s+one\b/gi, "11")
+    .replace(/\bdouble\s+two\b/gi, "22")
+    .replace(/\bdouble\s+three\b/gi, "33")
+    .replace(/\bdouble\s+four\b/gi, "44")
+    .replace(/\bdouble\s+five\b/gi, "55")
+    .replace(/\bdouble\s+six\b/gi, "66")
+    .replace(/\bdouble\s+seven\b/gi, "77")
+    .replace(/\bdouble\s+eight\b/gi, "88")
+    .replace(/\bdouble\s+nine\b/gi, "99")
+    .replace(/\btriple\s+zero\b/gi, "000")
+    .replace(/\btriple\s+one\b/gi, "111");
+
+  // 4. Indic numerals (Gujarati & Devanagari)
+  const indicDigits: Record<string, string> = {
+    "૦": "0", "૧": "1", "૨": "2", "૩": "3", "૪": "4",
+    "૫": "5", "૬": "6", "૭": "7", "૮": "8", "૯": "9",
+    "०": "0", "१": "1", "२": "2", "३": "3", "४": "4",
+    "५": "5", "६": "6", "७": "7", "८": "8", "९": "9",
+  };
+  text = text.replace(/[૦-૯०-९]/g, (ch) => indicDigits[ch] || ch);
+
+  // 5. Spoken symbols
+  text = text
+    .replace(/\s*(?:at\s+the\s+rate|at\s+rate|એટ\s*ધ\s*રેટ|એટ\s*રેટ|एट\s*द\s*रेट|एट\s*रेट)\s*/gi, "@")
+    .replace(/\s*(?:hash|hashtag|હેશ|हैश)\s*/gi, "#")
+    .replace(/\s*(?:dollar|ડોલર|डॉलर)\s*/gi, "$")
+    .replace(/\s*(?:star|asterisk|તારો|તારા|तारा|स्टार)\s*/gi, "*")
+    .replace(/\s*(?:underscore|under\s+score|અંડરસ્કોર|अंडरस्कोर)\s*/gi, "_")
+    .replace(/\s*(?:dash|hyphen|minus|માઈનસ|माइनस)\s*/gi, "-")
+    .replace(/\s*(?:dot|period|ડોટ|डॉट)\s*/gi, ".");
+
+  // 6. Compound tens
+  const tensMap: Record<string, number> = {
+    twenty: 20, thirty: 30, forty: 40, fifty: 50,
+    sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  };
+  const onesMap: Record<string, number> = {
+    one: 1, two: 2, three: 3, four: 4, five: 5,
+    six: 6, seven: 7, eight: 8, nine: 9,
+  };
+
+  for (const [tWord, tVal] of Object.entries(tensMap)) {
+    for (const [oWord, oVal] of Object.entries(onesMap)) {
+      const reg = new RegExp(`\\b${tWord}\\s+${oWord}\\b`, "gi");
+      text = text.replace(reg, String(tVal + oVal));
+    }
+    const tReg = new RegExp(`\\b${tWord}\\b`, "gi");
+    text = text.replace(tReg, String(tVal));
+  }
+
+  // 7. Single digit words
+  const singlesMap: Record<string, string> = {
+    zero: "0", one: "1", two: "2", three: "3", four: "4",
+    five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+    ten: "10", eleven: "11", twelve: "12", thirteen: "13",
+    fourteen: "14", fifteen: "15", sixteen: "16", seventeen: "17",
+    eighteen: "18", nineteen: "19",
+  };
+  for (const [word, digit] of Object.entries(singlesMap)) {
+    const reg = new RegExp(`\\b${word}\\b`, "gi");
+    text = text.replace(reg, digit);
+  }
+
+  // 8. Strip all whitespace between characters/digits so "1 2 3 4" becomes "1234"
+  return text.replace(/\s+/g, "").replace(/[.,;?!]+$/, "");
+}
+
 // ─── 7. Live Focused Field Prompt Generator ───────────────────────────────────
 export function getFieldPromptMessage(
   fieldLabel: string,
@@ -1119,7 +1215,7 @@ export function getFieldPromptMessage(
 
   if (lang.startsWith("gu")) {
     if (isEmail) return "કૃપા કરીને તમારું ઈમેઇલ સરનામું બોલો.";
-    if (isPass) return "કૃપા કરીને તમારો પાસવર્ડ બોલો.";
+    if (isPass) return "કૃપા કરીને તમારો પાસવર્ડ બોલો (ઓછામાં ઓછા ૬ અક્ષર હોવા જોઈએ).";
     if (isName) return "કૃપા કરીને તમારું પૂરું નામ બોલો.";
     if (isSearch) return "કૃપા કરીને તમે શું સર્ચ કરવા માંગો છો તે બોલો.";
     if (isRole) return "કૃપા કરીને તમારો ઇચ્છિત રોલ અથવા જોબ ટાઇટલ બોલો.";
@@ -1128,7 +1224,7 @@ export function getFieldPromptMessage(
 
   if (lang.startsWith("hi")) {
     if (isEmail) return "कृपया अपना ईमेल पता बोलें।";
-    if (isPass) return "कृपया अपना पासवर्ड बोलें।";
+    if (isPass) return "कृपया अपना पासवर्ड बोलें (कम से कम ६ अक्षर होने चाहिए)।";
     if (isName) return "कृपया अपना पूरा नाम बोलें।";
     if (isSearch) return "कृपया सर्च करने के लिए बोलें।";
     if (isRole) return "कृपया अपना लक्षित रोल या पद बोलें।";
@@ -1137,14 +1233,14 @@ export function getFieldPromptMessage(
 
   if (lang.startsWith("fr")) {
     if (isEmail) return "Veuillez dicter votre adresse e-mail.";
-    if (isPass) return "Veuillez dicter votre mot de passe.";
+    if (isPass) return "Veuillez dicter votre mot de passe (au moins 6 caractères).";
     if (isName) return "Veuillez dicter votre nom complet.";
     if (isSearch) return "Que souhaitez-vous rechercher ?";
     return `Veuillez dicter pour ${fieldLabel || "ce champ"}.`;
   }
 
   if (isEmail) return "Please speak your email address.";
-  if (isPass) return "Please speak your password.";
+  if (isPass) return "Please speak your password (must be at least 6 characters).";
   if (isName) return "Please speak your full name.";
   if (isSearch) return "Please speak what you would like to search for.";
   if (isRole) return "Please speak your target role or job title.";

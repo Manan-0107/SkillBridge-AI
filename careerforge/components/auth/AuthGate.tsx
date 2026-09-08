@@ -13,6 +13,7 @@ import {
   SpeechRecognitionController,
   normalizeSpokenEmail,
   normalizeSpokenName,
+  normalizeSpokenPassword,
   playAccessibleChime,
   isSpeechRecognitionSupported,
 } from "@/lib/voice";
@@ -212,10 +213,16 @@ export function AuthGate() {
             }, 300);
           }
         } else if (field === "password") {
-          setPassword(clean);
+          const cleanPass = normalizeSpokenPassword(clean);
+          setPassword(cleanPass);
           if (isFinal) {
             playAccessibleChime("success");
             setDictatingField(null);
+            if (cleanPass.length < 6) {
+              setError("Password needs at least 6 characters (e.g. 123456).");
+            } else {
+              setError("");
+            }
           }
         }
       },
@@ -641,8 +648,8 @@ export function AuthGate() {
               </div>
               <p className="mt-1 text-[11px] text-neutral-500">
                 {activeSection === "password"
-                  ? "👉 Active Section: Type your password or click 'Speak Password'."
-                  : "Needs at least 6 characters."}
+                  ? "👉 Active Section: Type or speak your password (must be at least 6 characters, e.g. 123456)."
+                  : "Needs at least 6 characters (e.g. 123456)."}
               </p>
             </div>
 

@@ -21,6 +21,7 @@ import {
   isSelfVoiceEcho,
   normalizeSpokenEmail,
   normalizeSpokenName,
+  normalizeSpokenPassword,
   getFieldPromptMessage,
 } from "@/lib/voice";
 
@@ -98,19 +99,19 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
     label: "Password",
     stepNumber: 3,
     prompts: {
-      en: "Step 3: Please speak your password or PIN for your account.",
-      gu: "સ્ટેપ ૩: કૃપા કરીને તમારા એકાઉન્ટ માટે પાસવર્ડ અથવા પિન બોલો.",
-      hi: "स्टेप ३: कृपया अपने खाते के लिए पासवर्ड या पिन बोलें।",
+      en: "Step 3: Please speak your password or PIN for your account. It must be at least 6 characters.",
+      gu: "સ્ટેપ ૩: કૃપા કરીને તમારા એકાઉન્ટ માટે પાસવર્ડ અથવા પિન બોલો. તે ઓછામાં ઓછા ૬ અક્ષરનો હોવો જોઈએ.",
+      hi: "स्टेप ३: कृपया अपने खाते के लिए पासवर्ड या पिन बोलें। यह कम से कम ६ अक्षरों का होना चाहिए।",
     },
     retryPrompts: {
-      en: "No problem, let's try again. Please speak your password or PIN.",
-      gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારો પાસવર્ડ અથવા પિન બોલો.",
-      hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। कृपया अपना पासवर्ड या पिन बोलें।",
+      en: "Password must have at least 6 characters. Please speak your password or PIN.",
+      gu: "પાસવર્ડ ઓછામાં ઓછો ૬ અક્ષરનો હોવો જોઈએ. કૃપા કરીને તમારો પાસવર્ડ અથવા પિન બોલો.",
+      hi: "पासवर्ड कम से कम ६ अक्षरों का होना चाहिए। कृपया अपना पासवर्ड या पिन बोलें।",
     },
     confirmPrompts: {
-      en: (ans) => `Got it, password recorded. Is that correct? Say Yes to continue, or No to re-speak.`,
-      gu: (ans) => `પાસવર્ડ નોંધાઈ ગયો. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
-      hi: (ans) => `पासवर्ड दर्ज हुआ। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+      en: (ans) => `Got it, password recorded with ${ans.length} characters. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: (ans) => `પાસવર્ડ નોંધાઈ ગયો (${ans.length} અક્ષરો). શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: (ans) => `पासवर्ड दर्ज हुआ (${ans.length} अक्षर)। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
     },
     selector: '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]',
   },
@@ -766,6 +767,8 @@ export function GlobalVoiceDictator() {
           let valueToType = clean;
           if (targetEl.type === "email" || targetEl.id === "auth-email-input") {
             valueToType = normalizeSpokenEmail(clean);
+          } else if (targetEl.type === "password" || targetEl.id === "auth-password-input") {
+            valueToType = normalizeSpokenPassword(clean);
           } else if (targetEl.id === "auth-name-input") {
             valueToType = normalizeSpokenName(clean);
           }
@@ -1079,6 +1082,27 @@ export function GlobalVoiceDictator() {
               !candidateAnswer.includes(".com") &&
               !candidateAnswer.includes(".in"))
           ) {
+            return;
+          }
+        } else if (activeQ.id === "password") {
+          candidateAnswer = normalizeSpokenPassword(clean);
+          if (!candidateAnswer) return;
+
+          // ── CONSTRAINT CHECK: Password must be at least 6 characters ──
+          if (candidateAnswer.length < 6) {
+            const targetEl = resolveTargetElement();
+            if (targetEl) {
+              setNativeInputValue(targetEl, candidateAnswer);
+            }
+            const shortMsg = isGujarati
+              ? `પાસવર્ડ ઓછામાં ઓછો ૬ અક્ષરનો હોવો જોઈએ. તમે માત્ર ${candidateAnswer.length} અક્ષર બોલ્યા છો (${candidateAnswer}). કૃપા કરીને ૬ કે તેથી વધુ અક્ષરનો પાસવર્ડ અથવા પિન બોલો.`
+              : isHindi
+              ? `पासवर्ड कम से कम ६ अक्षरों का होना चाहिए। आपने केवल ${candidateAnswer.length} अक्षर बोले हैं (${candidateAnswer})। कृपया ६ या अधिक अक्षरों का पासवर्ड या पिन बोलें।`
+              : `Password must be at least 6 characters. You spoke ${candidateAnswer.length} characters: ${candidateAnswer}. Please speak a password or PIN with at least 6 characters.`;
+
+            setAiSpeechPrompt(shortMsg);
+            showStatus(`⚠️ Password needs 6+ characters (heard: "${candidateAnswer}")`, 6000);
+            speakAndListen(shortMsg);
             return;
           }
         }
