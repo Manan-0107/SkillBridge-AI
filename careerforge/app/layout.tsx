@@ -5,7 +5,6 @@ import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
 import { VoiceProvider } from "@/context/VoiceContext";
-import { VoiceBar } from "@/components/common/VoiceBar";
 
 const display = Newsreader({
   subsets: ["latin"],
@@ -41,7 +40,6 @@ export default function RootLayout({
             <VoiceProvider>
               {children}
               <GlobalVoiceDictator />
-              <VoiceBar />
             </VoiceProvider>
           </GlobalVoiceProvider>
         </AppProvider>
