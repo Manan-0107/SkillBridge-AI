@@ -244,6 +244,8 @@ function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[], user?
 
 export type VoiceInteractionState =
   | "IDLE"
+  | "INITIALIZING"
+  | "READY"
   | "LISTENING"
   | "PROCESSING"
   | "SPEAKING"
@@ -577,6 +579,7 @@ export function GlobalVoiceDictator() {
     }
 
     controllerRef.current?.stop();
+    setInteractionState("INITIALIZING");
     const controller = startSpeechRecognition(
       {
         onTranscript: (transcript: string, isFinal?: boolean) => {
@@ -895,6 +898,58 @@ export function GlobalVoiceDictator() {
         }
 
         // Still waiting for clear Yes or No
+        return;
+      }
+
+      // ── SPECIAL INTENT: AUDIOBOOK IMMEDIATE VOICE COMMANDS (Section 7) ──
+      const isAudiobookCommand =
+        lower.includes("audiobook") ||
+        lower === "stop" ||
+        lower === "pause" ||
+        lower === "resume" ||
+        lower === "go back" ||
+        lower.includes("go back 10 seconds") ||
+        lower.includes("rewind") ||
+        lower.includes("go forward") ||
+        lower.includes("next stage") ||
+        lower.includes("previous stage") ||
+        lower.includes("explain what the author meant") ||
+        lower.includes("what the author meant");
+
+      if (isAudiobookCommand) {
+        let action: "stop" | "pause" | "resume" | "back" | "forward" | "explain" | null = null;
+        if (lower === "stop" || lower.includes("stop audiobook") || lower.includes("stop playback")) {
+          action = "stop";
+        } else if (lower === "pause" || lower.includes("pause audiobook") || lower.includes("pause audio")) {
+          action = "pause";
+        } else if (lower === "resume" || lower.includes("resume audiobook") || lower.includes("resume audio")) {
+          action = "resume";
+        } else if (lower.includes("go back") || lower.includes("rewind") || lower.includes("previous stage")) {
+          action = "back";
+        } else if (lower.includes("go forward") || lower.includes("skip forward") || lower.includes("next stage")) {
+          action = "forward";
+        } else if (lower.includes("explain what the author meant") || lower.includes("what the author meant") || lower.includes("explain concept")) {
+          action = "explain";
+        }
+
+        if (action) {
+          window.dispatchEvent(new CustomEvent("careerforge:audiobook-control", { detail: { action } }));
+          showStatus(`🎧 Audiobook: ${action.toUpperCase()}`, 2500);
+          return;
+        }
+      }
+
+      // ── SPECIAL INTENT: ASSESSMENT QUESTION DOUBT (Section 6) ──
+      const isDoubtIntent =
+        lower.includes("doubt") ||
+        (lower.includes("explain") && (lower.includes("question") || lower.includes("this") || lower.includes("concept"))) ||
+        lower.includes("what does this mean") ||
+        lower.includes("help with question") ||
+        lower.includes("help me understand");
+
+      if (isDoubtIntent) {
+        window.dispatchEvent(new CustomEvent("careerforge:practice-doubt", { detail: { query: clean } }));
+        showStatus("💡 Addressing assessment doubt...", 3000);
         return;
       }
 

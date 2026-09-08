@@ -118,6 +118,7 @@ const quickPills = [
 export type VoiceStatusState =
   | "idle"
   | "initializing"
+  | "ready"
   | "listening"
   | "processing"
   | "speaking"

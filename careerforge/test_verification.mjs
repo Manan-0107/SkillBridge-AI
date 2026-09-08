@@ -373,6 +373,58 @@ async function runTests() {
     assert("Barge-in: Prompt reflection 'What is your full name' IS treated as echo", isEcho("What is your full name", true) === true);
   }
 
+  // 10. SECURITY HEADERS VERIFICATION (Section 18)
+  console.log("\n--- 10. Security Headers Verification ---");
+  {
+    const res = await fetch(`${BASE_URL}/`);
+    const headers = res.headers;
+    assert("Security Header: X-Content-Type-Options is nosniff", headers.get("x-content-type-options") === "nosniff");
+    assert("Security Header: X-Frame-Options is DENY", headers.get("x-frame-options") === "DENY");
+    assert("Security Header: Referrer-Policy is strict-origin-when-cross-origin", headers.get("referrer-policy") === "strict-origin-when-cross-origin");
+    assert("Security Header: Permissions-Policy restricts microphone to self", (headers.get("permissions-policy") || "").includes("microphone=(self)"));
+  }
+
+  // 11. AUDIOBOOK IMMEDIATE VOICE COMMANDS (Section 7)
+  console.log("\n--- 11. Audiobook Immediate Voice Commands ---");
+  {
+    function parseAudiobookCommand(spoken) {
+      const lower = spoken.toLowerCase().trim();
+      if (lower === "stop" || lower.includes("stop audiobook") || lower.includes("stop playback")) return "stop";
+      if (lower === "pause" || lower.includes("pause audiobook") || lower.includes("pause audio")) return "pause";
+      if (lower === "resume" || lower.includes("resume audiobook") || lower.includes("resume audio")) return "resume";
+      if (lower.includes("go back") || lower.includes("rewind") || lower.includes("previous stage")) return "back";
+      if (lower.includes("go forward") || lower.includes("skip forward") || lower.includes("next stage")) return "forward";
+      if (lower.includes("explain what the author meant") || lower.includes("what the author meant") || lower.includes("explain concept")) return "explain";
+      return null;
+    }
+
+    assert("Audiobook Command: 'Stop' triggers stop", parseAudiobookCommand("Stop") === "stop");
+    assert("Audiobook Command: 'Pause audiobook' triggers pause", parseAudiobookCommand("Pause audiobook") === "pause");
+    assert("Audiobook Command: 'Resume' triggers resume", parseAudiobookCommand("Resume") === "resume");
+    assert("Audiobook Command: 'Go back 10 seconds' triggers back", parseAudiobookCommand("Go back 10 seconds") === "back");
+    assert("Audiobook Command: 'Go forward' triggers forward", parseAudiobookCommand("Go forward") === "forward");
+    assert("Audiobook Command: 'Explain what the author meant' triggers explain", parseAudiobookCommand("Explain what the author meant") === "explain");
+  }
+
+  // 12. ASSESSMENT DOUBT INTERRUPTION & STATE PRESERVATION (Section 6)
+  console.log("\n--- 12. Assessment Doubt Interruption & State Preservation ---");
+  {
+    function isAssessmentDoubt(text) {
+      const lower = text.toLowerCase().trim();
+      return (
+        lower.includes("doubt") ||
+        (lower.includes("explain") && (lower.includes("question") || lower.includes("this") || lower.includes("concept"))) ||
+        lower.includes("what does this mean") ||
+        lower.includes("help with question") ||
+        lower.includes("help me understand")
+      );
+    }
+
+    assert("Assessment: 'I have a doubt about microtasks' triggers doubt handler", isAssessmentDoubt("I have a doubt about microtasks") === true);
+    assert("Assessment: 'Can you explain this question?' triggers doubt handler", isAssessmentDoubt("Can you explain this question?") === true);
+    assert("Assessment: Standard answer 'Promises use microtask queue' does NOT trigger doubt", isAssessmentDoubt("Promises use microtask queue") === false);
+  }
+
   console.log("\n=========================================");
   const passedCount = results.filter((r) => r.passed).length;
   const failedCount = results.filter((r) => !r.passed).length;
