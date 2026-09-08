@@ -256,6 +256,8 @@ export function setNativeInputValue(
     cleanValue = cleanValue.trim().replace(/[.,;?!]+$/, "");
   }
 
+  const previousValue = element.value;
+
   const prototype =
     element instanceof HTMLTextAreaElement
       ? window.HTMLTextAreaElement.prototype
@@ -267,6 +269,13 @@ export function setNativeInputValue(
     valueSetter.call(element, cleanValue);
   } else {
     element.value = cleanValue;
+  }
+
+  // React 16/17/18/19 internal synthetic event tracker synchronization:
+  // Reset _valueTracker so React's onChange handler triggers reliably
+  const tracker = (element as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue(previousValue);
   }
 
   element.dispatchEvent(new Event("input", { bubbles: true }));
@@ -544,13 +553,7 @@ export function startSpeechRecognition(
     ? !!(callbacksOrOptions as SpeechRecognitionOptions).isBlindGuide
     : !!optionsArg?.isBlindGuide;
 
-  // Safeguard 2: While Blind Guide is active, background mics must stay parked
-  if (blindGuideActive && !isBlindGuide) {
-    callbacksOrOptions.onListeningChange?.(false);
-    return null;
-  }
-
-  // Safeguard 3: The user-controlled command bar owns the mic — don't contend for it
+  // Safeguard 2: The user-controlled command bar owns the mic — don't contend for it
   if (commandBarActive) {
     callbacksOrOptions.onListeningChange?.(false);
     return null;
