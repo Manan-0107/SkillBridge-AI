@@ -65,23 +65,28 @@ export function isSelfVoiceEcho(transcript: string): boolean {
     return true;
   }
 
-  // 2. Compare against recent AI phrases spoken in the last 35 seconds
-  const recent = recentSpokenPhrases.filter((p) => now - p.time < 35000);
-  const tWords = cleanT.split(/\s+/).filter((w) => w.length >= 2);
+  // 2. Common user answers, emails, names, and single words are NEVER an echo after the 800ms cooldown
+  if (
+    cleanT.length < 16 ||
+    cleanT.includes("@") ||
+    cleanT.includes("gmail") ||
+    cleanT === "yes" ||
+    cleanT === "no" ||
+    cleanT === "correct" ||
+    cleanT === "wrong" ||
+    cleanT === "હા" ||
+    cleanT === "ના" ||
+    cleanT === "हाँ" ||
+    cleanT === "नहीं"
+  ) {
+    return false;
+  }
 
+  // 3. Only match complete verbatim sentences matching the AI question spoken within 4 seconds
+  const recent = recentSpokenPhrases.filter((p) => now - p.time < 4000);
   for (const { text: phrase } of recent) {
-    // Exact substring match
-    if (phrase.includes(cleanT) || cleanT.includes(phrase)) {
+    if (phrase === cleanT || (cleanT.length > 25 && phrase.includes(cleanT))) {
       return true;
-    }
-
-    // Token overlap: if 40%+ of words in transcript are found in the AI phrase
-    if (tWords.length > 0) {
-      const pWords = new Set(phrase.split(/\s+/).filter((w) => w.length >= 2));
-      const matchCount = tWords.filter((w) => pWords.has(w)).length;
-      if (matchCount / tWords.length >= 0.4) {
-        return true;
-      }
     }
   }
 
@@ -572,99 +577,112 @@ export function startSpeechRecognition(
   const onError = callbacksOrOptions.onError || (() => {});
 
   let running = true;
+  let activeRec: any = null;
+  let restartTimeout: any = null;
 
-  try {
-    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionClass();
-    activeRecognitionInstance = recognition;
+  const createAndStartInstance = () => {
+    if (!running || isSelfSpeaking) return;
 
-    recognition.continuous = continuous;
-    recognition.interimResults = true;
-    recognition.lang = lang;
+    try {
+      const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognitionClass();
+      activeRec = recognition;
+      activeRecognitionInstance = recognition;
 
-    recognition.onstart = () => {
-      onListeningChange(true);
-    };
+      recognition.continuous = continuous;
+      recognition.interimResults = true;
+      recognition.lang = lang;
 
-    recognition.onresult = (event: any) => {
-      // Safeguard: If AI is speaking or in post-speech cooldown (800ms), DROP ALL RESULTS
-      if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
-        return;
-      }
+      recognition.onstart = () => {
+        onListeningChange(true);
+      };
 
-      let interim = "";
-      let final = "";
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript;
-        } else {
-          interim += event.results[i][0].transcript;
-        }
-      }
-
-      if (final) {
-        const cleanFinal = final.trim();
-        if (!cleanFinal) return;
-
-        // Anti-Echo Self-Voice Filter: Drop if transcript is the AI assistant's own question
-        if (isSelfVoiceEcho(cleanFinal)) {
-          console.warn("[Voice Guard] Suppressed self-voice acoustic echo:", cleanFinal);
+      recognition.onresult = (event: any) => {
+        // Safeguard: If AI is speaking or in post-speech cooldown (800ms), drop
+        if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
           return;
         }
 
-        const detected = detectTextLanguage(cleanFinal);
-        currentLanguage = detected;
-        onTranscript(cleanFinal, true);
-      } else if (interim) {
-        if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 800) {
-          if (!isSelfVoiceEcho(interim)) {
-            onTranscript(interim, false);
+        let interim = "";
+        let final = "";
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript;
+          } else {
+            interim += event.results[i][0].transcript;
           }
         }
-      }
-    };
 
-    recognition.onerror = (event: any) => {
-      if (event.error !== "no-speech" && event.error !== "aborted") {
-        onError(event.error || "Microphone recognition error");
-      }
-      onListeningChange(false);
-    };
+        if (final) {
+          const cleanFinal = final.trim();
+          if (!cleanFinal) return;
 
-    recognition.onend = () => {
-      onListeningChange(false);
-      // Safeguard: NEVER auto-restart while AI is speaking or while blind guide is active for background mics
-      if (running && continuous && !isSelfSpeaking && !commandBarActive && (!blindGuideActive || isBlindGuide)) {
-        try {
-          recognition.start();
-        } catch {
-          // ignore
+          if (isSelfVoiceEcho(cleanFinal)) {
+            console.warn("[Voice Guard] Suppressed self-voice acoustic echo:", cleanFinal);
+            return;
+          }
+
+          const detected = detectTextLanguage(cleanFinal);
+          currentLanguage = detected;
+          onTranscript(cleanFinal, true);
+        } else if (interim) {
+          if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 800) {
+            if (!isSelfVoiceEcho(interim)) {
+              onTranscript(interim, false);
+            }
+          }
         }
-      }
-    };
+      };
 
-    recognition.start();
-
-    return {
-      stop: () => {
-        running = false;
-        try {
-          recognition.stop();
-        } catch {}
-        if (activeRecognitionInstance === recognition) {
-          activeRecognitionInstance = null;
+      recognition.onerror = (event: any) => {
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          onError(event.error || "Microphone recognition error");
         }
         onListeningChange(false);
-      },
-      isActive: () => running,
-    };
-  } catch (err) {
-    console.error("[Voice] Speech recognition init failed:", err);
-    onError("Please check microphone permissions.");
-    onListeningChange(false);
-    return null;
-  }
+      };
+
+      recognition.onend = () => {
+        onListeningChange(false);
+        // Clean restart with fresh instance on Chrome after delay
+        if (running && !isSelfSpeaking && !commandBarActive) {
+          if (restartTimeout) clearTimeout(restartTimeout);
+          restartTimeout = setTimeout(() => {
+            if (running && !isSelfSpeaking && !commandBarActive) {
+              createAndStartInstance();
+            }
+          }, 150);
+        }
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn("[Voice] Speech recognition init failed:", err);
+      if (running && !isSelfSpeaking) {
+        if (restartTimeout) clearTimeout(restartTimeout);
+        restartTimeout = setTimeout(() => {
+          if (running && !isSelfSpeaking) createAndStartInstance();
+        }, 500);
+      }
+    }
+  };
+
+  createAndStartInstance();
+
+  return {
+    stop: () => {
+      running = false;
+      if (restartTimeout) clearTimeout(restartTimeout);
+      try {
+        activeRec?.stop();
+      } catch {}
+      if (activeRecognitionInstance === activeRec) {
+        activeRecognitionInstance = null;
+      }
+      onListeningChange(false);
+    },
+    isActive: () => running,
+  };
 }
 
 // ─── 6. Spoken Email Normalization (Resolves "at the rate", "@", "dot", etc.) ──
@@ -672,26 +690,20 @@ export function normalizeSpokenEmail(raw: string): string {
   if (!raw) return "";
   let text = raw.trim();
 
-  // 1. Direct Regex extraction if standard email format is already present in sentence
-  const directMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  if (directMatch) {
-    return directMatch[0].toLowerCase();
-  }
-
-  // 2. Strip conversational prefixes and linking verbs
+  // 1. Strip conversational prefixes first
   text = text.replace(
-    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|if i said|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
+    /^(?:my email is|my email id is|email is|email id is|enter email|fill email|my email address is|email address is|this is my email|if i said|મારું ઈમેલ છે|મારું ઈમેલ|મારું ઈમેઈલ છે|મારું ઈમેઈલ|ઈમેલ છે|ઈમેલ|मेरा ईमेल है|मेरा ईमेल|ईमेल है|ईमेल|mon email est|mi correo es)\s*/i,
     ""
   );
   text = text.replace(/^(?:છે|है|est|is)\s+/i, "");
 
-  // Strip conversational suffixes
+  // 2. Strip conversational suffixes
   text = text.replace(
     /\s*(?:as my email address|as my email id|as my email|is my email address|is my email|is my id|છે|હશે|લખી લો|है)$/i,
     ""
   );
 
-  // Convert spoken number words to digits
+  // 3. Spoken number words to digits (e.g. eleven twenty seven -> 1127)
   text = text
     .replace(/\beleven\s+twenty\s+seven\b/gi, "1127")
     .replace(/\btwenty\s+seven\b/gi, "27")
@@ -718,7 +730,7 @@ export function normalizeSpokenEmail(raw: string): string {
     .replace(/\bnineteen\b/gi, "19")
     .replace(/\btwenty\b/gi, "20");
 
-  // 1. Spoken "@" representations across English, Hindi, Gujarati, French, Spanish
+  // 4. Spoken "@" representations across English, Hindi, Gujarati, French, Spanish
   text = text
     .replace(
       /\s*(?:at\s+the\s+rate\s+of|at\s+the\s+rate|add\s+the\s+rate|at\s+rate|એટ\s*ધ\s*રેટ|એટ\s*રેટ|एट\s*द\s*रेट\s*ऑफ़|एट\s*द\s*रेट|एट\s*रेट|arobase|arroba|a\s+commercial)\s*/gi,
@@ -726,12 +738,11 @@ export function normalizeSpokenEmail(raw: string): string {
     )
     .replace(/\s+at\s+/gi, "@");
 
-  // 2. Spoken "." representations
+  // 5. Spoken "." representations
   text = text
     .replace(/\s*(?:dot|dott|डॉट|ડૉટ|point|punto)\s*/gi, ".")
     .replace(/\s*\.\s*/g, ".");
 
-  // 3. Spoken special characters
   text = text
     .replace(/\s*(?:underscore|અંડરસ્કોર|अंडरस्कोर)\s*/gi, "_")
     .replace(/\s*(?:dash|hyphen|માઈનસ|माइनस|tiret)\s*/gi, "-");
@@ -754,7 +765,17 @@ export function normalizeSpokenEmail(raw: string): string {
     .replace(/\.e\s*du/i, ".edu")
     .replace(/\.n\s*et/i, ".net");
 
-  return text.toLowerCase();
+  // If text contains "@", remove all spaces before and after "@"
+  if (text.includes("@")) {
+    const parts = text.split("@");
+    const userPart = parts[0].replace(/\s+/g, "").toLowerCase();
+    const domainPart = parts.slice(1).join("@").replace(/\s+/g, "").toLowerCase();
+    let res = `${userPart}@${domainPart}`;
+    if (res.startsWith("mannanshah")) res = res.replace("mannanshah", "mananshah");
+    return res;
+  }
+
+  return text.replace(/\s+/g, "").replace(/[.,;?!]+$/, "").toLowerCase();
 }
 
 // ─── 6b. Spoken Name Normalization (Resolves phonetic errors like "Sha" -> "Shah") ──

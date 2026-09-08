@@ -191,6 +191,15 @@ function saveStoredInterview(state: StoredInterviewState) {
   try {
     localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(state));
   } catch {}
+
+  // Also persist asynchronously to server keyed by client IP and device cookie
+  try {
+    fetch("/api/profile/anonymous", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    }).catch(() => {});
+  } catch {}
 }
 
 function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[], user?: any): ProfileQuestion | null {
@@ -277,30 +286,48 @@ export function GlobalVoiceDictator() {
     }, duration);
   }, []);
 
-  // ─── Hydrate Pre-verified Fields to DOM on Mount & Refresh ───────────────────
+  // ─── Hydrate Pre-verified Fields from LocalStorage + Server IP/Device Store ──
   useEffect(() => {
-    const stored = loadStoredInterview(user);
-    setInterviewState(stored);
-    const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
+    const local = loadStoredInterview(user);
+    setInterviewState(local);
+    const nextQ = getNextRemainingQuestion(local.completedQuestions, user);
     setCurrentQuestion(nextQ);
 
-    // Pre-populate input elements if on login/profile page
-    const timer = setTimeout(() => {
-      if (stored.name) {
+    const applyFields = (data: StoredInterviewState) => {
+      if (data.name) {
         const nameInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[0].selector);
-        if (nameInput && !nameInput.value) {
-          setNativeInputValue(nameInput, stored.name);
-        }
+        if (nameInput && !nameInput.value) setNativeInputValue(nameInput, data.name);
       }
-      if (stored.email) {
+      if (data.email) {
         const emailInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[1].selector);
-        if (emailInput && !emailInput.value) {
-          setNativeInputValue(emailInput, stored.email);
-        }
+        if (emailInput && !emailInput.value) setNativeInputValue(emailInput, data.email);
       }
-    }, 400);
+    };
 
-    return () => clearTimeout(timer);
+    applyFields(local);
+
+    // Fetch IP and Device-backed persistence from server
+    fetch("/api/profile/anonymous")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.ok && data.profile) {
+          const merged: StoredInterviewState = {
+            ...local,
+            ...data.profile,
+            completedQuestions: Array.from(
+              new Set([...local.completedQuestions, ...(data.profile.completedQuestions || [])])
+            ),
+          };
+          setInterviewState(merged);
+          interviewStateRef.current = merged;
+          saveStoredInterview(merged);
+          applyFields(merged);
+          const updatedNextQ = getNextRemainingQuestion(merged.completedQuestions, user);
+          setCurrentQuestion(updatedNextQ);
+          currentQuestionRef.current = updatedNextQ;
+        }
+      })
+      .catch(() => {});
   }, [user]);
 
   // ─── Track Active Focused Input / Textarea ──────────────────────────────────
@@ -427,7 +454,7 @@ export function GlobalVoiceDictator() {
       speakText(textToSay, {
         lang: speechLang,
         onEnd: () => {
-          // Acoustic dissipation cooldown (800ms) to ensure laptop speaker reverb cleared
+          // Acoustic dissipation cooldown (800ms) to ensure speaker vibration cleared
           setTimeout(() => {
             playAccessibleChime("focus");
             if (activeRef.current) {
@@ -551,13 +578,113 @@ export function GlobalVoiceDictator() {
         return;
       }
 
+      // ── SPECIAL INTENT A: USER EXPLICITLY STATES EMAIL ("my email is mananshah1127@gmail.com") ──
+      const isExplicitEmail =
+        lower.includes("@") ||
+        lower.includes("gmail") ||
+        lower.includes("yahoo") ||
+        lower.includes("outlook") ||
+        lower.includes("at the rate") ||
+        lower.startsWith("my email is") ||
+        lower.startsWith("email is") ||
+        lower.startsWith("મારું ઈમેલ") ||
+        lower.startsWith("मेरा ईमेल");
+
+      if (isExplicitEmail && !pendingVerificationRef.current) {
+        const extractedEmail = normalizeSpokenEmail(clean);
+        if (extractedEmail && extractedEmail.includes("@")) {
+          // Switch active section in AuthGate
+          window.dispatchEvent(
+            new CustomEvent("careerforge:auth-section", { detail: { section: "email" } })
+          );
+          const emailInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[1].selector);
+          if (emailInput) {
+            emailInput.scrollIntoView({ behavior: "smooth", block: "center" });
+            emailInput.focus();
+            focusedElementRef.current = emailInput;
+            setNativeInputValue(emailInput, extractedEmail);
+          }
+
+          if (isFinal) {
+            setLiveTranscript(extractedEmail);
+            const emailQ = PROFILE_QUESTIONS[1];
+            setPendingVerification({
+              question: emailQ,
+              candidateAnswer: extractedEmail,
+            });
+            pendingVerificationRef.current = {
+              question: emailQ,
+              candidateAnswer: extractedEmail,
+            };
+
+            const confirmMsg = isGujarati
+              ? emailQ.confirmPrompts.gu(extractedEmail)
+              : isHindi
+              ? emailQ.confirmPrompts.hi(extractedEmail)
+              : emailQ.confirmPrompts.en(extractedEmail);
+
+            setAiSpeechPrompt(confirmMsg);
+            showStatus(`📧 ${extractedEmail} — ${confirmMsg}`, 5000);
+            speakAndListen(confirmMsg);
+            return;
+          }
+          return;
+        }
+      }
+
+      // ── SPECIAL INTENT B: USER EXPLICITLY STATES NAME ("my name is ...") ──
+      const isExplicitName =
+        lower.startsWith("my name is") ||
+        lower.startsWith("name is") ||
+        lower.startsWith("મારું નામ") ||
+        lower.startsWith("मेरा नाम");
+
+      if (isExplicitName && !pendingVerificationRef.current) {
+        const extractedName = normalizeSpokenName(clean);
+        if (extractedName) {
+          window.dispatchEvent(
+            new CustomEvent("careerforge:auth-section", { detail: { section: "name" } })
+          );
+          const nameInput = document.querySelector<HTMLInputElement>(PROFILE_QUESTIONS[0].selector);
+          if (nameInput) {
+            nameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+            nameInput.focus();
+            focusedElementRef.current = nameInput;
+            setNativeInputValue(nameInput, extractedName);
+          }
+
+          if (isFinal) {
+            setLiveTranscript(extractedName);
+            const nameQ = PROFILE_QUESTIONS[0];
+            setPendingVerification({
+              question: nameQ,
+              candidateAnswer: extractedName,
+            });
+            pendingVerificationRef.current = {
+              question: nameQ,
+              candidateAnswer: extractedName,
+            };
+
+            const confirmMsg = isGujarati
+              ? nameQ.confirmPrompts.gu(extractedName)
+              : isHindi
+              ? nameQ.confirmPrompts.hi(extractedName)
+              : nameQ.confirmPrompts.en(extractedName);
+
+            setAiSpeechPrompt(confirmMsg);
+            showStatus(`👤 ${extractedName} — ${confirmMsg}`, 5000);
+            speakAndListen(confirmMsg);
+            return;
+          }
+          return;
+        }
+      }
+
       // ── 1. LIVE TYPING (Interim & Final) ──────────────────────────────────
-      // Whenever the user speaks, immediately type what they are saying into the target input
       if (!pendingVerificationRef.current) {
         const targetEl = resolveTargetElement();
         if (targetEl) {
           focusedElementRef.current = targetEl;
-          // Apply live typing value
           let valueToType = clean;
           if (targetEl.type === "email" || targetEl.id === "auth-email-input") {
             valueToType = normalizeSpokenEmail(clean);
@@ -618,7 +745,7 @@ export function GlobalVoiceDictator() {
           setLiveTranscript("");
           setInterimTranscript("");
 
-          // Update interview state and persist to localStorage
+          // Update interview state and persist to localStorage + server
           const prevStored = interviewStateRef.current;
           const newCompleted = Array.from(new Set([...prevStored.completedQuestions, verifiedQuestion.id]));
           const updatedState: StoredInterviewState = {
@@ -668,7 +795,6 @@ export function GlobalVoiceDictator() {
               nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
               nextEl.focus();
               focusedElementRef.current = nextEl;
-              // Ensure next field starts empty for new speech if not already confirmed
               if (!newCompleted.includes(nextQ.id)) {
                 setNativeInputValue(nextEl, "");
               }
@@ -694,7 +820,6 @@ export function GlobalVoiceDictator() {
               }
             }
 
-            // All questions verified!
             const allDoneMsg = isGujarati
               ? "અભિનંદન! તમારા બધા પ્રશ્નો વેરિફાય થઈ ગયા છે. તમારું એકાઉન્ટ અને પ્રોફાઇલ તૈયાર છે!"
               : isHindi
@@ -744,7 +869,6 @@ export function GlobalVoiceDictator() {
 
       // ── 3. GENERAL SYSTEM COMMANDS (Navigation / Submit / Clear / Help) ───
 
-      // Clear input command
       if (
         lower === "clear" ||
         lower === "erase" ||
@@ -762,7 +886,6 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // Submit command
       if (
         lower === "submit" ||
         lower === "login" ||
@@ -784,7 +907,6 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // Help command
       if (lower === "help" || lower === "help me" || lower.includes("મદદ") || lower.includes("सहायता")) {
         const helpPrompt = isGujarati
           ? "નમસ્તે! હું કરિયરફોર્જ સહાયક છું. તમારું નામ, ઈમેઇલ, જોબ રોલ બોલો અથવા કરિયર પ્રશ્ન પૂછો."
@@ -820,7 +942,6 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // Scroll commands
       if (lower.includes("scroll down") || lower.includes("નીચે સ્ક્રોલ")) {
         window.scrollBy({ top: 400, behavior: "smooth" });
         playAccessibleChime("navigate");
@@ -842,13 +963,11 @@ export function GlobalVoiceDictator() {
           candidateAnswer = normalizeSpokenEmail(clean);
         }
 
-        // Live type into target element
         const targetEl = resolveTargetElement();
         if (targetEl) {
           setNativeInputValue(targetEl, candidateAnswer);
         }
 
-        // Set pending verification state
         setPendingVerification({
           question: activeQ,
           candidateAnswer,
@@ -912,7 +1031,6 @@ export function GlobalVoiceDictator() {
     activeRef.current = true;
     setVoiceMode(true);
 
-    // Check if there is an unverified profile question left to ask
     const stored = loadStoredInterview(user);
     const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
 
@@ -920,14 +1038,12 @@ export function GlobalVoiceDictator() {
       setCurrentQuestion(nextQ);
       currentQuestionRef.current = nextQ;
 
-      // Switch active section in AuthGate if applicable
       if (nextQ.id === "name" || nextQ.id === "email" || nextQ.id === "password") {
         window.dispatchEvent(
           new CustomEvent("careerforge:auth-section", { detail: { section: nextQ.id } })
         );
       }
 
-      // Focus field for this question
       setTimeout(() => {
         const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(nextQ.selector);
         if (el) {
@@ -945,7 +1061,6 @@ export function GlobalVoiceDictator() {
       showStatus(`🎙️ Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4000);
       speakAndListen(promptText);
     } else {
-      // All questions were already verified
       const isGu = currentLangRef.current === "gu-IN";
       const isHi = currentLangRef.current === "hi-IN";
       const welcomeBack = isGu
@@ -984,6 +1099,34 @@ export function GlobalVoiceDictator() {
     }
   };
 
+  // ─── Auto-Start Voice Assistant Immediately on Entering Website ─────────────
+  useEffect(() => {
+    const autoTimer = setTimeout(() => {
+      startVoiceDictation();
+    }, 600);
+
+    // Fallback for browser autoplay audio policy: start immediately on first user touch/click/keypress
+    const handleFirstGesture = () => {
+      if (!activeRef.current) {
+        startVoiceDictation();
+      }
+      window.removeEventListener("click", handleFirstGesture);
+      window.removeEventListener("keydown", handleFirstGesture);
+      window.removeEventListener("touchstart", handleFirstGesture);
+    };
+
+    window.addEventListener("click", handleFirstGesture, { once: true });
+    window.addEventListener("keydown", handleFirstGesture, { once: true });
+    window.addEventListener("touchstart", handleFirstGesture, { once: true });
+
+    return () => {
+      clearTimeout(autoTimer);
+      window.removeEventListener("click", handleFirstGesture);
+      window.removeEventListener("keydown", handleFirstGesture);
+      window.removeEventListener("touchstart", handleFirstGesture);
+    };
+  }, [startVoiceDictation]);
+
   // ─── Tab-Switch Auto-Pause with Guided Reconnect on Return ──────────────────
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -999,7 +1142,6 @@ export function GlobalVoiceDictator() {
       } else {
         if (wasActiveBeforeBlurRef.current) {
           wasActiveBeforeBlurRef.current = false;
-          // Check for remaining questions on return
           const stored = loadStoredInterview(user);
           const nextQ = getNextRemainingQuestion(stored.completedQuestions, user);
           if (nextQ) {
