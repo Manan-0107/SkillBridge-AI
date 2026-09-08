@@ -439,7 +439,11 @@ export function GlobalVoiceDictator() {
 
   // ─── Microphone Speech Recognition Starter ──────────────────────────────────
   const startListeningMic = useCallback(() => {
-    if (!isSpeechRecognitionSupported()) return;
+    if (!isSpeechRecognitionSupported()) {
+      showStatus("Speech recognition is not supported in this browser. Please use Chrome or Edge.", 5000);
+      setListening(false);
+      return;
+    }
 
     controllerRef.current?.stop();
     const controller = startSpeechRecognition(
@@ -453,13 +457,20 @@ export function GlobalVoiceDictator() {
         onError: (err: string) => {
           console.warn("[VoiceDictator] Error:", err);
           setListening(false);
+          if (err.includes("language-not-supported") || err.includes("bad-grammar")) {
+            showStatus(`The language "${currentLangRef.current || voiceLanguage}" is not supported by your browser's speech recognition engine.`, 5000);
+          } else if (err.includes("not-allowed") || err.includes("service-not-allowed")) {
+            showStatus("Microphone access was denied. Please allow microphone permissions in your browser.", 5000);
+          } else {
+            showStatus(`Microphone error: ${err}`, 4000);
+          }
         },
       },
-      { lang: currentLangRef.current || "en-US", continuous: true }
+      { lang: currentLangRef.current || voiceLanguage || "en-US", continuous: true }
     );
 
     controllerRef.current = controller;
-  }, []);
+  }, [showStatus, voiceLanguage]);
 
   // ─── Speech Synthesis with Acoustic Echo Cancellation & Microphone Loop ─────
   const speakAndListen = useCallback(

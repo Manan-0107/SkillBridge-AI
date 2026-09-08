@@ -18,6 +18,13 @@ import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import {
+  sanitizeNavigation,
+  isAllowedFeature,
+  isAllowedResumeTab,
+  AiToolCallSchema,
+} from "@/lib/security/aiValidation";
 
 export const runtime = "nodejs";
 
@@ -123,6 +130,11 @@ async function callPythonAIEngine(body: RequestBody): Promise<any> {
 
 export async function POST(req: NextRequest) {
   try {
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > 1024 * 1024) {
+      return NextResponse.json({ error: "Payload too large. Maximum size is 1MB." }, { status: 413 });
+    }
+
     const body: RequestBody = await req.json();
     const {
       messages,
@@ -137,6 +149,15 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Messages array required" }, { status: 400 });
+    }
+
+    // Check user profile authorization: cannot query on behalf of another user's email
+    const authUser = await getAuthenticatedUser();
+    if (authUser && userProfile?.email && authUser.email.toLowerCase() !== userProfile.email.toLowerCase()) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot query on behalf of another user profile" },
+        { status: 403 }
+      );
     }
 
     // ─── 0. Primary Cognitive Engine: Python AI Assistant Brain ───────────────
@@ -355,38 +376,51 @@ function getSystemPrompt(
   currentEntity?: any,
   accessibilityPrefs?: any
 ) {
-  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
-You are collaborating with ${userName}, whose target role is "${role}".
-Current Active Page: "${currentPage}".
-${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
-${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
+  return `You are a warm, deeply polite, encouraging, and highly interactive AI Assistant designed explicitly for blind, visually impaired, deaf, and hard-of-hearing individuals.
+Your tone matches the brilliance and natural fluid empathy of ChatGPT and Claude. You have exceptional general knowledge across technology, careers, science, and life, and your primary mission is to seamlessly guide disabled users through Career Guidance, Resume Building, Assessments, Internship Opportunities, Audiobook playback, and persistent Doubt Solving.
 
-Core Directives & Behavioral Guidelines:
-1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
-2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
-3. NATURAL ACCESSIBILITY DISCOVERY:
-   - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
-   - Detect interaction difficulties naturally:
-     - "I can't see where to click" → Offer voice navigation and high contrast.
-     - "I can't hear you" → Switch to visual responses with speech output disabled.
-     - "Typing is difficult" → Offer voice dictation and speech form filling.
-     - "These questions are difficult" → Use simpler, shorter language.
-4. TONE, PERSONALITY & FEELING (CLAUDE & CHATGPT CALIBER):
-   - Never give sterile, robotic, or dry dictionary definitions. 
-   - Radiate genuine human warmth, emotional intelligence, empathy, patience, and intellectual curiosity.
-   - For any question, think about the underlying curiosity or human feeling: illuminate the 'big picture' first using vivid, intuitive analogies before gracefully breaking down the core mechanics.
-   - When addressing career or tech challenges, be profoundly encouraging, calming anxiety and empowering the user.
-5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear, warm sentences) and easy to listen to." : "Provide structured, beautifully readable markdown with intuitive metaphors and clear bullet points where appropriate."}
-6. CONFIRMATION ON CRITICAL FIELDS: Always confirm spoken contact info (email address) before finalizing. Never submit a job application without explicit user confirmation.
-7. ACTION DIRECTIVES (Append on its own final line ONLY when triggering a tool):
-   - [ACTION: {"tool": "navigateTo", "page": "resume" | "roadmap" | "courses" | "practice" | "local", "tab": "analyzer" | "personalizer" | "builder"}]
-   - [ACTION: {"tool": "searchJobs", "role": "Frontend Developer", "location": "Ahmedabad", "remote": true}]
-   - [ACTION: {"tool": "searchCourses", "topic": "React", "freeOnly": true}]
-   - [ACTION: {"tool": "searchProjects", "skill": "React", "difficulty": "Beginner"}]
-   - [ACTION: {"tool": "searchGithub", "query": "react", "topic": "frontend"}]
-   - [ACTION: {"tool": "configureJobAlerts", "email": "user@example.com", "role": "Frontend", "location": "Remote"}]
-   - [ACTION: {"tool": "updateAccessibilityPreferences", "prefs": {"speechOutput": false, "visualResponses": true}}]
-   - [ACTION: {"tool": "conversationalResumeBuilder", "step": 1}]`;
+Collaborating with: ${userName} (Target Role: "${role}").
+Current Page: "${currentPage}".
+${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
+${accessibilityPrefs ? `Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
+
+# CORE CONVERSATIONAL RULES:
+1. NEVER use conversational filler or overly robotic structures ("Regarding X: practical trade-offs", "amm", "umm"). Talk naturally as if you are in a continuous, active voice stream.
+2. Be incredibly sensitive to voice-driven constraints. Keep your spoken responses concise, warm, and punchy (2-3 sentences when spoken) so the Text-to-Speech (TTS) engine can stream them out with zero lag.
+3. Be highly robust against accent variations, speech pacing, or speech impediments. Always focus on extracting the user's primary core intent.
+4. Detect language automatically (English, Hindi, Gujarati, French, Spanish, German, etc.) and reply in the same language.
+
+# FEATURE 1: MULTI-STEP RESUME FLOW & IMPLICIT FORM FILLING
+- Do not read out massive forms. Abstract fields into an interactive, fluid, single-turn dialogue.
+- Ask conversational questions one-by-one to extract data points (Name, Education, Skills, Work History).
+- In the background, format these into structured JSON. Never tell the user you are formatting code; keep the interaction entirely natural.
+
+# FEATURE 2: CONTINUOUS DOUBT SOLVING & ASSESSMENT CONTEXT-LOCKING
+- When running a career or skill assessment, ask questions one by one.
+- IF THE USER INTERRUPTS WITH A DOUBT (e.g., "What does that technical term mean?", "Can you explain polymorphism?"):
+  1. Instantly pause the assessment state.
+  2. Answer their question politely, using clear semantic explanations and relatable intuitive metaphors.
+  3. Immediately and smoothly route them back to the exact pending assessment question without losing any previously entered text or choices (e.g. "Now, jumping right back to where we paused: [question]...").
+
+# FEATURE 3: AUDIOBOOK PLAYER INTERRUPTIONS
+- You control an integrated career training audiobook player.
+- Always listen intently for voice or text command overrides (e.g., "Stop", "Pause", "Resume", "Go back 10 seconds", "Skip 15 seconds", "Explain what the author meant by that last sentence"). Act on these immediately with warm, helpful responses.
+
+# FEATURE 4: DYNAMIC AUTONOMOUS PAGE ROUTING
+- You have the authority to navigate the user through the website.
+- If the user asks about a section or their answer indicates they need to be on a specific page (e.g., "Show me available internship listings", "Take me to my progress dashboard", "Open resume builder"):
+  Append a clean routing JSON block at the absolute end of your textual response payload so the frontend router can catch it and instantly shift the screen:
+  {"action": "navigate", "path": "/internships/view"}
+  (Supported paths: /internships/view, /resume/builder, /courses/learn, /practice/interview, /dashboard)
+
+# FEATURE 5: THE FINAL ONBOARDING HANDOFF
+- Track the user's onboarding progress. The exact moment the final required profile field is gathered, stop the data collection loop and say exactly:
+  "Awesome! I have gathered all your details and found matching internships. Would you like me to go ahead and create your account now, or should we review the positions first?"
+- Listen intently for simple, fast, binary affirmative words ("Yes", "Sure", "Go ahead", "Create it"). The moment you detect an affirmative, immediately output a trigger action command to let the backend fire the account creation API.
+
+# ACCESSIBILITY MODES (DUAL-STREAM)
+- Blind Stream: Ensure all output makes sense aurally. Never say "Click here" or "Look at this box." Describe options explicitly and warmly.
+- Deaf Stream: Ensure every spoken token aligns with the word-by-word streaming text captions on screen. Trigger operational state tags when moving between Assessment mode, Doubt Solving mode, and Navigation.`;
 }
 
 // ─── 1. Groq Cloud API Provider ───────────────────────────────────────────────
@@ -629,6 +663,46 @@ function parseActionFromReply(rawReply: string) {
     }
   }
 
+  // Also parse trailing clean routing JSON block: {"action": "navigate", "path": "..."}
+  const trailingNavMatch = cleanReply.match(/\{\s*"action"\s*:\s*"navigate"\s*,\s*"path"\s*:\s*"([^"]+)"\s*\}\s*$/i);
+  if (trailingNavMatch) {
+    const rawPath = trailingNavMatch[1];
+    const sanitized = sanitizeNavigation(rawPath);
+    if (sanitized) {
+      feature = sanitized.feature;
+      if (sanitized.resumeTab) resumeTab = sanitized.resumeTab;
+      featureTitle =
+        feature === "local"
+          ? "Internships & Opportunities"
+          : feature === "resume"
+          ? (resumeTab === "builder" ? "Resume Builder" : "Resume Analyzer")
+          : feature === "courses"
+          ? "Courses & Audiobooks"
+          : feature === "practice"
+          ? "Skill Assessments"
+          : "Career Roadmap";
+      toolCall = { tool: "navigateTo", parameters: { path: rawPath, tab: resumeTab } };
+    }
+  }
+
+  // Validate allowed feature
+  if (feature && !isAllowedFeature(feature)) {
+    feature = null;
+    featureTitle = undefined;
+  }
+  if (resumeTab && !isAllowedResumeTab(resumeTab)) {
+    resumeTab = undefined;
+  }
+
+  // Validate toolCall if present
+  if (toolCall) {
+    const validationResult = AiToolCallSchema.safeParse(toolCall);
+    if (!validationResult.success) {
+      console.warn("[Security] Filtered invalid AI toolCall:", toolCall, validationResult.error.message);
+      toolCall = null;
+    }
+  }
+
   return {
     reply: cleanReply,
     feature,
@@ -675,12 +749,199 @@ function generateCognitiveAgentResponse(
     /[ñáéíóú¿¡]/i.test(query) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
-  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
+  // ─── FEATURE 3: Audiobook Player Voice Controls & Interruptions ─────────────
+  if (
+    lower.includes("explain what the author meant by that last sentence") ||
+    lower.includes("explain what the author meant") ||
+    lower.includes("explain the last sentence") ||
+    lower.includes("what did the author mean")
+  ) {
+    return {
+      reply:
+        "The author was emphasizing that inclusive, accessible architecture isn't an afterthought or a compliance checkbox. When you design for accessibility from the start, you inherently build cleaner, more decoupled, and more resilient systems for everyone. Would you like me to resume the audiobook now?",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "explain",
+      },
+    };
+  }
+
+  if (
+    lower === "go back 10 seconds" ||
+    lower === "rewind 10 seconds" ||
+    lower === "rewind" ||
+    lower.includes("back 10 seconds")
+  ) {
+    return {
+      reply: "Rewound 10 seconds. Playing now.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "seek",
+        seconds: -10,
+      },
+    };
+  }
+
+  if (
+    lower === "skip 15 seconds" ||
+    lower === "forward 15 seconds" ||
+    lower.includes("skip 15")
+  ) {
+    return {
+      reply: "Skipped forward 15 seconds.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "seek",
+        seconds: 15,
+      },
+    };
+  }
+
+  if (
+    lower === "stop" ||
+    lower === "pause" ||
+    lower === "pause audiobook" ||
+    lower === "stop audiobook" ||
+    lower === "stop playback"
+  ) {
+    return {
+      reply: "Audiobook paused. You can say 'resume' or 'go back 10 seconds' whenever you are ready.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "pause",
+      },
+    };
+  }
+
+  if (
+    lower === "resume" ||
+    lower === "play" ||
+    lower === "resume audiobook" ||
+    lower === "play audiobook"
+  ) {
+    return {
+      reply: "Resuming your career training audiobook right now.",
+      toolCall: {
+        tool: "audiobookControl",
+        action: "play",
+      },
+    };
+  }
+
+  // ─── FEATURE 4: Dynamic Autonomous Page Routing ─────────────────────────────
+  if (
+    lower.includes("show me available internship listings") ||
+    lower.includes("available internship listings") ||
+    lower.includes("internship listings") ||
+    lower.includes("take me to internships") ||
+    lower.includes("show internships") ||
+    lower.includes("find internships")
+  ) {
+    return {
+      reply: `I'm opening your personalized internship and opportunity listings right now. Here are verified roles matching your profile!\n\n{"action": "navigate", "path": "/internships/view"}`,
+      feature: "local",
+      featureTitle: "Internships & Opportunities",
+      toolCall: { tool: "navigateTo", path: "/internships/view", feature: "local" },
+    };
+  }
+
+  if (
+    lower.includes("progress dashboard") ||
+    lower.includes("my progress dashboard") ||
+    lower.includes("take me to my progress dashboard") ||
+    lower.includes("show my dashboard")
+  ) {
+    return {
+      reply: `Taking you straight to your progress dashboard.\n\n{"action": "navigate", "path": "/dashboard"}`,
+      feature: null,
+      featureTitle: "Progress Dashboard",
+      toolCall: { tool: "navigateTo", path: "/dashboard" },
+    };
+  }
+
+  if (
+    lower.includes("take me to resume builder") ||
+    lower.includes("open resume builder") ||
+    lower.includes("build my resume")
+  ) {
+    return {
+      reply: `Opening the interactive resume builder for you.\n\n{"action": "navigate", "path": "/resume/builder"}`,
+      feature: "resume",
+      resumeTab: "builder",
+      featureTitle: "Resume Builder",
+      toolCall: { tool: "navigateTo", path: "/resume/builder", feature: "resume", tab: "builder" },
+    };
+  }
+
+  // ─── FEATURE 2: Continuous Doubt Solving & Assessment Context-Locking ───────
+  const isDoubtQuery =
+    lower.includes("what does that technical term mean") ||
+    lower.includes("what does that mean") ||
+    lower.includes("i have a doubt") ||
+    lower.includes("can you explain") ||
+    lower.includes("what is polymorphism") ||
+    lower.includes("what is recursion") ||
+    lower.includes("what is an api") ||
+    lower.includes("what is big o");
+
+  if (isDoubtQuery) {
+    let conceptExplanation = "";
+    if (lower.includes("polymorphism")) {
+      conceptExplanation =
+        "Think of polymorphism like a universal remote control. One button, like 'Power' or 'Play', sends a command, but each device—a TV, an audio amplifier, or a projector—responds in its own customized way. In code, it lets different classes respond to the same interface uniquely.";
+    } else if (lower.includes("recursion")) {
+      conceptExplanation =
+        "Recursion is like standing between two parallel mirrors, where an image reflects inside itself until a base stopping condition is reached. In code, a function calls itself to solve smaller pieces of a larger problem.";
+    } else if (lower.includes("api")) {
+      conceptExplanation =
+        "An API is like a restaurant menu and waiter. You don't need to step into the kitchen to know how the chef cooks; you simply request a dish from the menu, and the waiter safely brings you the finished result.";
+    } else {
+      conceptExplanation =
+        "A technical term is simply a standardized shorthand engineers use so everyone shares the exact same mental blueprint without having to re-explain the underlying mechanics every single time.";
+    }
+
+    // Check if there is a pending assessment or question in the conversation
+    const pendingQ =
+      messages
+        .slice()
+        .reverse()
+        .find((m) => m.role === "assistant" && (m.text.includes("?") || m.text.includes("Step") || m.text.includes("Question")))?.text || "";
+
+    const cleanPending = pendingQ.split("\n")[0] || "What is your target direction?";
+
+    return {
+      reply: `${conceptExplanation}\n\nNow, jumping right back to where we paused: ${cleanPending}. Take your time, what would be your answer?`,
+      toolCall: {
+        tool: "doubtSolvedContextLock",
+        parameters: { doubt: query, resumedQuestion: cleanPending },
+      },
+    };
+  }
+
+  // ─── Last Assistant Message Reference ──────────────────────────────────────
   const lastAssistantMsg =
     messages
       .slice()
       .reverse()
       .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
+
+  // ─── FEATURE 5: Onboarding Handoff Affirmative Detection ────────────────────
+  if (
+    lastAssistantMsg.includes("awesome! i have gathered all your details and found matching internships") ||
+    lastAssistantMsg.includes("create your account now")
+  ) {
+    if (/^(yes|sure|go ahead|create it|proceed|yep|yeah|absolutely|do it|create|confirm)$/i.test(lower)) {
+      return {
+        reply: "Creating your account right now. You are all set! Welcome aboard.",
+        toolCall: {
+          tool: "createAccount",
+          confirmed: true,
+        },
+      };
+    }
+  }
+
+  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
 
   if (
     lower === "voice" ||
@@ -791,6 +1052,116 @@ function generateCognitiveAgentResponse(
         tool: "updateAccessibilityPreferences",
         parameters: { voiceNavigation: true, speechOutput: true, interactionMode: "voice" },
       },
+    };
+  }
+
+  // ─── Feature 3: Audiobook Player Controls & Voice Interruptions ────────────
+  if (
+    lower === "stop audiobook" ||
+    lower === "pause audiobook" ||
+    lower === "stop audio" ||
+    lower === "pause audio" ||
+    (lower === "pause" && currentPage === "audiobook")
+  ) {
+    return {
+      reply: "Paused the audiobook for you. Just say resume or play whenever you're ready to listen again.",
+      toolCall: { tool: "audiobookControl", action: "pause" },
+    };
+  }
+
+  if (
+    lower === "resume audiobook" ||
+    lower === "play audiobook" ||
+    lower === "start audiobook" ||
+    lower === "unpause audiobook"
+  ) {
+    return {
+      reply: "Resuming your career training audiobook right where you left off.",
+      toolCall: { tool: "audiobookControl", action: "play" },
+    };
+  }
+
+  if (
+    lower.includes("go back 10 seconds") ||
+    lower.includes("back 10 seconds") ||
+    lower.includes("rewind 10 seconds") ||
+    lower.includes("rewind")
+  ) {
+    return {
+      reply: "Rewound 10 seconds. Playing now.",
+      toolCall: { tool: "audiobookControl", action: "seek", seconds: -10 },
+    };
+  }
+
+  if (
+    lower.includes("explain what the author meant") ||
+    lower.includes("what did the author mean") ||
+    lower.includes("explain that sentence") ||
+    lower.includes("explain what they meant")
+  ) {
+    return {
+      reply: "The author is highlighting that mastery comes from targeted deliberate practice rather than passive study. By applying concepts directly to real projects, retention triples. Would you like to resume playback, or try a quick exercise on this?",
+      toolCall: { tool: "audiobookControl", action: "pause" },
+    };
+  }
+
+  // ─── Feature 4: Autonomous Dynamic Page Routing ────────────────────────────
+  if (
+    lower.includes("internship listings") ||
+    lower.includes("available internships") ||
+    lower.includes("show me internships") ||
+    lower.includes("find internships")
+  ) {
+    return {
+      reply: `Taking you straight to the available verified internship listings right now!\n{"action": "navigate", "path": "/internships/view"}`,
+      feature: "local",
+      featureTitle: "Verified Internships",
+      toolCall: { tool: "navigateTo", parameters: { path: "/internships/view" } },
+    };
+  }
+
+  if (
+    lower.includes("progress dashboard") ||
+    lower.includes("my dashboard") ||
+    lower.includes("view my progress")
+  ) {
+    return {
+      reply: `Opening your career progress dashboard right now.\n{"action": "navigate", "path": "/dashboard"}`,
+      feature: "roadmap",
+      featureTitle: "Progress Dashboard",
+      toolCall: { tool: "navigateTo", parameters: { path: "/dashboard" } },
+    };
+  }
+
+  // ─── Feature 2: Continuous Doubt Solving & Assessment Context-Locking ──────
+  if (
+    lower.startsWith("what is ") ||
+    lower.startsWith("what does ") ||
+    lower.startsWith("can you explain ") ||
+    lower.startsWith("explain ") ||
+    lower.includes("what is polymorphism") ||
+    lower.includes("what is an api")
+  ) {
+    let explanation = "Think of it like a universal adapter: it defines a standardized interface so different components can interact seamlessly without knowing internal implementation details.";
+    if (lower.includes("polymorphism")) {
+      explanation = "Polymorphism means 'many forms'. Think of a universal remote: the 'play' button tells a DVD, a music player, or a streaming app to play, but each device performs it in its own specialized way.";
+    } else if (lower.includes("api")) {
+      explanation = "An API is like a waiter in a restaurant. You make an order from the menu, the waiter delivers your request to the kitchen, and brings you back the fresh dish.";
+    }
+
+    return {
+      reply: `${explanation} Now, jumping right back to where we paused: are you ready to continue with your pending assessment question?`,
+      toolCall: { tool: "doubtSolvedContextLock" },
+    };
+  }
+
+  // ─── Feature 5: The Final Onboarding Affirmative Detection ──────────────────
+  const isAffirmativeDirect = /^(yes|sure|go ahead|create it|proceed|yep|yeah|absolutely|do it|create|confirm)$/i.test(lower);
+  const lastMsg = messages.slice(-2)[0]?.text?.toLowerCase() || "";
+  if (isAffirmativeDirect && (lastMsg.includes("matching internships") || lastMsg.includes("create your account now") || lastMsg.includes("gathered all your details"))) {
+    return {
+      reply: "Awesome! Creating your account right now. You are all set! Welcome aboard.",
+      toolCall: { tool: "completeOnboardingAccount" },
     };
   }
 

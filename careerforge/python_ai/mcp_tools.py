@@ -12,9 +12,19 @@ High-speed Model Context Protocol tools for dynamic, open-domain AI execution:
 import re
 import json
 import urllib.parse
+import urllib.request
 from typing import Dict, Any, List, Optional
-import requests
-from bs4 import BeautifulSoup
+
+try:
+    import requests
+except ImportError:
+    requests = None
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
+
 
 USER_AGENT = "CareerForge-Assistant/2.0 (contact@careerforge.local; bot/educational; MCP-Tools)"
 
@@ -66,14 +76,28 @@ class MCPToolRegistry:
             return self.mcp_web_url_crawler(arguments.get("url", ""))
         return {"error": f"Unknown tool: {tool_name}"}
 
-    def mcp_knowledge_retrieval(self, query: str, max_results: int = 2) -> Dict[str, Any]:
-        """
-        Fast, single-request Wikipedia Knowledge Graph query.
-        Returns clean titles, lead sections, and source URLs in <500ms.
-        """
-        clean_q = re.sub(r"^(who is|what is|what are|explain|tell me about|how does|what causes|why is|why are)\s+", "", query, flags=re.I).strip(" ?.")
-        if not clean_q:
-            clean_q = query.strip(" ?.")
+    def _get_json(self, url: str, params: dict, timeout: int = 4) -> dict:
+        if requests:
+            resp = requests.get(url, params=params, headers=self.headers, timeout=timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {}
+        try:
+            qs = urllib.parse.urlencode(params)
+            req = urllib.request.Request(f"{url}?{qs}", headers=self.headers)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception:
+            return {}
+
+    def mcp_knowledge_retrieval(self, query: str, max_results: int = 3) -> Dict[str, Any]:
+        """Fetches encyclopedic data from Wikipedia API with single-request optimization."""
+        clean_q = query.strip()
+        is_who = clean_q.lower().startswith("who is") or clean_q.lower().startswith("what is")
+        if is_who:
+            clean_q = re.sub(r"^(who is|what is|tell me about|explain)\s*", "", clean_q, flags=re.IGNORECASE)
+            clean_q = clean_q.strip(" ?.")
+
 
         results = []
         try:
@@ -88,20 +112,18 @@ class MCPToolRegistry:
                 "explaintext": 1,
                 "format": "json",
             }
-            resp = requests.get(wiki_endpoint, params=params, headers=self.headers, timeout=4)
-            if resp.status_code == 200:
-                data = resp.json()
-                pages = data.get("query", {}).get("pages", {})
-                for pid, page in sorted(pages.items(), key=lambda item: item[1].get("index", 999)):
-                    title = page.get("title", "")
-                    extract = page.get("extract", "").strip()
-                    if title and extract:
-                        url_slug = urllib.parse.quote(title.replace(" ", "_"))
-                        results.append({
-                            "title": title,
-                            "extract": extract,
-                            "url": f"https://en.wikipedia.org/wiki/{url_slug}",
-                        })
+            data = self._get_json(wiki_endpoint, params, timeout=4)
+            pages = data.get("query", {}).get("pages", {})
+            for pid, page in sorted(pages.items(), key=lambda item: item[1].get("index", 999)):
+                title = page.get("title", "")
+                extract = page.get("extract", "").strip()
+                if title and extract:
+                    url_slug = urllib.parse.quote(title.replace(" ", "_"))
+                    results.append({
+                        "title": title,
+                        "extract": extract,
+                        "url": f"https://en.wikipedia.org/wiki/{url_slug}",
+                    })
         except Exception as e:
             print(f"[MCP Tool: knowledge_retrieval] Error: {e}")
 
@@ -115,18 +137,17 @@ class MCPToolRegistry:
                     "srlimit": 2,
                     "format": "json",
                 }
-                resp = requests.get("https://en.wikipedia.org/w/api.php", params=params_fallback, headers=self.headers, timeout=3)
-                if resp.status_code == 200:
-                    hits = resp.json().get("query", {}).get("search", [])
-                    for hit in hits:
-                        title = hit.get("title", "")
-                        snippet = re.sub(r"<[^>]+>", "", hit.get("snippet", ""))
-                        if title and snippet:
-                            results.append({
-                                "title": title,
-                                "extract": snippet,
-                                "url": f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
-                            })
+                data_fb = self._get_json("https://en.wikipedia.org/w/api.php", params_fallback, timeout=3)
+                hits = data_fb.get("query", {}).get("search", [])
+                for hit in hits:
+                    title = hit.get("title", "")
+                    snippet = re.sub(r"<[^>]+>", "", hit.get("snippet", ""))
+                    if title and snippet:
+                        results.append({
+                            "title": title,
+                            "extract": snippet,
+                            "url": f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
+                        })
             except Exception:
                 pass
 

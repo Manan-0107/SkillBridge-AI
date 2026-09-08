@@ -23,6 +23,18 @@ import {
 import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
+import { VoiceSessionManager } from "@/lib/voice/VoiceSessionManager";
+import { VoiceDiagnosticsPanel } from "@/components/voice/VoiceDiagnosticsPanel";
+import { isAllowedFeature, isAllowedResumeTab, sanitizeNavigation } from "@/lib/security/aiValidation";
+
+export type VoiceFlowState =
+  | "idle"
+  | "initializing"
+  | "listening"
+  | "speech detected"
+  | "recognizing"
+  | "final"
+  | "processing";
 
 export type Msg = {
   id: string;
@@ -155,6 +167,7 @@ export function AssistantHome({
 
   // ─── Voice & Silence Detection State ───────────────────────────────────────
   const [listening, setListening] = useState(false);
+  const [voiceFlowState, setVoiceFlowState] = useState<VoiceFlowState>("idle");
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [liveSpokenText, setLiveSpokenText] = useState<string | null>(null);
   const [lastAssistantReply, setLastAssistantReply] = useState<string | null>(null);
@@ -170,6 +183,12 @@ export function AssistantHome({
   // Horizontal Scroll Carousel State
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+
+  // Integrated Career Training Audiobook Player State
+  const [audiobookPlaying, setAudiobookPlaying] = useState(false);
+  const [audiobookTrack, setAudiobookTrack] = useState("Career Mastery: Cracking Technical Interviews");
+  const [audiobookSeconds, setAudiobookSeconds] = useState(42);
+  const [audiobookTotalSeconds] = useState(480);
 
   // Refs for Real-Time Audio Synchronization & Guarding
   const isAISpeakingRef = useRef(false);
@@ -207,6 +226,44 @@ export function AssistantHome({
     };
   }, []);
 
+  // Audiobook playback progress tick
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (audiobookPlaying) {
+      timer = setInterval(() => {
+        setAudiobookSeconds((prev) => {
+          if (prev >= audiobookTotalSeconds) {
+            setAudiobookPlaying(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [audiobookPlaying, audiobookTotalSeconds]);
+
+  // ─── VoiceSessionManager Authoritative Subscription ────────────────────────
+  useEffect(() => {
+    const manager = VoiceSessionManager.getInstance();
+    void manager.initialize();
+
+    const unsubscribe = manager.subscribe((ctx, metrics) => {
+      if (ctx?.interimTranscript) {
+        setLiveSpokenText(ctx.interimTranscript);
+      }
+      if (metrics.micState === "DENIED" || metrics.micState === "ERROR") {
+        setMicError("Microphone access is unavailable or denied. Please check permissions.");
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   // ─── Voice Recognition with 3.5s Silence Auto-Send ─────────────────────────
   const clearSilenceTimers = useCallback(() => {
     if (silenceTimerRef.current) {
@@ -224,6 +281,7 @@ export function AssistantHome({
     clearSilenceTimers();
     speechControllerRef.current?.stop();
     setListening(false);
+    setVoiceFlowState("idle");
   }, [clearSilenceTimers]);
 
   const startSilenceAutoSendCountdown = useCallback(() => {
@@ -251,9 +309,12 @@ export function AssistantHome({
 
       const textToSend = inputRef.current.trim();
       if (textToSend) {
+        setVoiceFlowState("processing");
         setInput("");
         inputRef.current = "";
         runPromptRef.current(textToSend);
+      } else {
+        setVoiceFlowState("idle");
       }
     }, 3500);
   }, [clearSilenceTimers]);
@@ -266,11 +327,31 @@ export function AssistantHome({
 
     setMicError(null);
     clearSilenceTimers();
+    setVoiceFlowState("initializing");
+
+    // Start authoritative interaction on VoiceSessionManager
+    const manager = VoiceSessionManager.getInstance();
+    const currentQ = activeQuestionRef.current;
+    manager.startInteraction({
+      questionId: currentQ?.id || "chat_prompt",
+      mode: currentQ ? "ASSESSMENT" : "GENERAL",
+      expectedType: currentQ?.expectedType || "free_text",
+      promptText: currentQ?.question,
+    });
 
     const controller = startSpeechRecognition({
       lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
       onTranscript: (transcript: string, isFinal?: boolean) => {
         if (transcript) {
+          if (!isFinal) {
+            setVoiceFlowState("speech detected");
+            setTimeout(() => {
+              setVoiceFlowState((prev) => (prev === "speech detected" ? "recognizing" : prev));
+            }, 60);
+          } else {
+            setVoiceFlowState("final");
+          }
+
           // Detect spoken language if auto mode is enabled
           const detected = detectTextLanguage(transcript);
           if (detected && voiceLanguage === "auto" && detected !== voiceLang) {
@@ -283,11 +364,34 @@ export function AssistantHome({
             lower === "stop" ||
             lower === "wait" ||
             lower === "pause" ||
+            lower === "pause audiobook" ||
+            lower === "stop audiobook" ||
             lower === "રોકો" ||
             lower === "रुको" ||
             lower === "arrête"
           ) {
+            setAudiobookPlaying(false);
+            VoiceSessionManager.getInstance().handleUserBargeIn();
             stopAllVoice();
+            setVoiceFlowState("idle");
+            return;
+          }
+
+          if (
+            lower === "play audiobook" ||
+            lower === "resume audiobook" ||
+            lower === "start audiobook"
+          ) {
+            setAudiobookPlaying(true);
+            return;
+          }
+
+          if (
+            lower.includes("go back 10 seconds") ||
+            lower.includes("back 10 seconds") ||
+            lower.includes("rewind")
+          ) {
+            setAudiobookSeconds((s) => Math.max(0, s - 10));
             return;
           }
 
@@ -304,17 +408,30 @@ export function AssistantHome({
           inputRef.current = cleanAnswer;
 
           if (isFinal) {
+            const currentInteraction = VoiceSessionManager.getInstance().getCurrentInteraction();
+            if (currentInteraction) {
+              void VoiceSessionManager.getInstance().commitAnswer(
+                currentInteraction.interactionId,
+                cleanAnswer
+              );
+            }
             startSilenceAutoSendCountdown();
           }
         }
       },
       onListeningChange: (isList: boolean) => {
         setListening(isList);
-        if (!isList) clearSilenceTimers();
+        if (isList) {
+          setVoiceFlowState("listening");
+        } else {
+          clearSilenceTimers();
+          setVoiceFlowState((prev) => (prev === "processing" ? "processing" : "idle"));
+        }
       },
       onError: (err: string) => {
         setMicError(err);
         setListening(false);
+        setVoiceFlowState("idle");
         clearSilenceTimers();
       },
     });
@@ -645,6 +762,13 @@ export function AssistantHome({
   };
 
   const executeRedirect = (feature: FeatureId, tab?: ResumeTab) => {
+    if (!isAllowedFeature(feature)) {
+      console.warn("[Security] Blocked redirect to unauthorized feature:", feature);
+      return;
+    }
+    if (tab && !isAllowedResumeTab(tab)) {
+      tab = undefined;
+    }
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
@@ -933,18 +1057,52 @@ export function AssistantHome({
         }
       }
 
-      const replyText =
+      const rawReplyText =
         data.reply ||
         "I'm here to support your career journey. What would you like to explore next?";
       const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const hasFeature = Boolean(data.feature);
-      setLastAssistantReply(replyText);
+      
+      // ── Autonomous Navigation & Trailing JSON Interceptor ──
+      let targetFeature: FeatureId | null = isAllowedFeature(data.feature) ? data.feature : null;
+      let targetTab: ResumeTab | undefined = isAllowedResumeTab(data.resumeTab) ? data.resumeTab : undefined;
+      let cleanVoiceText = rawReplyText;
+
+      const trailingNavJson = rawReplyText.match(/\{\s*"action"\s*:\s*"navigate"\s*,\s*"path"\s*:\s*"([^"]+)"\s*\}\s*$/i);
+      if (trailingNavJson) {
+        cleanVoiceText = rawReplyText.replace(trailingNavJson[0], "").trim();
+        const sanitized = sanitizeNavigation(trailingNavJson[1]);
+        if (sanitized) {
+          targetFeature = sanitized.feature;
+          if (sanitized.resumeTab) targetTab = sanitized.resumeTab;
+        }
+      }
+
+      // Haptic feedback sequence on operational state or navigation change (Deaf stream)
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        if (targetFeature || data.toolCall?.tool === "doubtSolvedContextLock" || data.toolCall?.tool === "audiobookControl") {
+          try {
+            navigator.vibrate([40, 60, 40]);
+          } catch (_) {}
+        }
+      }
+
+      // Audiobook control action execution
+      if (data.toolCall?.tool === "audiobookControl") {
+        const act = data.toolCall.action;
+        if (act === "play") setAudiobookPlaying(true);
+        else if (act === "pause") setAudiobookPlaying(false);
+        else if (act === "seek") {
+          setAudiobookSeconds((prev) => Math.max(0, prev + (data.toolCall.seconds || 0)));
+        }
+      }
+
+      setLastAssistantReply(cleanVoiceText);
 
       const intent: ParsedIntent = {
-        feature: data.feature || null,
+        feature: targetFeature,
         featureTitle: data.featureTitle,
-        resumeTab: data.resumeTab,
-        reply: replyText,
+        resumeTab: targetTab,
+        reply: cleanVoiceText,
       };
 
       if (data.role) setTargetRole(data.role);
@@ -955,9 +1113,9 @@ export function AssistantHome({
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: replyTime,
-          text: replyText,
+          text: cleanVoiceText,
           intent,
-          redirecting: hasFeature,
+          redirecting: Boolean(targetFeature),
           engine: data.engine || "CareerForge AI",
           thinking: Array.isArray(data.thinking) ? data.thinking : undefined,
         },
@@ -974,14 +1132,14 @@ export function AssistantHome({
       );
       scrollToBottom();
 
-      // Automatically speak the question and auto-listen for user's voice reply
+      // Automatically speak the clean question and auto-listen for user's voice reply
       if (voiceMode && accessibilityPrefs?.speechOutput !== false && !textFallbackActive) {
         setSpeakingMsgId(finalMessages[finalMessages.length - 1].id);
-        setLiveSpokenText(replyText);
+        setLiveSpokenText(cleanVoiceText);
         isAISpeakingRef.current = true;
         stopListening();
-        speakText(replyText, {
-          lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(replyText),
+        speakText(cleanVoiceText, {
+          lang: voiceLanguage !== "auto" ? voiceLanguage : detectTextLanguage(cleanVoiceText),
           onStart: () => {
             isAISpeakingRef.current = true;
             stopListening();
@@ -1005,15 +1163,20 @@ export function AssistantHome({
       }
 
       setBusy(false);
-      if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
-        setRedirectCountdown(3);
-        const timer = setTimeout(() => {
-          executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
-        }, 3200);
-        setActiveTimer(timer);
+      setVoiceFlowState("idle");
+      if (targetFeature) {
+        const isExplicitNav = userMsgText.toLowerCase().includes("show") || userMsgText.toLowerCase().includes("open") || userMsgText.toLowerCase().includes("take me") || userMsgText.toLowerCase().includes("navigate") || trailingNavJson;
+        if (isExplicitNav) {
+          setRedirectCountdown(2);
+          const timer = setTimeout(() => {
+            executeRedirect(targetFeature as FeatureId, targetTab as ResumeTab);
+          }, 2400);
+          setActiveTimer(timer);
+        }
       }
     } catch (err) {
       console.error("[AssistantHome] LLM call error:", err);
+      setVoiceFlowState("idle");
       const fallbackMessages: Msg[] = [
         ...nextMessages,
         {
@@ -1033,12 +1196,21 @@ export function AssistantHome({
   };
   runPromptRef.current = runPrompt;
 
+  // Cleanup active audio/speech listeners and timers on unmount
+  useEffect(() => {
+    return () => {
+      clearSilenceTimers();
+      speechControllerRef.current?.stop();
+    };
+  }, [clearSilenceTimers]);
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     clearSilenceTimers();
     if (listening) {
       speechControllerRef.current?.stop();
       setListening(false);
+      setVoiceFlowState("idle");
     }
     const value = input;
     setInput("");
@@ -1378,6 +1550,101 @@ export function AssistantHome({
                 <span className="hidden sm:inline">Delete</span>
               </button>
             )}
+          </div>
+        </div>
+
+        {/* ── Accessibility Real-Time Caption Stream (Deaf & Hard-of-Hearing) ── */}
+        {(liveSpokenText || (voiceMode && listening)) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="border-b border-accent/20 bg-ink text-white px-4 py-3 shadow-md transition-all animate-in fade-in slide-in-from-top-2 duration-200"
+          >
+            <div className="mx-auto flex max-w-3xl items-center gap-3">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  {liveSpokenText ? "Live Captions" : "Listening..."}
+                </span>
+              </div>
+              <div className="flex-1 text-sm font-medium text-slate-100 leading-relaxed font-sans select-text">
+                {liveSpokenText ? (
+                  <span className="text-white drop-shadow-xs font-semibold">{liveSpokenText}</span>
+                ) : (
+                  <span className="text-slate-400 italic">Speak naturally. Real-time captions will stream here word-by-word.</span>
+                )}
+              </div>
+              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/70 border border-white/15">
+                Dual-Stream Sync
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Feature 3: Integrated Career Training Audiobook Player ── */}
+        <div
+          role="region"
+          aria-label="Career Training Audiobook Player"
+          className="border-b border-line bg-gradient-to-r from-mist via-paper to-mist px-4 py-2.5 shadow-2xs"
+        >
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${audiobookPlaying ? "bg-accent text-white animate-pulse" : "bg-paper text-ink border border-line"}`}>
+                <HeadphonesIcon className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-ink truncate max-w-[200px] sm:max-w-xs">{audiobookTrack}</span>
+                  <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${audiobookPlaying ? "bg-accent/15 text-accent" : "bg-stone-200 text-stone-600"}`}>
+                    {audiobookPlaying ? "Playing" : "Paused"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-graphite font-mono">
+                  <span>{Math.floor(audiobookSeconds / 60)}:{String(audiobookSeconds % 60).padStart(2, '0')}</span>
+                  <div className="w-24 sm:w-36 h-1.5 rounded-full bg-line overflow-hidden">
+                    <div
+                      className="h-full bg-accent transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.min(100, (audiobookSeconds / audiobookTotalSeconds) * 100)}%` }}
+                    />
+                  </div>
+                  <span>{Math.floor(audiobookTotalSeconds / 60)}:{String(audiobookTotalSeconds % 60).padStart(2, '0')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAudiobookSeconds((s) => Math.max(0, s - 10))}
+                title="Rewind 10 seconds"
+                aria-label="Rewind 10 seconds"
+                className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink hover:bg-mist transition-colors cursor-pointer"
+              >
+                ⏪ -10s
+              </button>
+              <button
+                type="button"
+                onClick={() => setAudiobookPlaying(!audiobookPlaying)}
+                title={audiobookPlaying ? "Pause Audiobook" : "Play Audiobook"}
+                aria-label={audiobookPlaying ? "Pause Audiobook" : "Play Audiobook"}
+                className="rounded bg-ink px-3 py-1 text-xs font-semibold text-paper hover:bg-ink/90 transition-colors cursor-pointer"
+              >
+                {audiobookPlaying ? "⏸ Pause" : "▶ Play"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAudiobookSeconds((s) => Math.min(audiobookTotalSeconds, s + 10))}
+                title="Forward 10 seconds"
+                aria-label="Forward 10 seconds"
+                className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink hover:bg-mist transition-colors cursor-pointer"
+              >
+                ⏩ +10s
+              </button>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-graphite/80 italic">
+              <span>Voice commands: &quot;Stop&quot;, &quot;Go back 10 seconds&quot;, &quot;Explain author&apos;s point&quot;</span>
+            </div>
           </div>
         </div>
 
@@ -1725,11 +1992,28 @@ export function AssistantHome({
                     }
                   >
                     <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-paper" : "text-graphite/80"}`} />
-                    <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
+                    <span>
+                      {listening
+                        ? silenceCountdown
+                          ? `Auto-sending in ${silenceCountdown}s…`
+                          : voiceFlowState === "speech detected" || voiceFlowState === "recognizing"
+                          ? "Recognizing…"
+                          : voiceFlowState === "final"
+                          ? "Captured…"
+                          : voiceFlowState === "initializing"
+                          ? "Starting…"
+                          : "Listening…"
+                        : voiceFlowState === "processing"
+                        ? "Processing…"
+                        : "Voice"}
+                    </span>
                   </button>
 
                   {micError && (
-                    <span className="text-[10px] text-red-600 truncate max-w-[140px]">
+                    <span
+                      className="text-[11px] font-medium text-red-600 truncate max-w-[220px] bg-red-50 px-2 py-0.5 rounded border border-red-200"
+                      title={micError}
+                    >
                       {micError}
                     </span>
                   )}
@@ -1806,6 +2090,9 @@ export function AssistantHome({
           </div>
         </div>
       </div>
+
+      {/* Real-time Voice Diagnostics HUD */}
+      <VoiceDiagnosticsPanel />
     </div>
   );
 }
@@ -1938,6 +2225,15 @@ function StopIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24">
       <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
+function HeadphonesIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
     </svg>
   );
 }

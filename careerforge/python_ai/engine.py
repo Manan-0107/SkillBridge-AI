@@ -21,7 +21,12 @@ import sys
 import json
 import re
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env.local"))
+    load_dotenv()
+except ImportError:
+    pass
 
 # Ensure python_ai is on path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -30,10 +35,6 @@ if current_dir not in sys.path:
 
 from web_browser import web_browser
 from mcp_tools import mcp_registry
-
-# Load environment variables
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env.local"))
-load_dotenv()
 
 
 def detect_message_language(text: str) -> str:

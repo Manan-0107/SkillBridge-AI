@@ -153,7 +153,8 @@ export function isSelfVoiceEcho(transcript: string): boolean {
 }
 
 export function isAIAudioPlaying(): boolean {
-  return isSelfSpeaking || Date.now() - lastSpeechEndedAt < 1800;
+  const isSynthSpeaking = typeof window !== "undefined" && Boolean(window.speechSynthesis?.speaking);
+  return isSelfSpeaking || isSynthSpeaking || Date.now() - lastSpeechEndedAt < 1800;
 }
 
 let blindGuideActive = false;
@@ -432,7 +433,8 @@ export function resumeSpeaking() {
 }
 
 export function isSpeaking(): boolean {
-  return isSelfSpeaking;
+  const isSynthSpeaking = typeof window !== "undefined" && Boolean(window.speechSynthesis?.speaking);
+  return isSelfSpeaking || isSynthSpeaking;
 }
 
 let activeRecognitionInstance: any = null;

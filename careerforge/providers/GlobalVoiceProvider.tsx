@@ -168,12 +168,12 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
     persistFallback(true);
   }, [persistFallback]);
 
-  const { voiceLanguage, setVoiceLanguage } = useApp();
+  const { user, voiceLanguage, setVoiceLanguage } = useApp();
 
   const voice = useVoiceCommand({
-    // Only enabled during the initial preference probe if needed;
+    // Only enabled during the initial preference probe when authenticated;
     // GlobalVoiceDictator handles continuous accessible speech recognition to prevent dual-mic collision.
-    enabled: isPreferenceLoading,
+    enabled: Boolean(user) && isPreferenceLoading,
     lang: voiceLanguage || "en-US",
     onSpeechDetected: resolveAsVoiceMode,
     onFallbackTriggered: resolveAsTextMode,

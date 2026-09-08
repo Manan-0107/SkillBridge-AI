@@ -111,8 +111,32 @@ export async function GET(req: NextRequest) {
     const filterType = (searchParams.get("type") || "all").toLowerCase().trim();
     const locationParam = (searchParams.get("location") || "").trim();
     const countryCodeParam = (searchParams.get("countryCode") || "").toUpperCase().trim();
-    const userLat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null;
-    const userLon = searchParams.get("lon") ? parseFloat(searchParams.get("lon")!) : null;
+    const rawLat = searchParams.get("lat");
+    const rawLon = searchParams.get("lon") || searchParams.get("lng");
+    let userLat: number | null = null;
+    let userLon: number | null = null;
+
+    if (rawLat !== null && rawLat !== "") {
+      const parsed = parseFloat(rawLat);
+      if (!Number.isFinite(parsed) || parsed < -90 || parsed > 90) {
+        return NextResponse.json(
+          { status: "error", error: "Invalid latitude. Must be a finite number between -90 and 90." },
+          { status: 400 }
+        );
+      }
+      userLat = parsed;
+    }
+
+    if (rawLon !== null && rawLon !== "") {
+      const parsed = parseFloat(rawLon);
+      if (!Number.isFinite(parsed) || parsed < -180 || parsed > 180) {
+        return NextResponse.json(
+          { status: "error", error: "Invalid longitude. Must be a finite number between -180 and 180." },
+          { status: 400 }
+        );
+      }
+      userLon = parsed;
+    }
 
     // Detect target country rule
     const countryRule = detectCountryRule(locationParam, countryCodeParam);
@@ -255,10 +279,10 @@ export async function GET(req: NextRequest) {
         remotePercentage: "78% Remote / Hybrid Available",
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Jobs API] Error fetching jobs:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch live job feeds" },
+      { status: "error", error: "Failed to fetch live job feeds" },
       { status: 500 }
     );
   }

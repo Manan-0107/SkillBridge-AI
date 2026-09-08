@@ -10,8 +10,17 @@ import urllib.parse
 import json
 import re
 from typing import Dict, Any, List, Optional
-import requests
-from bs4 import BeautifulSoup
+
+try:
+    import requests
+except ImportError:
+    requests = None
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
+
 
 
 class WebBrowser:
@@ -43,14 +52,23 @@ class WebBrowser:
                 "explaintext": 1,
                 "format": "json",
             }
-            resp = requests.get(wiki_url, params=params, headers=self.headers, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                pages = data.get("query", {}).get("pages", {})
-                for pid, p in sorted(pages.items(), key=lambda item: item[1].get("index", 999)):
-                    title = p.get("title", "")
-                    extract = p.get("extract", "").strip()
-                    if title and extract:
+            if requests:
+                resp = requests.get(wiki_url, params=params, headers=self.headers, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                else:
+                    data = {}
+            else:
+                qs = urllib.parse.urlencode(params)
+                req = urllib.request.Request(f"{wiki_url}?{qs}", headers=self.headers)
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+
+            pages = data.get("query", {}).get("pages", {})
+            for pid, p in sorted(pages.items(), key=lambda item: item[1].get("index", 999)):
+                title = p.get("title", "")
+                extract = p.get("extract", "").strip()
+                if title and extract:
                         results.append({
                             "title": title,
                             "snippet": extract,

@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeHtmlAndSvg } from "@/lib/security/aiValidation";
 
 export const runtime = "nodejs"; // pdf-parse requires Node.js
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // ── Plain text / Markdown ────────────────────────────────────────────────
     if (["txt", "md", "rtf"].includes(ext) || file.type.includes("text")) {
-      const text = buffer.toString("utf-8");
+      const text = sanitizeHtmlAndSvg(buffer.toString("utf-8"));
       return NextResponse.json({ text, filename });
     }
 
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
         const pdfParse = require("pdf-parse");
         const data = await pdfParse(buffer);
         return NextResponse.json({
-          text: data.text,
+          text: sanitizeHtmlAndSvg(data.text),
           filename,
           pages: data.numpages,
         });
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const mammoth = require("mammoth");
         const result = await mammoth.extractRawText({ buffer });
-        return NextResponse.json({ text: result.value, filename });
+        return NextResponse.json({ text: sanitizeHtmlAndSvg(result.value), filename });
       } catch (docxErr) {
         console.error("[parse] mammoth error:", docxErr);
         return NextResponse.json(
