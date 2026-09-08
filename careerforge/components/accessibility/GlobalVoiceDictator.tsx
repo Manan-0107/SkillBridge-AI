@@ -92,21 +92,9 @@ export function GlobalVoiceDictator() {
           (target instanceof HTMLTextAreaElement ? "Text Area" : `${target.type || "text"} field`);
         setFocusedFieldLabel(label);
 
-        // Whenever a field is live/focused, ask the user to speak for that field!
+        // Update current field hint without interrupting keyboard typing
         const prompt = getFieldPromptMessage(label, target.type, currentLangRef.current);
         setAiSpeechPrompt(prompt);
-        showStatus("🎙️ " + prompt, 4000);
-        playAccessibleChime("focus");
-        if (accessibilityPrefs?.speechOutput !== false) {
-          speakText(prompt, {
-            lang: currentLangRef.current,
-            onEnd: () => {
-              if (!active) {
-                toggleVoiceDictation();
-              }
-            },
-          });
-        }
       }
     };
 
@@ -644,24 +632,6 @@ export function GlobalVoiceDictator() {
       // ── Command E: Live Focused Field Filling with Step Auto-Progression ─────
       if (focusedElementRef.current) {
         const target = focusedElementRef.current;
-        const isNameField =
-          target.name?.toLowerCase().includes("name") ||
-          target.id?.toLowerCase().includes("name") ||
-          target.placeholder?.toLowerCase().includes("name") ||
-          target.getAttribute("aria-label")?.toLowerCase().includes("name");
-
-        const isEmailField =
-          target.type === "email" ||
-          (target.name && target.name.toLowerCase().includes("email")) ||
-          (target.id && target.id.toLowerCase().includes("email")) ||
-          (target.placeholder && target.placeholder.toLowerCase().includes("email")) ||
-          lower.includes("@") ||
-          lower.includes("at the rate") ||
-          lower.includes("at rate") ||
-          lower.includes("એટ ધ રેટ") ||
-          lower.includes("एट द रेट") ||
-          lower.includes("gmail") ||
-          lower.includes(".com");
 
         const isPasswordField =
           target.type === "password" ||
@@ -670,68 +640,99 @@ export function GlobalVoiceDictator() {
           target.name?.toLowerCase().includes("pin") ||
           target.id?.toLowerCase().includes("pin");
 
-        if (isNameField) {
-          const cleanName = normalizeSpokenName(clean);
-          setNativeInputValue(target, cleanName);
-          pendingNameVerificationRef.current = cleanName;
-          playAccessibleChime("success");
-          showStatus(isGujarati ? `નામ: ${cleanName}` : `Name: ${cleanName}`);
+        const isNameField =
+          !isPasswordField &&
+          (target.name?.toLowerCase().includes("name") ||
+            target.id?.toLowerCase().includes("name") ||
+            target.placeholder?.toLowerCase().includes("name") ||
+            target.getAttribute("aria-label")?.toLowerCase().includes("name"));
 
-          const verifyMsg = isGujarati
-            ? `મેં તમારું નામ "${cleanName}" નોંધ્યું છે. શું આ સાચું છે? આગળ વધવા માટે 'હા' બોલો અથવા ફરીથી નામ બોલો.`
+        const isEmailField =
+          !isPasswordField &&
+          !isNameField &&
+          (target.type === "email" ||
+            (target.name && target.name.toLowerCase().includes("email")) ||
+            (target.id && target.id.toLowerCase().includes("email")) ||
+            (target.placeholder && target.placeholder.toLowerCase().includes("email")));
+
+        // 1. Password Field
+        if (isPasswordField) {
+          setNativeInputValue(target, clean);
+          playAccessibleChime("success");
+          const doneMsg = isGujarati
+            ? "પાસવર્ડ ભરાઈ ગયો છે! લૉગિન કરવા માટે 'સબમિટ' બોલો."
             : isHindi
-            ? `मैंने आपका नाम "${cleanName}" दर्ज किया है। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें या दोबारा बोलें।`
-            : `I recorded your name as "${cleanName}". Is that correct? Say 'Yes' to continue or speak your name again.`;
-          
-          setAiSpeechPrompt(verifyMsg);
-          speakText(verifyMsg, { lang: currentLangRef.current });
-          showStatus(`🎙️ ${verifyMsg}`, 5000);
+            ? "पासवर्ड दर्ज कर दिया गया है! लॉगिन करने के लिए 'सबमिट' बोलें।"
+            : "Password filled! Say 'Submit' or press Enter to continue.";
+          setAiSpeechPrompt(doneMsg);
+          showStatus(`✅ ${doneMsg}`, 4500);
+
+          // Focus submit button
+          const submitBtn = document.querySelector<HTMLButtonElement>('#submit-btn, button[type="submit"]');
+          if (submitBtn) {
+            setTimeout(() => {
+              submitBtn.focus();
+              focusedElementRef.current = submitBtn as any;
+            }, 500);
+          }
           return;
         }
 
+        // 2. Name Field
+        if (isNameField) {
+          const cleanName = normalizeSpokenName(clean);
+          setNativeInputValue(target, cleanName);
+          playAccessibleChime("success");
+          showStatus(isGujarati ? `નામ: ${cleanName}` : `Name: ${cleanName}`);
+
+          // Auto-progress to Email section
+          const nextEmail = document.querySelector<HTMLInputElement>(
+            '#auth-email-input, input[type="email"], input[name*="email" i]'
+          );
+          if (nextEmail) {
+            setTimeout(() => {
+              nextEmail.focus();
+              focusedElementRef.current = nextEmail;
+              const nextMsg = isGujarati
+                ? `નામ ${cleanName} નોંધાયું. સ્ટેપ ૨: કૃપા કરીને તમારું ઈમેઇલ બોલો.`
+                : isHindi
+                ? `नाम ${cleanName} दर्ज हुआ। स्टेप २: कृपया अपना ईमेल बोलें।`
+                : `Name recorded. Step 2: Please speak or enter your email address.`;
+              setAiSpeechPrompt(nextMsg);
+              showStatus(`🎙️ ${nextMsg}`, 4000);
+            }, 400);
+          }
+          return;
+        }
+
+        // 3. Email Field
         if (isEmailField) {
           const rawEmail = normalizeSpokenEmail(clean);
           setNativeInputValue(target, rawEmail);
           playAccessibleChime("success");
           showStatus(isGujarati ? `ઈમેઇલ: ${rawEmail}` : `Email: ${rawEmail}`);
 
-          // Auto-progress to Password / PIN!
+          // Auto-progress to Password section
           const nextPass = document.querySelector<HTMLInputElement>(
-            '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]'
+            '#auth-password-input, input[type="password"], input[name*="pass" i]'
           );
           if (nextPass) {
             setTimeout(() => {
               nextPass.focus();
               focusedElementRef.current = nextPass;
-              setPendingFieldTarget("password");
               const nextMsg = isGujarati
-                ? `ઈમેઇલ ${rawEmail} સેવ થયું. સ્ટેપ ૩: કૃપા કરીને તમારો પાસવર્ડ અથવા પિન બોલો.`
+                ? `ઈમેઇલ ${rawEmail} નોંધાયું. આગળ: કૃપા કરીને તમારો પાસવર્ડ બોલો.`
                 : isHindi
-                ? `ईमेल ${rawEmail} सहेज लिया गया। स्टेप ३: कृपया अपना पासवर्ड या पिन बोलें।`
-                : `Email recorded as ${rawEmail}. Step 3: Please speak your password or PIN.`;
+                ? `ईमेल ${rawEmail} दर्ज हुआ। आगे: कृपया अपना पासवर्ड बोलें।`
+                : `Email recorded. Next step: Please speak or enter your password.`;
               setAiSpeechPrompt(nextMsg);
-              speakText(nextMsg, { lang: currentLangRef.current });
-              showStatus(`🎙️ ${nextMsg}`, 4500);
-            }, 500);
+              showStatus(`🎙️ ${nextMsg}`, 4000);
+            }, 400);
           }
           return;
         }
 
-        if (isPasswordField) {
-          setNativeInputValue(target, clean);
-          playAccessibleChime("success");
-          const doneMsg = isGujarati
-            ? `પાસવર્ડ ભરાઈ ગયો છે! લૉગિન કરવા માટે 'સબમિટ' બોલો અથવા ફેરફાર કરવા માટે 'નામ બદલવું છે' બોલો.`
-            : isHindi
-            ? `पासवर्ड दर्ज कर दिया गया है! लॉगिन करने के लिए 'सबमिट' बोलें या बदलाव के लिए 'नाम बदलना है' बोलें।`
-            : `Password filled! Say 'Submit' to sign in or say 'Change Name' to edit.`;
-          setAiSpeechPrompt(doneMsg);
-          speakText(doneMsg, { lang: currentLangRef.current });
-          showStatus(`✅ ${doneMsg}`, 5000);
-          return;
-        }
-
-        // Generic text / number / search / role input field
+        // 4. Other Focused Input / Textarea
         setNativeInputValue(target, clean);
         playAccessibleChime("success");
         const ack = isGujarati ? `ભરાઈ ગયું: ${clean}` : isHindi ? `दर्ज हुआ: ${clean}` : `Entered: ${clean}`;
@@ -745,28 +746,14 @@ export function GlobalVoiceDictator() {
       const nameMatch = clean.match(/^(?:name|fill name|my name is|મારું નામ|नाम)\s+(.+)$/i);
       const searchMatch = clean.match(/^(?:search|find|શોધો|ખોજો|खोजो)\s+(.+)$/i);
 
-      if (emailMatch || lower.includes("@") || lower.includes("at the rate") || lower.includes("gmail") || lower.includes(".com")) {
-        const rawEmail = normalizeSpokenEmail(emailMatch ? emailMatch[1] : clean);
-        const emailInput = document.querySelector<HTMLInputElement>(
-          'input[type="email"], input[name*="email" i], input[id*="email" i], input[placeholder*="email" i]'
-        );
-        if (emailInput) {
-          emailInput.focus();
-          setNativeInputValue(emailInput, rawEmail);
-          playAccessibleChime("success");
-          const ack = isGujarati ? `ઈમેઇલ ભરાઈ ગયું: ${rawEmail}` : `Email filled: ${rawEmail}`;
-          showStatus(`✅ ${ack}`, 4000);
-          return;
-        }
-      }
-
-      if (passMatch) {
-        const passVal = passMatch[1].trim();
+      if (passMatch || lower.startsWith("password ") || lower.startsWith("pass ")) {
+        const passVal = (passMatch ? passMatch[1] : clean.replace(/^(?:password|pass)\s+/i, "")).trim();
         const passInput = document.querySelector<HTMLInputElement>(
-          'input[type="password"], input[name*="password" i], input[id*="password" i]'
+          '#auth-password-input, input[type="password"], input[name*="password" i], input[id*="password" i]'
         );
         if (passInput) {
           passInput.focus();
+          focusedElementRef.current = passInput;
           setNativeInputValue(passInput, passVal);
           playAccessibleChime("success");
           showStatus(isGujarati ? "પાસવર્ડ ભરાઈ ગયો" : "Filled Password");
@@ -774,16 +761,33 @@ export function GlobalVoiceDictator() {
         }
       }
 
-      if (nameMatch) {
-        const nameVal = nameMatch[1].trim();
+      if (nameMatch || lower.startsWith("name ") || lower.startsWith("my name is ")) {
+        const nameVal = (nameMatch ? nameMatch[1] : clean.replace(/^(?:name|my name is)\s+/i, "")).trim();
         const nameInput = document.querySelector<HTMLInputElement>(
-          'input[name*="name" i], input[id*="name" i], input[placeholder*="name" i]'
+          '#auth-name-input, input[name*="name" i], input[id*="name" i]'
         );
         if (nameInput) {
           nameInput.focus();
+          focusedElementRef.current = nameInput;
           setNativeInputValue(nameInput, nameVal);
           playAccessibleChime("success");
           showStatus(isGujarati ? `નામ ભરાઈ ગયું: ${nameVal}` : `Filled Name: ${nameVal}`);
+          return;
+        }
+      }
+
+      if (emailMatch || lower.startsWith("email ") || (lower.includes("@") && !lower.includes("?"))) {
+        const rawEmail = normalizeSpokenEmail(emailMatch ? emailMatch[1] : clean.replace(/^email\s+/i, ""));
+        const emailInput = document.querySelector<HTMLInputElement>(
+          '#auth-email-input, input[type="email"], input[name*="email" i]'
+        );
+        if (emailInput) {
+          emailInput.focus();
+          focusedElementRef.current = emailInput;
+          setNativeInputValue(emailInput, rawEmail);
+          playAccessibleChime("success");
+          const ack = isGujarati ? `ઈમેઇલ ભરાઈ ગયું: ${rawEmail}` : `Email filled: ${rawEmail}`;
+          showStatus(`✅ ${ack}`, 4000);
           return;
         }
       }
@@ -795,6 +799,7 @@ export function GlobalVoiceDictator() {
         );
         if (searchInput) {
           searchInput.focus();
+          focusedElementRef.current = searchInput;
           setNativeInputValue(searchInput, searchVal);
           playAccessibleChime("success");
           showStatus(isGujarati ? `શોધી રહ્યા છીએ: ${searchVal}` : `Searching: ${searchVal}`);
@@ -802,7 +807,7 @@ export function GlobalVoiceDictator() {
         }
       }
 
-      // ── Command G: If User is Asking a Question to the AI (Conversational Guidance)
+      // ── Command G: If User is Asking a Question to the AI
       const isQuestion =
         lower.endsWith("?") ||
         lower.startsWith("what") ||
@@ -823,29 +828,71 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // ── Standard Action: Type directly into focused element or primary screen input
+      // ── Standard Action: Sequential Section Filling (Name -> Email -> Password)
       let targetEl: HTMLInputElement | HTMLTextAreaElement | null = focusedElementRef.current;
       if (!targetEl) {
         const active = document.activeElement;
         if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
           targetEl = active;
         } else {
-          targetEl = document.querySelector<HTMLInputElement>(
-            'input[type="text"]:not([disabled]), input[type="email"]:not([disabled]), textarea:not([disabled])'
-          );
+          // Check for multi-section login/signup form fields sequentially!
+          const authName = document.querySelector<HTMLInputElement>('#auth-name-input');
+          const authEmail = document.querySelector<HTMLInputElement>('#auth-email-input');
+          const authPass = document.querySelector<HTMLInputElement>('#auth-password-input');
+
+          if (authName && !authName.value.trim()) {
+            targetEl = authName;
+          } else if (authEmail && !authEmail.value.trim()) {
+            targetEl = authEmail;
+          } else if (authPass && !authPass.value.trim()) {
+            targetEl = authPass;
+          } else {
+            targetEl = document.querySelector<HTMLInputElement>(
+              'textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="search"]:not([disabled])'
+            );
+          }
         }
       }
 
       if (targetEl) {
         targetEl.focus();
-        appendNativeInputValue(targetEl, clean, "append");
+        focusedElementRef.current = targetEl;
+
+        const isTargetEmail = targetEl.type === "email" || targetEl.id === "auth-email-input";
+        const isTargetName = targetEl.id === "auth-name-input";
+        const valToSet = isTargetEmail
+          ? normalizeSpokenEmail(clean)
+          : isTargetName
+          ? normalizeSpokenName(clean)
+          : clean;
+
+        setNativeInputValue(targetEl, valToSet);
         playAccessibleChime("success");
         const label =
           targetEl.getAttribute("aria-label") ||
           targetEl.placeholder ||
           targetEl.name ||
           "Active Field";
-        showStatus(`Filled: "${clean.slice(0, 24)}${clean.length > 24 ? "…" : ""}" into ${label}`);
+        showStatus(`Filled: "${valToSet.slice(0, 24)}${valToSet.length > 24 ? "…" : ""}" into ${label}`);
+
+        // Automatically advance focus to the next section!
+        if (targetEl.id === "auth-name-input") {
+          const nextEmail = document.querySelector<HTMLInputElement>('#auth-email-input');
+          if (nextEmail) {
+            setTimeout(() => {
+              nextEmail.focus();
+              focusedElementRef.current = nextEmail;
+            }, 300);
+          }
+        } else if (targetEl.id === "auth-email-input") {
+          const nextPass = document.querySelector<HTMLInputElement>('#auth-password-input');
+          if (nextPass) {
+            setTimeout(() => {
+              nextPass.focus();
+              focusedElementRef.current = nextPass;
+            }, 300);
+          }
+        }
       } else {
         // If no field found and not answered above, treat as conversational guidance
         askAiAssistant(clean, detectedLang);
