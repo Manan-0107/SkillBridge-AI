@@ -34,7 +34,19 @@ export default function Home() {
     return () => window.removeEventListener("careerforge:navigate" as any, handleNav);
   }, []);
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <main className="min-h-screen bg-paper flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white flex items-center justify-center font-bold text-xl shadow-md animate-pulse">
+            CF
+          </div>
+          <p className="text-sm font-medium text-neutral-600">Loading CareerForge workspace...</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!user) return <AuthGate />;
 
   const current = view.kind === "assistant" ? "assistant" : view.feature;
