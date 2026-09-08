@@ -122,6 +122,7 @@ export function AssistantHome({
 }) {
   const {
     user,
+    signIn,
     setTargetRole,
     voiceMode,
     setVoiceMode,
@@ -905,6 +906,29 @@ export function AssistantHome({
           setAccessibilityPrefs(data.toolCall.parameters);
           if (data.toolCall.parameters.interactionMode === "voice") {
             setVoiceMode(true);
+          }
+        } else if (data.toolCall.tool === "updateUserProfile" && data.toolCall.parameters) {
+          const { email: updatedEmail, name: updatedName, targetRole: updatedRole } = data.toolCall.parameters;
+          if (updatedEmail) {
+            void signIn(updatedEmail, updatedName || user?.name);
+            try {
+              fetch("/api/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  user: {
+                    email: updatedEmail,
+                    name: updatedName || user?.name || "Candidate",
+                    authProvider: "email",
+                    targetRole: updatedRole || user?.targetRole,
+                  },
+                  state: {},
+                }),
+              }).catch(() => {});
+            } catch {}
+          }
+          if (updatedRole) {
+            setTargetRole(updatedRole);
           }
         }
       }

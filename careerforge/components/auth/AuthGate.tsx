@@ -90,7 +90,7 @@ export function AuthGate() {
     setError("");
   }, [mode]);
 
-  // Listen for voice-guided section transitions (Name -> Email -> Password)
+  // Listen for voice-guided section transitions and real-time voice typing sync
   useEffect(() => {
     const handleAuthSection = (e: Event) => {
       const custom = e as CustomEvent<{ section: "name" | "email" | "password" }>;
@@ -102,8 +102,43 @@ export function AuthGate() {
         if (sec === "password") passwordInputRef.current?.focus();
       }
     };
+
+    const handleAuthValue = (e: Event) => {
+      const custom = e as CustomEvent<{ field: "name" | "email" | "password"; value: string }>;
+      if (custom.detail?.field && typeof custom.detail?.value === "string") {
+        if (custom.detail.field === "name") setName(custom.detail.value);
+        if (custom.detail.field === "email") setEmail(custom.detail.value);
+        if (custom.detail.field === "password") setPassword(custom.detail.value);
+      }
+    };
+
     window.addEventListener("careerforge:auth-section", handleAuthSection);
-    return () => window.removeEventListener("careerforge:auth-section", handleAuthSection);
+    window.addEventListener("careerforge:auth-value", handleAuthValue);
+
+    // Hydrate existing verified profile from anonymous storage if available
+    try {
+      const raw = localStorage.getItem("careerforge_interview_state");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.name) setName(parsed.name);
+        if (parsed.email) setEmail(parsed.email);
+      }
+    } catch {}
+
+    fetch("/api/profile/anonymous")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.ok && data.profile) {
+          if (data.profile.name) setName(data.profile.name);
+          if (data.profile.email) setEmail(data.profile.email);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      window.removeEventListener("careerforge:auth-section", handleAuthSection);
+      window.removeEventListener("careerforge:auth-value", handleAuthValue);
+    };
   }, []);
 
   // Clean up any active field speech recognition when unmounting

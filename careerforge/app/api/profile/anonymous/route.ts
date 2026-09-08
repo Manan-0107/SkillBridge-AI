@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import fs from "fs";
 import path from "path";
+import { upsertUser } from "@/lib/db";
 
 const COOKIE_NAME = "cf_anon_device";
 const COOKIE_OPTS = {
@@ -136,6 +137,20 @@ export async function POST(req: NextRequest) {
     disk[deviceId] = updatedProfile;
     disk[clientIp] = updatedProfile;
     saveDiskBackup(disk);
+
+    // If an email address is provided, also sync to database users table for fetching
+    if (updatedProfile.email && updatedProfile.email.includes("@")) {
+      try {
+        await upsertUser({
+          email: updatedProfile.email,
+          name: updatedProfile.name,
+          targetRole: updatedProfile.targetRole,
+          authProvider: "email",
+        });
+      } catch (dbErr) {
+        console.warn("[Anonymous Profile] DB upsert note:", dbErr);
+      }
+    }
 
     const res = NextResponse.json({
       ok: true,

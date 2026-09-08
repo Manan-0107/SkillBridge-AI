@@ -18,6 +18,7 @@ import {
   SUPPORTED_LANGUAGES,
   setGlobalVoiceLanguage,
   isAIAudioPlaying,
+  isSelfVoiceEcho,
   normalizeSpokenEmail,
   normalizeSpokenName,
   getFieldPromptMessage,
@@ -203,6 +204,29 @@ function saveStoredInterview(state: StoredInterviewState) {
 }
 
 function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[], user?: any): ProfileQuestion | null {
+  // Check live DOM form inputs to guarantee strict chronological order:
+  // Step 1: Name -> Step 2: Email -> Step 3: Password -> Step 4: Role -> Step 5: Location
+  if (typeof document !== "undefined") {
+    const nameInput = document.querySelector<HTMLInputElement>('#auth-name-input');
+    const emailInput = document.querySelector<HTMLInputElement>('#auth-email-input');
+    const passInput = document.querySelector<HTMLInputElement>('#auth-password-input');
+
+    if (!user) {
+      // 1. If Name is in the DOM and is empty or not completed, MUST ask Step 1 (Name)
+      if (nameInput && (!nameInput.value.trim() || !completedQuestions.includes("name"))) {
+        return PROFILE_QUESTIONS[0];
+      }
+      // 2. If Name is verified/filled, but Email is empty or not completed, MUST ask Step 2 (Email)
+      if (emailInput && (!emailInput.value.trim() || !completedQuestions.includes("email"))) {
+        return PROFILE_QUESTIONS[1];
+      }
+      // 3. If Name and Email are filled, but Password is empty or not completed, MUST ask Step 3 (Password)
+      if (passInput && (!passInput.value.trim() || !completedQuestions.includes("password"))) {
+        return PROFILE_QUESTIONS[2];
+      }
+    }
+  }
+
   for (const q of PROFILE_QUESTIONS) {
     if (completedQuestions.includes(q.id)) {
       continue;
@@ -211,18 +235,12 @@ function getNextRemainingQuestion(completedQuestions: ProfileQuestionId[], user?
     if (user && (q.id === "name" || q.id === "email" || q.id === "password")) {
       continue;
     }
-    // If on AuthGate sign-in mode (no name input in DOM), skip name
-    if (q.id === "name" && typeof document !== "undefined") {
-      const nameInput = document.querySelector('#auth-name-input');
-      const emailInput = document.querySelector('#auth-email-input');
-      if (emailInput && !nameInput) {
-        continue;
-      }
-    }
     return q;
   }
   return null;
 }
+
+let globalVoiceDictatorStarted = false;
 
 export function GlobalVoiceDictator() {
   const {
@@ -453,14 +471,16 @@ export function GlobalVoiceDictator() {
       const speechLang = lang || currentLangRef.current || "en-US";
       speakText(textToSay, {
         lang: speechLang,
+        rate: 0.92,
         onEnd: () => {
-          // Acoustic dissipation cooldown (800ms) to ensure speaker vibration cleared
+          // Acoustic dissipation cooldown (1800ms) guarantees that speaker vibrations
+          // and ambient reverberations have cleared before the microphone opens
           setTimeout(() => {
-            playAccessibleChime("focus");
-            if (activeRef.current) {
+            if (activeRef.current && !isSpeaking()) {
+              playAccessibleChime("focus");
               startListeningMic();
             }
-          }, 800);
+          }, 1800);
         },
       });
     },
@@ -578,6 +598,58 @@ export function GlobalVoiceDictator() {
         return;
       }
 
+      // ── CRITICAL ANTI-RECURSION FILTER ──
+      // Drop any audio recognized during or within acoustic cooldown of AI speech
+      if (isSpeaking() || isAIAudioPlaying() || isSelfVoiceEcho(clean)) {
+        return;
+      }
+
+      // Drop any recognized transcript that matches any part of AI assistant question prompts
+      const isQuestionEcho =
+        lower.includes("what is your") ||
+        lower.includes("what is") ||
+        lower.includes("full name") ||
+        lower.includes("your full name") ||
+        lower.includes("your name") ||
+        lower.includes("step 1") ||
+        lower.includes("step 2") ||
+        lower.includes("step 3") ||
+        lower.includes("step 4") ||
+        lower.includes("step 5") ||
+        lower.includes("contact email") ||
+        lower.includes("email address") ||
+        lower.includes("password or pin") ||
+        lower.includes("target career") ||
+        lower.includes("dream job") ||
+        lower.includes("core technical skills") ||
+        lower.includes("core skills") ||
+        lower.includes("say yes to continue") ||
+        lower.includes("say yes") ||
+        lower.includes("say no") ||
+        lower.includes("to re-speak") ||
+        lower.includes("is that correct") ||
+        lower.includes("welcome to careerforge") ||
+        lower.includes("let's try again") ||
+        lower.includes("no problem") ||
+        lower.includes("got it you said") ||
+        lower.includes("got it your email") ||
+        lower.includes("પૂરું નામ") ||
+        lower.includes("તમારું નામ") ||
+        lower.includes("તમારું ઇમેઇલ") ||
+        lower.includes("સાચું છે") ||
+        lower.includes("સ્વાગત છે") ||
+        lower.includes("કરિયરફોર્જ") ||
+        lower.includes("पूरा नाम") ||
+        lower.includes("आपका नाम") ||
+        lower.includes("आपका ईमेल") ||
+        lower.includes("सही है") ||
+        lower.includes("स्वागत है") ||
+        lower.includes("करियरफोर्ज");
+
+      if (isQuestionEcho) {
+        return;
+      }
+
       // ── SPECIAL INTENT A: USER EXPLICITLY STATES EMAIL ("my email is mananshah1127@gmail.com") ──
       const isExplicitEmail =
         lower.includes("@") ||
@@ -603,6 +675,9 @@ export function GlobalVoiceDictator() {
             emailInput.focus();
             focusedElementRef.current = emailInput;
             setNativeInputValue(emailInput, extractedEmail);
+            window.dispatchEvent(
+              new CustomEvent("careerforge:auth-value", { detail: { field: "email", value: extractedEmail } })
+            );
           }
 
           if (isFinal) {
@@ -651,6 +726,9 @@ export function GlobalVoiceDictator() {
             nameInput.focus();
             focusedElementRef.current = nameInput;
             setNativeInputValue(nameInput, extractedName);
+            window.dispatchEvent(
+              new CustomEvent("careerforge:auth-value", { detail: { field: "name", value: extractedName } })
+            );
           }
 
           if (isFinal) {
@@ -761,12 +839,38 @@ export function GlobalVoiceDictator() {
           if (verifiedQuestion.id === "name" && verifiedAnswer) {
             const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
             if (el) setNativeInputValue(el, verifiedAnswer);
+            window.dispatchEvent(
+              new CustomEvent("careerforge:auth-value", { detail: { field: "name", value: verifiedAnswer } })
+            );
           } else if (verifiedQuestion.id === "email" && verifiedAnswer) {
             const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
             if (el) setNativeInputValue(el, verifiedAnswer);
+            window.dispatchEvent(
+              new CustomEvent("careerforge:auth-value", { detail: { field: "email", value: verifiedAnswer } })
+            );
+            // Persist carefully to /api/user for database record and fetching
+            try {
+              fetch("/api/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  user: {
+                    email: verifiedAnswer,
+                    name: updatedState.name || "Candidate",
+                    authProvider: "email",
+                  },
+                  state: {
+                    interview: updatedState,
+                  },
+                }),
+              }).catch(() => {});
+            } catch {}
           } else if (verifiedQuestion.id === "password" && verifiedAnswer) {
             const el = document.querySelector<HTMLInputElement>(verifiedQuestion.selector);
             if (el) setNativeInputValue(el, verifiedAnswer);
+            window.dispatchEvent(
+              new CustomEvent("careerforge:auth-value", { detail: { field: "password", value: verifiedAnswer } })
+            );
           } else if (verifiedQuestion.id === "targetRole" && verifiedAnswer) {
             try {
               setTargetRole(verifiedAnswer as any);
@@ -865,6 +969,9 @@ export function GlobalVoiceDictator() {
           speakAndListen(retryMsg);
           return;
         }
+
+        // In verification mode, do not process anything else until user clearly says Yes or No
+        return;
       }
 
       // ── 3. GENERAL SYSTEM COMMANDS (Navigation / Submit / Clear / Help) ───
@@ -956,11 +1063,24 @@ export function GlobalVoiceDictator() {
       // ── 4. QUESTIONNAIRE ANSWER PROCESSING & VERIFICATION PROMPT ─────────
       const activeQ = currentQuestionRef.current;
       if (activeQ) {
+        if (clean.length < 2) return;
+
         let candidateAnswer = clean;
         if (activeQ.id === "name") {
           candidateAnswer = normalizeSpokenName(clean);
+          if (!candidateAnswer || candidateAnswer.length < 2) return;
         } else if (activeQ.id === "email") {
           candidateAnswer = normalizeSpokenEmail(clean);
+          if (
+            !candidateAnswer ||
+            (!candidateAnswer.includes("@") &&
+              !candidateAnswer.includes("gmail") &&
+              !candidateAnswer.includes("yahoo") &&
+              !candidateAnswer.includes(".com") &&
+              !candidateAnswer.includes(".in"))
+          ) {
+            return;
+          }
         }
 
         const targetEl = resolveTargetElement();
@@ -1013,6 +1133,17 @@ export function GlobalVoiceDictator() {
         lower.includes("क्या");
 
       if (isQuestion) {
+        // If AssistantHome is actively rendered and composer is visible, delegate to AssistantHome
+        const hasAssistantHome =
+          typeof document !== "undefined" &&
+          Boolean(
+            document.querySelector(
+              '#assistant-composer, textarea[placeholder*="Ask CareerForge"], textarea[placeholder*="Type or speak"]'
+            )
+          );
+        if (hasAssistantHome && user) {
+          return;
+        }
         askAiAssistant(clean, detectedLang);
       }
     },
@@ -1025,6 +1156,12 @@ export function GlobalVoiceDictator() {
       showStatus("Speech recognition is not supported in this browser. Please use Chrome/Edge.", 5000);
       return;
     }
+
+    // Stop any speech or recognition immediately before starting a fresh session
+    stopSpeaking();
+    controllerRef.current?.stop();
+    controllerRef.current = null;
+    setListening(false);
 
     playAccessibleChime("start");
     setActive(true);
@@ -1099,31 +1236,20 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── Auto-Start Voice Assistant Immediately on Entering Website ─────────────
+  // ─── Auto-Start Voice Assistant Immediately on Entering Website (Strictly Once) ──
+  const autoStartedRef = useRef(false);
+
   useEffect(() => {
+    if (globalVoiceDictatorStarted || autoStartedRef.current) return;
+    globalVoiceDictatorStarted = true;
+    autoStartedRef.current = true;
+
     const autoTimer = setTimeout(() => {
       startVoiceDictation();
-    }, 600);
-
-    // Fallback for browser autoplay audio policy: start immediately on first user touch/click/keypress
-    const handleFirstGesture = () => {
-      if (!activeRef.current) {
-        startVoiceDictation();
-      }
-      window.removeEventListener("click", handleFirstGesture);
-      window.removeEventListener("keydown", handleFirstGesture);
-      window.removeEventListener("touchstart", handleFirstGesture);
-    };
-
-    window.addEventListener("click", handleFirstGesture, { once: true });
-    window.addEventListener("keydown", handleFirstGesture, { once: true });
-    window.addEventListener("touchstart", handleFirstGesture, { once: true });
+    }, 1200);
 
     return () => {
       clearTimeout(autoTimer);
-      window.removeEventListener("click", handleFirstGesture);
-      window.removeEventListener("keydown", handleFirstGesture);
-      window.removeEventListener("touchstart", handleFirstGesture);
     };
   }, [startVoiceDictation]);
 
