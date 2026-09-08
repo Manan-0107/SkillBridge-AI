@@ -24,21 +24,25 @@ export function TopNav({
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur">
-      <div className="app-shell flex items-center justify-between py-4">
-        <button
-          type="button"
-          onClick={onAssistant}
-          className="font-display text-xl italic text-ink"
-        >
-          CareerForge
-        </button>
+      <div className="app-shell relative flex items-center justify-between py-4">
+        {/* Left: Brand Logo */}
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={onAssistant}
+            className="font-display text-xl italic text-ink"
+          >
+            CareerForge
+          </button>
+        </div>
 
-        <nav className="hidden items-center gap-6 md:flex">
+        {/* Center: Navigation Links in the exact middle */}
+        <nav className="absolute left-1/2 -translate-x-1/2 hidden items-center gap-7 md:flex">
           <button
             type="button"
             onClick={onAssistant}
             className={`text-sm font-medium transition-colors ${
-              view === "assistant" ? "text-ink" : "text-graphite hover:text-ink"
+              view === "assistant" ? "text-ink font-semibold" : "text-graphite hover:text-ink"
             }`}
           >
             Assistant
@@ -49,7 +53,7 @@ export function TopNav({
               type="button"
               onClick={() => onFeature(l.id)}
               className={`text-sm font-medium transition-colors ${
-                view === l.id ? "text-ink" : "text-graphite hover:text-ink"
+                view === l.id ? "text-ink font-semibold" : "text-graphite hover:text-ink"
               }`}
             >
               {l.label}
@@ -57,6 +61,7 @@ export function TopNav({
           ))}
         </nav>
 
+        {/* Right: Translate & Profile */}
         <div className="flex items-center gap-3">
           <GoogleTranslateWidget />
           {user?.picture ? (
@@ -80,7 +85,7 @@ export function TopNav({
         </div>
       </div>
 
-      <nav className="flex gap-5 overflow-x-auto border-t border-line px-6 py-2.5 md:hidden">
+      <nav className="flex items-center justify-center gap-6 overflow-x-auto border-t border-line px-6 py-2.5 md:hidden">
         <button
           type="button"
           onClick={onAssistant}

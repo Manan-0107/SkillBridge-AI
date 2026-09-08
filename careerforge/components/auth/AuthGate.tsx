@@ -1,14 +1,21 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useRef, useEffect } from "react";
 import { useApp } from "@/lib/store";
 import { hasGoogleClientId, requestGoogleProfile } from "@/lib/googleAuth";
 import {
   FieldLabel,
   GhostButton,
   PrimaryButton,
-  inputClasses,
 } from "@/components/ui/Primitives";
+import {
+  startSpeechRecognition,
+  SpeechRecognitionController,
+  normalizeSpokenEmail,
+  normalizeSpokenName,
+  playAccessibleChime,
+  isSpeechRecognitionSupported,
+} from "@/lib/voice";
 
 const COUNTRY_CODES = [
   { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
@@ -36,12 +43,27 @@ const COUNTRY_CODES = [
 ];
 
 export function AuthGate() {
-  const { signIn, signInWithGoogle, signInWithGithub, signInWithPhone } = useApp();
+  const { signIn, signInWithGoogle, signInWithGithub, signInWithPhone, voiceLanguage } = useApp();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Active section tracking
+  const [activeSection, setActiveSection] = useState<"name" | "email" | "password">(
+    mode === "signup" ? "name" : "email"
+  );
+
+  // Dedicated per-field voice dictation state
+  const [dictatingField, setDictatingField] = useState<"name" | "email" | "password" | null>(null);
+  const fieldControllerRef = useRef<SpeechRecognitionController | null>(null);
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   // Google Modal State
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -62,13 +84,187 @@ export function AuthGate() {
   const [phoneStep, setPhoneStep] = useState<"input" | "otp">("input");
   const [phoneOtp, setPhoneOtp] = useState("");
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!email.includes("@")) return setError("Enter a valid email address.");
-    if (password.length < 6)
-      return setError("Password needs at least 6 characters.");
+  useEffect(() => {
+    // When switching mode, reset active section
+    setActiveSection(mode === "signup" ? "name" : "email");
     setError("");
-    signIn(email, mode === "signup" ? name : undefined);
+  }, [mode]);
+
+  // Listen for voice-guided section transitions (Name -> Email -> Password)
+  useEffect(() => {
+    const handleAuthSection = (e: Event) => {
+      const custom = e as CustomEvent<{ section: "name" | "email" | "password" }>;
+      if (custom.detail?.section) {
+        const sec = custom.detail.section;
+        setActiveSection(sec);
+        if (sec === "name") nameInputRef.current?.focus();
+        if (sec === "email") emailInputRef.current?.focus();
+        if (sec === "password") passwordInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("careerforge:auth-section", handleAuthSection);
+    return () => window.removeEventListener("careerforge:auth-section", handleAuthSection);
+  }, []);
+
+  // Clean up any active field speech recognition when unmounting
+  useEffect(() => {
+    return () => {
+      if (fieldControllerRef.current) {
+        fieldControllerRef.current.stop();
+      }
+    };
+  }, []);
+
+  // ─── Per-Field Voice Dictation Handler ──────────────────────────────────────
+  const toggleFieldDictation = (field: "name" | "email" | "password") => {
+    if (dictatingField === field) {
+      // Stop dictation
+      fieldControllerRef.current?.stop();
+      fieldControllerRef.current = null;
+      setDictatingField(null);
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      setError("Speech recognition is not supported in this browser. Please type directly.");
+      return;
+    }
+
+    // Stop previous controller if running
+    fieldControllerRef.current?.stop();
+    setActiveSection(field);
+    setDictatingField(field);
+    playAccessibleChime("start");
+
+    // Focus target input
+    if (field === "name") nameInputRef.current?.focus();
+    if (field === "email") emailInputRef.current?.focus();
+    if (field === "password") passwordInputRef.current?.focus();
+
+    const controller = startSpeechRecognition({
+      lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      onListeningChange: (isListening) => {
+        if (!isListening && dictatingField === field) {
+          setDictatingField(null);
+        }
+      },
+      onTranscript: (transcript: string, isFinal?: boolean) => {
+        const clean = transcript.trim();
+        if (!clean) return;
+
+        if (field === "name") {
+          const val = normalizeSpokenName(clean);
+          setName(val);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+            // Auto advance to email
+            setTimeout(() => {
+              setActiveSection("email");
+              emailInputRef.current?.focus();
+            }, 300);
+          }
+        } else if (field === "email") {
+          const val = normalizeSpokenEmail(clean);
+          setEmail(val);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+            // Auto advance to password
+            setTimeout(() => {
+              setActiveSection("password");
+              passwordInputRef.current?.focus();
+            }, 300);
+          }
+        } else if (field === "password") {
+          setPassword(clean);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+          }
+        }
+      },
+      onError: () => {
+        setDictatingField(null);
+      },
+    });
+
+    fieldControllerRef.current = controller;
+  };
+
+  // ─── Direct Form Submit with /api/auth/login API Integration ───────────────
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (mode === "signup" && name.trim().length < 2) {
+      setActiveSection("name");
+      nameInputRef.current?.focus();
+      return setError("Please enter your full name (at least 2 characters).");
+    }
+
+    if (!email.includes("@")) {
+      setActiveSection("email");
+      emailInputRef.current?.focus();
+      return setError("Enter a valid email address.");
+    }
+
+    if (password.length < 6) {
+      setActiveSection("password");
+      passwordInputRef.current?.focus();
+      return setError("Password needs at least 6 characters.");
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          name: mode === "signup" ? name.trim() : undefined,
+          mode,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Authentication failed. Please check your details.");
+      }
+
+      playAccessibleChime("success");
+      // Persist authenticated user to App Store
+      await signIn(data.user.email, data.user.name);
+    } catch (err: any) {
+      setError(err.message || "An error occurred during authentication.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Guest Demo Login Flow ──────────────────────────────────────────────────
+  const handleGuestLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "guest" }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        playAccessibleChime("success");
+        await signIn(data.user.email, data.user.name);
+      }
+    } catch {
+      await signIn("alex.rivera@example.com", "Alex Rivera");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ─── Google Auth Flow ───────────────────────────────────────────────────────
@@ -150,6 +346,11 @@ export function AuthGate() {
     signInWithPhone(fullPhone, phoneName.trim() || undefined);
   };
 
+  // Validation flags for visual step progression
+  const isNameDone = name.trim().length >= 2;
+  const isEmailDone = email.includes("@") && email.length >= 5;
+  const isPasswordDone = password.length >= 6;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-8 sm:px-6 sm:py-12">
       <div className="w-full max-w-md space-y-6">
@@ -163,6 +364,7 @@ export function AuthGate() {
 
         {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
+          {/* Mode Switcher: Create Account vs Sign In */}
           <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
             <button
               type="button"
@@ -184,57 +386,254 @@ export function AuthGate() {
             </button>
           </div>
 
+          {/* ─── Multi-Section Step Indicator ─────────────────────────────────── */}
+          <div className="mb-6 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">
+              Step-by-Step Entry:
+            </p>
+            <div className="flex items-center gap-1.5 text-xs">
+              {mode === "signup" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSection("name");
+                      nameInputRef.current?.focus();
+                    }}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                      activeSection === "name"
+                        ? "bg-neutral-900 text-white shadow-xs"
+                        : isNameDone
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                    }`}
+                  >
+                    <span>{isNameDone ? "✓" : "1"}</span>
+                    <span>Name</span>
+                  </button>
+                  <span className="text-neutral-400">→</span>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSection("email");
+                  emailInputRef.current?.focus();
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                  activeSection === "email"
+                    ? "bg-neutral-900 text-white shadow-xs"
+                    : isEmailDone
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                }`}
+              >
+                <span>{isEmailDone ? "✓" : mode === "signup" ? "2" : "1"}</span>
+                <span>Email</span>
+              </button>
+
+              <span className="text-neutral-400">→</span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSection("password");
+                  passwordInputRef.current?.focus();
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                  activeSection === "password"
+                    ? "bg-neutral-900 text-white shadow-xs"
+                    : isPasswordDone
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                }`}
+              >
+                <span>{isPasswordDone ? "✓" : mode === "signup" ? "3" : "2"}</span>
+                <span>Password</span>
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* ── SECTION 1: Full Name (Signup only) ────────────────────────── */}
             {mode === "signup" && (
-              <div>
-                <FieldLabel>Full Name</FieldLabel>
+              <div
+                className={`rounded-xl border p-3 transition-all ${
+                  activeSection === "name"
+                    ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
+                    : "border-neutral-200 hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <FieldLabel>
+                    Full Name {isNameDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                  </FieldLabel>
+                  <button
+                    type="button"
+                    onClick={() => toggleFieldDictation("name")}
+                    title="Dictate Full Name with Voice"
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                      dictatingField === "name"
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                    }`}
+                  >
+                    <span>🎙️</span>
+                    <span>{dictatingField === "name" ? "Listening..." : "Speak Name"}</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    ref={nameInputRef}
+                    id="auth-name-input"
+                    name="name"
+                    type="text"
+                    aria-label="Full Name"
+                    className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                    value={name}
+                    onFocus={() => setActiveSection("name")}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Alex Rivera"
+                    required
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  {activeSection === "name"
+                    ? "👉 Active Section: Type your name or click 'Speak Name'."
+                    : "Your display name across CareerForge."}
+                </p>
+              </div>
+            )}
+
+            {/* ── SECTION 2: Email Address ──────────────────────────────────── */}
+            <div
+              className={`rounded-xl border p-3 transition-all ${
+                activeSection === "email"
+                  ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
+                  : "border-neutral-200 hover:border-neutral-300"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <FieldLabel>
+                  Email Address {isEmailDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                </FieldLabel>
+                <button
+                  type="button"
+                  onClick={() => toggleFieldDictation("email")}
+                  title="Dictate Email Address with Voice"
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                    dictatingField === "email"
+                      ? "bg-red-500 text-white animate-pulse"
+                      : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                  }`}
+                >
+                  <span>🎙️</span>
+                  <span>{dictatingField === "email" ? "Listening..." : "Speak Email"}</span>
+                </button>
+              </div>
+              <div className="relative">
                 <input
-                  id="auth-name-input"
-                  name="name"
-                  aria-label="Full Name"
-                  className={inputClasses}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Alex Rivera"
+                  ref={emailInputRef}
+                  id="auth-email-input"
+                  name="email"
+                  type="email"
+                  aria-label="Email Address"
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  value={email}
+                  onFocus={() => setActiveSection("email")}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="alex.rivera@example.com"
                   required
                 />
               </div>
-            )}
-            <div>
-              <FieldLabel>Email Address</FieldLabel>
-              <input
-                id="auth-email-input"
-                name="email"
-                type="email"
-                aria-label="Email Address"
-                className={inputClasses}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="alex.rivera@example.com"
-                required
-              />
+              <p className="mt-1 text-[11px] text-neutral-500">
+                {activeSection === "email"
+                  ? "👉 Active Section: Type your email or click 'Speak Email'."
+                  : "We use this for your roadmap alerts and account sign-in."}
+              </p>
             </div>
-            <div>
-              <FieldLabel>Password</FieldLabel>
-              <input
-                id="auth-password-input"
-                name="password"
-                type="password"
-                aria-label="Password"
-                className={inputClasses}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
+
+            {/* ── SECTION 3: Password ───────────────────────────────────────── */}
+            <div
+              className={`rounded-xl border p-3 transition-all ${
+                activeSection === "password"
+                  ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
+                  : "border-neutral-200 hover:border-neutral-300"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <FieldLabel>
+                  Password {isPasswordDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                </FieldLabel>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 underline"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleFieldDictation("password")}
+                    title="Dictate Password with Voice"
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                      dictatingField === "password"
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                    }`}
+                  >
+                    <span>🎙️</span>
+                    <span>{dictatingField === "password" ? "Listening..." : "Speak Password"}</span>
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <input
+                  ref={passwordInputRef}
+                  id="auth-password-input"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  aria-label="Password"
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  value={password}
+                  onFocus={() => setActiveSection("password")}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  required
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-neutral-500">
+                {activeSection === "password"
+                  ? "👉 Active Section: Type your password or click 'Speak Password'."
+                  : "Needs at least 6 characters."}
+              </p>
             </div>
 
             {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
-              <p className="text-sm text-red-700">{error}</p>
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs font-medium text-red-700">
+                ⚠️ {error}
+              </div>
             )}
 
-            <PrimaryButton type="submit" id="submit-btn" className="w-full">
-              {mode === "signup" ? "Create account" : "Sign in"}
+            <PrimaryButton
+              type="submit"
+              id="submit-btn"
+              disabled={loading}
+              className="w-full py-3 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>{mode === "signup" ? "Create account" : "Sign in"}</span>
+              )}
             </PrimaryButton>
           </form>
 
@@ -289,7 +688,8 @@ export function AuthGate() {
           <div className="mt-4 pt-4 border-t border-line/60">
             <button
               type="button"
-              onClick={() => signIn("alex.rivera@example.com", "Alex Rivera")}
+              onClick={handleGuestLogin}
+              disabled={loading}
               className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/80 py-2.5 px-3 text-xs font-semibold text-neutral-700 hover:bg-white hover:border-neutral-900 hover:text-neutral-900 transition-all shadow-2xs cursor-pointer"
             >
               <span>🚀 Explore Platform as Guest (Candidate Demo)</span>
@@ -350,33 +750,19 @@ export function AuthGate() {
 
                 {error && <p className="text-xs text-red-600">{error}</p>}
 
-                <div className="pt-2 border-t border-neutral-200 space-y-2">
-                  <div className="flex items-center gap-2 text-[11px] text-neutral-600">
-                    <span className="text-emerald-600 font-bold">✓</span>
-                    <span>View your primary Google Account email address</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-neutral-600">
-                    <span className="text-emerald-600 font-bold">✓</span>
-                    <span>View your personal info and profile photo</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200">
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setGoogleModalOpen(false)}
-                    className="rounded-lg px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
+                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
                   >
-                    <span>Allow &amp; Continue</span>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
+                    Allow &amp; Continue
                   </button>
                 </div>
               </form>
@@ -385,24 +771,24 @@ export function AuthGate() {
         </div>
       )}
 
-      {/* ─── GitHub OAuth Permission Modal ────────────────────────────────────── */}
+      {/* ─── GitHub OAuth Modal ──────────────────────────────────────────────── */}
       {githubModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <GithubMark />
-                <span className="text-sm font-semibold text-neutral-800">Authorize with GitHub</span>
+                <span className="text-sm font-semibold text-neutral-800">Sign in with GitHub</span>
               </div>
               <span className="text-xs text-neutral-400 font-mono">github.com/login/oauth</span>
             </div>
 
             <div className="pt-4">
               <h2 className="text-base font-bold text-neutral-900 leading-snug">
-                Connect your GitHub Profile to CareerForge
+                Authorize CareerForge on GitHub
               </h2>
               <p className="mt-1 text-xs text-neutral-500">
-                Authorizing allows CareerForge to sync your technical repositories and skills.
+                Connect your GitHub profile to showcase code repositories and import verified skills.
               </p>
 
               <form onSubmit={handleGithubSubmit} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
@@ -410,57 +796,42 @@ export function AuthGate() {
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
                     GitHub Username <span className="text-red-500">*</span>
                   </label>
-                  <div className="mt-1 flex rounded-lg border border-neutral-300 bg-white overflow-hidden focus-within:border-ink">
-                    <span className="bg-neutral-100 px-2.5 py-2 text-xs text-neutral-500 font-mono border-r border-neutral-200">
-                      github.com/
-                    </span>
-                    <input
-                      required
-                      className="w-full px-3 py-2 text-xs text-neutral-900 focus:outline-none"
-                      value={githubUsername}
-                      onChange={(e) => setGithubUsername(e.target.value)}
-                      placeholder="octocat"
-                    />
-                  </div>
+                  <input
+                    required
+                    className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-neutral-900 focus:outline-none"
+                    value={githubUsername}
+                    onChange={(e) => setGithubUsername(e.target.value)}
+                    placeholder="e.g. torvalds"
+                  />
                 </div>
-
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
                     Email Address (Optional)
                   </label>
                   <input
                     type="email"
-                    className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-ink focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-neutral-900 focus:outline-none"
                     value={githubEmail}
                     onChange={(e) => setGithubEmail(e.target.value)}
-                    placeholder="your.email@example.com"
+                    placeholder="you@example.com"
                   />
                 </div>
 
                 {error && <p className="text-xs text-red-600">{error}</p>}
 
-                <div className="pt-2 border-t border-neutral-200 space-y-1.5 text-[11px] text-neutral-600">
-                  <p className="font-semibold text-neutral-800">Permissions requested:</p>
-                  <p>• Public profile (name, avatar, bio)</p>
-                  <p>• Public repository contributions &amp; tech stacks</p>
-                </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200">
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setGithubModalOpen(false)}
-                    className="rounded-lg px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
+                    className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-neutral-900 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-black transition-colors flex items-center gap-1.5"
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-neutral-800"
                   >
-                    <span>Authorize CareerForge</span>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
+                    Authorize CareerForge
                   </button>
                 </div>
               </form>
@@ -469,7 +840,7 @@ export function AuthGate() {
         </div>
       )}
 
-      {/* ─── Phone Number Authentication Modal (With Country Code Selector) ──── */}
+      {/* ─── Phone OTP Verification Modal ────────────────────────────────────── */}
       {phoneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -478,17 +849,17 @@ export function AuthGate() {
                 <PhoneMark />
                 <span className="text-sm font-semibold text-neutral-800">Phone Authentication</span>
               </div>
-              <span className="text-xs text-neutral-400">SMS Verification</span>
+              <span className="text-xs text-neutral-400 font-mono">SMS OTP</span>
             </div>
 
             <div className="pt-4">
               {phoneStep === "input" ? (
                 <>
                   <h2 className="text-base font-bold text-neutral-900 leading-snug">
-                    Enter your Mobile Number
+                    Sign in with your mobile number
                   </h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Select your country code and enter your phone number to receive an instant verification code.
+                    We will send an accessible 6-digit verification code to your phone.
                   </p>
 
                   <form onSubmit={handleSendOtp} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
@@ -506,47 +877,38 @@ export function AuthGate() {
 
                     <div>
                       <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
-                        Country Code &amp; Phone Number <span className="text-red-500">*</span>
+                        Country &amp; Phone Number <span className="text-red-500">*</span>
                       </label>
-                      
                       <div className="mt-1 flex gap-2">
-                        {/* Country Code Select */}
-                        <div className="relative w-36 shrink-0">
-                          <select
-                            value={countryCode}
-                            onChange={(e) => setCountryCode(e.target.value)}
-                            className="w-full appearance-none rounded-lg border border-neutral-300 bg-white px-2.5 py-2 text-xs font-medium text-neutral-900 focus:border-emerald-600 focus:outline-none"
-                          >
-                            {COUNTRY_CODES.map((c) => (
-                              <option key={c.code + c.country} value={c.code}>
-                                {c.flag} {c.code} ({c.country})
-                              </option>
-                            ))}
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-neutral-500 text-xs">
-                            ▼
-                          </div>
-                        </div>
-
-                        {/* Phone Number Input */}
+                        <select
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          className="rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs text-neutral-900 focus:border-emerald-600 focus:outline-none font-medium shrink-0"
+                        >
+                          {COUNTRY_CODES.map((c) => (
+                            <option key={c.code + c.country} value={c.code}>
+                              {c.flag} {c.code}
+                            </option>
+                          ))}
+                        </select>
                         <input
                           type="tel"
                           required
-                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-emerald-600 focus:outline-none"
+                          className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-emerald-600 focus:outline-none"
                           value={phoneNumber}
                           onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="9876543210"
+                          placeholder="e.g. 555 123 4567"
                         />
                       </div>
                     </div>
 
                     {error && <p className="text-xs text-red-600">{error}</p>}
 
-                    <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200">
+                    <div className="flex items-center justify-end gap-2 pt-2">
                       <button
                         type="button"
                         onClick={() => setPhoneModalOpen(false)}
-                        className="rounded-lg px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
+                        className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                       >
                         Cancel
                       </button>

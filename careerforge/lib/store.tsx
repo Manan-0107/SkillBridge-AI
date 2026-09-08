@@ -135,22 +135,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     null,
   );
 
-  // Hydrate from the server (replaces the old localStorage bootstrap).
+  // Hydrate instantly from localStorage, then sync with server in background
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      let serverSuccess = false;
+    // Step 1: Immediately restore from localStorage synchronously so UI renders with zero delay
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email) setUser(parsed);
+      }
 
+      const vm = window.localStorage.getItem(VOICE_MODE_KEY);
+      if (vm !== null) setVoiceModeState(vm === "true");
+
+      const vl = window.localStorage.getItem(VOICE_LANG_KEY);
+      if (vl) setVoiceLanguageState(vl);
+
+      const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
+      if (sp) setSpeechProviderState(sp as SpeechProviderType);
+
+      const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
+      if (vc !== null) setVoiceCheckedState(vc === "true");
+
+      const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
+      if (ap) setAccessibilityPrefsState(JSON.parse(ap));
+
+      const sk = window.localStorage.getItem(USER_SKILLS_KEY);
+      if (sk) setUserSkillsState(JSON.parse(sk));
+
+      const loc = window.localStorage.getItem(LOCATION_KEY);
+      if (loc) setCurrentLocationState(loc);
+    } catch {
+      // localStorage unavailable or restricted
+    }
+
+    // Set ready immediately on mount so the user never encounters a blank screen!
+    setReady(true);
+
+    // Step 2: Background sync with /api/user (with 2s timeout)
+    (async () => {
       try {
-        const res = await fetch("/api/user", { credentials: "include" });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch("/api/user", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
         if (res.ok) {
           const { user: u, state } = (await res.json()) as {
             user: User | null;
             state: PersistedUserState | null;
           };
 
-          if (!cancelled && u) setUser(u);
+          if (!cancelled && u) {
+            setUser(u);
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+            } catch {}
+          }
           if (!cancelled && state) {
             setVoiceModeState(state.voiceMode);
             setVoiceLanguageState(state.voiceLanguage);
@@ -159,123 +205,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAccessibilityPrefsState(state.accessibilityPrefs);
             setUserSkillsState(state.userSkills);
             setCurrentLocationState(state.currentLocation);
-            serverSuccess = true;
           }
         }
       } catch {
-        // Server/DB unavailable — proceed to fallback
+        // Server fetch timed out or offline — safely using local state
       }
-
-      if (!cancelled && !serverSuccess) {
-        try {
-          const raw = window.localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            setUser(JSON.parse(raw));
-          } else {
-            const defaultCandidate: User = {
-              email: "alex.rivera@example.com",
-              name: "Alex Rivera",
-              targetRole: "frontend",
-            };
-            setUser(defaultCandidate);
-          }
-
-          const vm = window.localStorage.getItem(VOICE_MODE_KEY);
-          if (vm !== null) setVoiceModeState(vm === "true");
-
-          const vl = window.localStorage.getItem(VOICE_LANG_KEY);
-          if (vl) setVoiceLanguageState(vl);
-
-          const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
-          if (sp) setSpeechProviderState(sp as SpeechProviderType);
-
-          const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
-          if (vc !== null) setVoiceCheckedState(vc === "true");
-
-          const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
-          if (ap) setAccessibilityPrefsState(JSON.parse(ap));
-
-          const sk = window.localStorage.getItem(USER_SKILLS_KEY);
-          if (sk) setUserSkillsState(JSON.parse(sk));
-
-          const loc = window.localStorage.getItem(LOCATION_KEY);
-          if (loc) setCurrentLocationState(loc);
-        } catch {
-          // localStorage unavailable — proceed unauthenticated
-        }
-      }
-
-      if (!cancelled) setReady(true);
-    })();
-
-    (async () => {
-      let serverSuccess = false;
-
-      try {
-        const res = await fetch("/api/user", { credentials: "include" });
-        if (res.ok) {
-          const { user: u, state } = (await res.json()) as {
-            user: User | null;
-            state: PersistedUserState | null;
-          };
-
-          if (!cancelled && u) setUser(u);
-          if (!cancelled && state) {
-            setVoiceModeState(state.voiceMode);
-            setVoiceLanguageState(state.voiceLanguage);
-            setSpeechProviderState(state.speechProvider);
-            setVoiceCheckedState(state.voiceChecked);
-            setAccessibilityPrefsState(state.accessibilityPrefs);
-            setUserSkillsState(state.userSkills);
-            setCurrentLocationState(state.currentLocation);
-            serverSuccess = true;
-          }
-        }
-      } catch {
-        // Server/DB unavailable — proceed to fallback
-      }
-
-      // Fallback to localStorage if server fetch failed or returned no state
-      if (!cancelled && !serverSuccess) {
-        try {
-          const raw = window.localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            setUser(JSON.parse(raw));
-          } else {
-            const defaultCandidate: User = {
-              email: "alex.rivera@example.com",
-              name: "Alex Rivera",
-              targetRole: "frontend",
-            };
-            setUser(defaultCandidate);
-          }
-
-          const vm = window.localStorage.getItem(VOICE_MODE_KEY);
-          if (vm !== null) setVoiceModeState(vm === "true");
-
-          const vl = window.localStorage.getItem(VOICE_LANG_KEY);
-          if (vl) setVoiceLanguageState(vl);
-
-          const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
-          if (sp) setSpeechProviderState(sp as SpeechProviderType);
-
-          const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
-          if (vc !== null) setVoiceCheckedState(vc === "true");
-
-          const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
-          if (ap) setAccessibilityPrefsState(JSON.parse(ap));
-
-          const sk = window.localStorage.getItem(USER_SKILLS_KEY);
-          if (sk) setUserSkillsState(JSON.parse(sk));
-
-          const loc = window.localStorage.getItem(LOCATION_KEY);
-          if (loc) setCurrentLocationState(loc);
-        } catch {
-          // localStorage unavailable — proceed unauthenticated
-        }
-      }
-
-      if (!cancelled) setReady(true);
     })();
 
     return () => {
@@ -334,7 +268,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [accessibilityPrefs]);
 
   // Setters just update state; the debounced effect above syncs to /api/user.
-  const persist = (next: User | null) => setUser(next);
+  const persist = (next: User | null) => {
+    setUser(next);
+    try {
+      if (next) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } else {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {}
+  };
 
   const setVoiceMode = (active: boolean) => {
     setVoiceModeState(active);

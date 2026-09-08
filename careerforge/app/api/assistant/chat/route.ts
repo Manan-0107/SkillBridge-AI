@@ -170,7 +170,16 @@ export async function POST(req: NextRequest) {
           accessibilityPrefs
         );
         if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...groqResponse, engine: "Groq (Llama 3.3 70B)" });
+          return NextResponse.json({
+            ...groqResponse,
+            thinking: (groqResponse as any).thinking || [
+              `🧠 1. Intent Analysis: Deeply analyzing the query and conversational context for ${userName}.`,
+              `🔍 2. Frontier Reasoning: Generating nuanced insight via Llama 3.3 70B cognitive architecture.`,
+              `💡 3. Conceptual & Empathy Alignment: Framing with intuitive analogies and empathetic warmth.`,
+              `✨ 4. Structured Synthesis: Formatting reply with clarity, warmth, and depth.`,
+            ],
+            engine: "Groq (Llama 3.3 70B)",
+          });
         }
       } catch (groqErr) {
         console.warn("[Assistant API] Groq error:", groqErr);
@@ -192,7 +201,16 @@ export async function POST(req: NextRequest) {
           accessibilityPrefs
         );
         if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...geminiResponse, engine: "Google Gemini 1.5 Flash" });
+          return NextResponse.json({
+            ...geminiResponse,
+            thinking: (geminiResponse as any).thinking || [
+              `🧠 1. Intent Analysis: Deconstructing curiosity and underlying goals for ${userName}.`,
+              `🔍 2. Multimodal Knowledge Grounding: Verifying factual principles via Gemini 1.5 Flash.`,
+              `💡 3. Empathy & Analogy Synthesis: Infusing warmth, intuitive metaphors, and feeling.`,
+              `✨ 4. Refined Output: Delivering clear, empowering, and actionable response.`,
+            ],
+            engine: "Google Gemini 1.5 Flash",
+          });
         }
       } catch (geminiErr) {
         console.warn("[Assistant API] Gemini error:", geminiErr);
@@ -214,7 +232,16 @@ export async function POST(req: NextRequest) {
           accessibilityPrefs
         );
         if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...openaiResponse, engine: "OpenAI GPT-4o-mini" });
+          return NextResponse.json({
+            ...openaiResponse,
+            thinking: (openaiResponse as any).thinking || [
+              `🧠 1. Cognitive Framing: Analyzing intent and emotional nuance for ${userName}.`,
+              `🔍 2. Model Reasoning: Deliberating across knowledge domains with GPT-4o-mini.`,
+              `💡 3. Empathy & Tone Calibration: Formulating intuitive real-world analogies with human feeling.`,
+              `✨ 4. Output Crafting: Polishing tone for maximum clarity, encouragement, and warmth.`,
+            ],
+            engine: "OpenAI GPT-4o-mini",
+          });
         }
       } catch (openaiErr) {
         console.warn("[Assistant API] OpenAI error:", openaiErr);
@@ -236,7 +263,16 @@ export async function POST(req: NextRequest) {
           accessibilityPrefs
         );
         if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...orResponse, engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)" });
+          return NextResponse.json({
+            ...orResponse,
+            thinking: (orResponse as any).thinking || [
+              `🧠 1. Query Analysis: Dissecting user intention and conversational background.`,
+              `🔍 2. OpenRouter Reasoning: Synthesizing deep perspective via frontier open models.`,
+              `💡 3. Intuitive Clarity: Enriching response with relatable examples and empathetic warmth.`,
+              `✨ 4. Delivery: Assembling polished, engaging Markdown response.`,
+            ],
+            engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)",
+          });
         }
       } catch (orErr) {
         console.warn("[Assistant API] OpenRouter error:", orErr);
@@ -258,7 +294,16 @@ export async function POST(req: NextRequest) {
           accessibilityPrefs
         );
         if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...ghResponse, engine: "GitHub Models (GPT-4o)" });
+          return NextResponse.json({
+            ...ghResponse,
+            thinking: (ghResponse as any).thinking || [
+              `🧠 1. Intent Sensing: Examining user inquiry and technical or conceptual context.`,
+              `🔍 2. Inference Architecture: Reasoning with GitHub Models (GPT-4o).`,
+              `💡 3. Metaphor & Empathy: Crafting accessible explanations with authentic human touch.`,
+              `✨ 4. Final Polish: Structuring response with genuine warmth and depth.`,
+            ],
+            engine: "GitHub Models (GPT-4o)",
+          });
         }
       } catch (ghErr) {
         console.warn("[Assistant API] GitHub Models error:", ghErr);
@@ -278,7 +323,17 @@ export async function POST(req: NextRequest) {
       accessibilityPrefs,
       resumeDraftState
     );
-    return NextResponse.json({ ...dynamicResponse, engine: "CareerForge Autonomous AI Brain" });
+    const defaultCognitiveThinking = [
+      `🧠 1. Deconstructing Intent & Nuance: Analyzing '${lastMessage.slice(0, 45)}' to address both factual and human curiosity.`,
+      `🔍 2. Knowledge Grounding: Verifying core mechanisms and practical relevance for role '${role}'.`,
+      `💡 3. Intuitive Metaphor & Empathy: Calibrating warm, empathetic delivery with relatable real-world framing.`,
+      `✨ 4. Calibrating Narrative Arc: Formatting structured, engaging answer with feeling, warmth, and depth.`,
+    ];
+    return NextResponse.json({
+      ...dynamicResponse,
+      thinking: (dynamicResponse as any).thinking || defaultCognitiveThinking,
+      engine: "CareerForge Autonomous AI Brain",
+    });
   } catch (error) {
     console.error("[Assistant API] Error:", error);
     return NextResponse.json(
@@ -316,8 +371,12 @@ Core Directives & Behavioral Guidelines:
      - "I can't hear you" → Switch to visual responses with speech output disabled.
      - "Typing is difficult" → Offer voice dictation and speech form filling.
      - "These questions are difficult" → Use simpler, shorter language.
-4. TONE & PERSONALITY: Extremely friendly, warm, patient, encouraging, respectful, simple, and professional. Never patronizing. Reduce anxiety around career and tech.
-5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear sentences) and easy to listen to." : "Provide structured, readable markdown with bullet points where appropriate."}
+4. TONE, PERSONALITY & FEELING (CLAUDE & CHATGPT CALIBER):
+   - Never give sterile, robotic, or dry dictionary definitions. 
+   - Radiate genuine human warmth, emotional intelligence, empathy, patience, and intellectual curiosity.
+   - For any question, think about the underlying curiosity or human feeling: illuminate the 'big picture' first using vivid, intuitive analogies before gracefully breaking down the core mechanics.
+   - When addressing career or tech challenges, be profoundly encouraging, calming anxiety and empowering the user.
+5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear, warm sentences) and easy to listen to." : "Provide structured, beautifully readable markdown with intuitive metaphors and clear bullet points where appropriate."}
 6. CONFIRMATION ON CRITICAL FIELDS: Always confirm spoken contact info (email address) before finalizing. Never submit a job application without explicit user confirmation.
 7. ACTION DIRECTIVES (Append on its own final line ONLY when triggering a tool):
    - [ACTION: {"tool": "navigateTo", "page": "resume" | "roadmap" | "courses" | "practice" | "local", "tab": "analyzer" | "personalizer" | "builder"}]

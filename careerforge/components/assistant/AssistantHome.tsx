@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState, useEffect, ChangeEvent, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { useApp } from "@/lib/store";
 import { FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
 import {
@@ -32,6 +33,7 @@ export type Msg = {
   intent?: ParsedIntent;
   redirecting?: boolean;
   engine?: string;
+  thinking?: string[];
 };
 
 export interface Conversation {
@@ -42,6 +44,61 @@ export interface Conversation {
   updatedAt: string;
   pinned?: boolean;
   archived?: boolean;
+}
+
+function ThinkingProcess({ steps }: { steps: string[] }) {
+  const [open, setOpen] = useState(false);
+
+  if (!steps || steps.length === 0) return null;
+
+  return (
+    <div className="mb-2 w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="group inline-flex items-center gap-2 rounded-full border border-line/80 bg-paper/80 px-3 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-all cursor-pointer shadow-2xs"
+        aria-expanded={open}
+        aria-label="Toggle thinking process"
+      >
+        <span className="flex h-2 w-2 rounded-full bg-accent animate-pulse" />
+        <span className="flex items-center gap-1">
+          <span className="text-accent font-semibold">Thought</span>
+          <span className="text-graphite/40">·</span>
+          <span>{steps.length} reasoning steps</span>
+        </span>
+        <svg
+          className={`w-3.5 h-3.5 text-graphite/60 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-1.5 rounded-xl border border-line/70 bg-paper/60 p-3 text-xs text-graphite shadow-2xs animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center justify-between pb-1 border-b border-line/40 text-[10px] font-semibold text-graphite/60 uppercase tracking-wider">
+            <span>Deliberative Reasoning Process</span>
+            <span className="text-accent/90 font-normal normal-case">Claude & ChatGPT Paradigm</span>
+          </div>
+          <div className="space-y-1.5 pt-1">
+            {steps.map((step, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 border border-line/40 text-graphite text-[11px] leading-relaxed"
+              >
+                <span className="text-accent font-bold select-none shrink-0">•</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const STORAGE_KEY = "careerforge.conversations";
@@ -480,16 +537,51 @@ export function AssistantHome({
     }
   };
 
-  const deleteConversation = (convId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const clearAllConversations = () => {
+    if (typeof window !== "undefined" && !window.confirm("Are you sure you want to delete all chat history? This cannot be undone.")) {
+      return;
+    }
+    const cleanId = `conv-${Date.now()}`;
+    const freshConv: Conversation = {
+      id: cleanId,
+      title: "New Career Chat",
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      archived: false,
+    };
+    saveConversations([freshConv]);
+    setActiveConvId(cleanId);
+    setInput("");
+    setAttachedFile(null);
+    clearSilenceTimers();
+    showToast("All chat history deleted");
+  };
+
+  const deleteConversation = (convId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const filtered = conversations.filter((c) => c.id !== convId);
     if (filtered.length === 0) {
-      createNewConversation();
+      const cleanId = `conv-${Date.now()}`;
+      const freshConv: Conversation = {
+        id: cleanId,
+        title: "New Career Chat",
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pinned: false,
+        archived: false,
+      };
+      saveConversations([freshConv]);
+      setActiveConvId(cleanId);
+      showToast("Chat deleted. Started clean chat.");
     } else {
       saveConversations(filtered);
       if (convId === activeConvId) {
         setActiveConvId(filtered[0].id);
       }
+      showToast("Chat deleted");
     }
   };
 
@@ -843,6 +935,7 @@ export function AssistantHome({
           intent,
           redirecting: hasFeature,
           engine: data.engine || "CareerForge AI",
+          thinking: Array.isArray(data.thinking) ? data.thinking : undefined,
         },
       ];
 
@@ -1069,39 +1162,53 @@ export function AssistantHome({
                     <span className="truncate">{conv.title}</span>
                   </div>
 
-                  {/* Actions on Hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions (Always visible with clear icons) */}
+                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-amber-600 transition-colors"
+                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-amber-600 transition-colors"
                     >
-                      <PinIcon filled={conv.pinned} className="w-3 h-3" />
+                      <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink transition-colors"
+                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-ink transition-colors"
                     >
-                      <ArchiveIcon className="w-3 h-3" />
+                      <ArchiveIcon className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-red-600 transition-colors"
+                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-red-600 transition-colors"
                     >
-                      <TrashIcon className="w-3 h-3" />
+                      <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
               );
             })
           )}
+        </div>
+
+        {/* Sidebar Footer: Delete All Chats */}
+        <div className="p-3 border-t border-line bg-paper/40">
+          <button
+            type="button"
+            onClick={clearAllConversations}
+            disabled={conversations.length === 0 || (conversations.length === 1 && conversations[0].messages.length === 0)}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-graphite hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Delete all chat history and start fresh"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+            <span>Delete All Chats</span>
+          </button>
         </div>
       </aside>
 
@@ -1172,21 +1279,6 @@ export function AssistantHome({
             </select>
 
 
-            {/* Speech Provider Dropdown */}
-            <select
-              value={speechProvider}
-              onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
-              title="Speech Provider Strategy"
-              aria-label="Speech Provider Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer hidden md:inline-block"
-            >
-              <option value="auto">⚡ Auto (Web → Azure → Google)</option>
-              <option value="web">🌐 Web Speech API (Free)</option>
-              <option value="azure">☁️ Microsoft Azure Speech</option>
-              <option value="google">☁️ Google Cloud Speech</option>
-            </select>
-
-
             {/* Repeat Button */}
             <button
               type="button"
@@ -1249,6 +1341,19 @@ export function AssistantHome({
             >
               <span>+ New</span>
             </button>
+
+            {activeConversation && (
+              <button
+                type="button"
+                onClick={(e) => deleteConversation(activeConversation.id, e)}
+                className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:text-red-600 hover:bg-red-50/50 cursor-pointer shadow-xs transition-colors"
+                title="Delete this chat"
+                aria-label="Delete Current Chat"
+              >
+                <TrashIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1378,6 +1483,11 @@ export function AssistantHome({
                         </div>
                       )}
 
+                      {/* Expandable Thought Deliberation like Claude / ChatGPT */}
+                      {!isUser && m.thinking && m.thinking.length > 0 && (
+                        <ThinkingProcess steps={m.thinking} />
+                      )}
+
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
@@ -1385,7 +1495,13 @@ export function AssistantHome({
                             : "bg-white text-ink rounded-tl-xs border border-line/60"
                         }`}
                       >
-                        <p className="whitespace-pre-line">{m.text}</p>
+                        {isUser ? (
+                          <p className="whitespace-pre-line">{m.text}</p>
+                        ) : (
+                          <div className="prose prose-sm max-w-none text-ink space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-ink [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-ink [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-ink [&>pre]:text-paper [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>code]:bg-paper [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
+                            <ReactMarkdown>{m.text}</ReactMarkdown>
+                          </div>
+                        )}
                       </div>
 
                       {/* Interactive Workspace Action */}
