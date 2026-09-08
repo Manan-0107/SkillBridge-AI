@@ -5,16 +5,17 @@
  * Converts raw experience lines into high-impact Google XYZ formula bullets
  * ("Accomplished [X] as measured by [Y] by doing [Z]").
  *
- * Body: {
- *   text: string;
- *   role?: string;
- *   type?: "bullet" | "summary" | "skills";
- * }
+ * Authenticated only. Request size limited to 64KB.
+ * Validates AI output schema and gracefully falls back to deterministic heuristic generation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+const MAX_TEXT_LENGTH = 64 * 1024; // 64 KB
 
 const ACTION_VERBS: Record<string, string[]> = {
   frontend: ["Architected", "Engineered", "Optimized", "Refactored", "Spearheaded", "Implemented", "Designed", "Standardized"],
@@ -26,35 +27,90 @@ const ACTION_VERBS: Record<string, string[]> = {
 };
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body = await req.json();
-    const { text, role = "frontend", type = "bullet" } = body as {
-      text: string;
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to optimize resume content.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { text, role = "frontend", type = "bullet" } = (body || {}) as {
+      text?: string;
       role?: string;
       type?: "bullet" | "summary" | "skills";
     };
 
-    if (!text || !text.trim()) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "text must be a non-empty string.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (text.length > MAX_TEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Text exceeds maximum allowed length (${MAX_TEXT_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
     }
 
     const trimmed = text.trim();
-    const verbs = ACTION_VERBS[role] || ACTION_VERBS.frontend;
+    const safeRole = typeof role === "string" ? role.toLowerCase() : "frontend";
+    const verbs = ACTION_VERBS[safeRole] || ACTION_VERBS.frontend;
     const randomVerb = verbs[Math.floor(Math.random() * verbs.length)];
 
-    // ─── 1. Try Free Multi-Model Engine for AI Optimization ───────────────────
-    const optimized = await runAiOptimization(trimmed, role, type);
+    // 1. Try Free Multi-Model Engine for AI Optimization
+    const optimized = await runAiOptimization(trimmed, safeRole, type);
     if (optimized) {
       return NextResponse.json(optimized);
     }
 
-    // ─── 2. Fallback Heuristic Optimization (Google XYZ Formula) ──────────────
-    const fallbackVariants = generateHeuristicVariants(trimmed, role, randomVerb, type);
+    // 2. Fallback Heuristic Optimization (Google XYZ Formula)
+    const fallbackVariants = generateHeuristicVariants(trimmed, safeRole, randomVerb, type);
     return NextResponse.json(fallbackVariants);
   } catch (error) {
-    console.error("[Optimize API] Error:", error);
+    console.error(`[Optimize API] Error (${requestId}):`, error);
     return NextResponse.json(
-      { error: "Internal optimization error" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Failed to optimize resume content.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }
@@ -104,7 +160,8 @@ Respond ONLY with valid JSON in this exact structure:
         const data = await res.json();
         const raw = data?.choices?.[0]?.message?.content || "";
         const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-        return JSON.parse(clean);
+        const parsed = JSON.parse(clean);
+        if (isValidOptimization(parsed)) return parsed;
       }
     } catch {
       // fallback
@@ -128,13 +185,24 @@ Respond ONLY with valid JSON in this exact structure:
       const raw = await res.text();
       const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
       const parsed = JSON.parse(clean);
-      if (parsed.optimized) return parsed;
+      if (isValidOptimization(parsed)) return parsed;
     }
   } catch {
     // fallback
   }
 
   return null;
+}
+
+function isValidOptimization(parsed: any): boolean {
+  return (
+    parsed &&
+    typeof parsed === "object" &&
+    typeof parsed.optimized === "string" &&
+    parsed.optimized.trim().length > 0 &&
+    Array.isArray(parsed.alternatives) &&
+    Array.isArray(parsed.atsKeywordsAdded)
+  );
 }
 
 // ─── Fallback Heuristic Generation ────────────────────────────────────────────

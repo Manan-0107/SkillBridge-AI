@@ -115,6 +115,18 @@ const quickPills = [
   { label: "Portfolio project ideas", prompt: "Give me standout production project ideas for my portfolio" },
 ];
 
+export type VoiceStatusState =
+  | "idle"
+  | "initializing"
+  | "listening"
+  | "processing"
+  | "speaking"
+  | "waiting_for_answer"
+  | "saving_answer"
+  | "navigating"
+  | "error"
+  | "recovering";
+
 export function AssistantHome({
   onRedirect,
 }: {
@@ -153,7 +165,8 @@ export function AssistantHome({
   } | null>(null);
   const [parsingDoc, setParsingDoc] = useState(false);
 
-  // ─── Voice & Silence Detection State ───────────────────────────────────────
+  // ─── Voice & Silence Detection State (7-State Machine) ─────────────────────
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatusState>("idle");
   const [listening, setListening] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [liveSpokenText, setLiveSpokenText] = useState<string | null>(null);
@@ -224,6 +237,7 @@ export function AssistantHome({
     clearSilenceTimers();
     speechControllerRef.current?.stop();
     setListening(false);
+    setVoiceStatus((prev) => (prev === "error" || prev === "recovering" ? prev : "idle"));
   }, [clearSilenceTimers]);
 
   const startSilenceAutoSendCountdown = useCallback(() => {
@@ -248,6 +262,7 @@ export function AssistantHome({
         speechControllerRef.current.stop();
       }
       setListening(false);
+      setVoiceStatus("processing");
 
       const textToSend = inputRef.current.trim();
       if (textToSend) {
@@ -266,6 +281,7 @@ export function AssistantHome({
 
     setMicError(null);
     clearSilenceTimers();
+    setVoiceStatus("initializing");
 
     const controller = startSpeechRecognition({
       lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
@@ -310,14 +326,39 @@ export function AssistantHome({
       },
       onListeningChange: (isList: boolean) => {
         setListening(isList);
-        if (!isList) clearSilenceTimers();
+        if (isList) {
+          setVoiceStatus("listening");
+        } else {
+          clearSilenceTimers();
+          setVoiceStatus((prev) => (prev === "error" || prev === "recovering" ? prev : "idle"));
+        }
       },
       onError: (err: string) => {
+        console.warn("[AssistantHome Mic Error]:", err);
         setMicError(err);
         setListening(false);
         clearSilenceTimers();
+        setVoiceStatus("error");
+        // Transition to recovering, never stuck on listening
+        setTimeout(() => {
+          setVoiceStatus("recovering");
+          setTimeout(() => {
+            setVoiceStatus("idle");
+          }, 2000);
+        }, 1500);
       },
     });
+
+    if (!controller) {
+      setMicError("Microphone speech recognition is not supported in this browser.");
+      setListening(false);
+      setVoiceStatus("error");
+      setTimeout(() => {
+        setVoiceStatus("recovering");
+        setTimeout(() => setVoiceStatus("idle"), 2000);
+      }, 1500);
+      return;
+    }
 
     speechControllerRef.current = controller;
   }, [clearSilenceTimers, speakingMsgId, startSilenceAutoSendCountdown, textFallbackActive, voiceLang, voiceLanguage]);
@@ -710,10 +751,10 @@ export function AssistantHome({
           setBusy(false);
           scrollToBottom();
 
-          // Auto-focus keyboard input immediately
-          requestAnimationFrame(() => {
+          // Auto-focus keyboard input immediately (background-safe)
+          setTimeout(() => {
             textareaRef.current?.focus();
-          });
+          }, 50);
           return;
         } else {
           // ── REPEAT / RETRY QUESTION WITH EMPATHETIC GUIDANCE ──
@@ -1257,26 +1298,44 @@ export function AssistantHome({
               {activeConversation?.title || "Career Copilot"}
             </span>
 
-            {/* Dynamic Real-Time Voice State Status Badge */}
-            {speakingMsgId && (
+            {/* Dynamic Real-Time Voice State Status Badge (7-State Machine) */}
+            {voiceStatus === "speaking" && (
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                 Speaking
               </span>
             )}
-            {!speakingMsgId && listening && (
+            {voiceStatus === "listening" && (
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 Listening
               </span>
             )}
-            {!speakingMsgId && !listening && busy && (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
-                <span className="h-1.5 w-1.5 rounded-full bg-graphite/50" />
-                Thinking
+            {voiceStatus === "initializing" && (
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Initializing
               </span>
             )}
-            {textFallbackActive && !listening && !speakingMsgId && (
+            {voiceStatus === "processing" && (
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
+                <span className="h-1.5 w-1.5 rounded-full bg-graphite/50 animate-pulse" />
+                Processing
+              </span>
+            )}
+            {voiceStatus === "error" && (
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-red-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                Microphone error
+              </span>
+            )}
+            {voiceStatus === "recovering" && (
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+                Recovering
+              </span>
+            )}
+            {voiceStatus === "idle" && textFallbackActive && (
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
                 <span className="h-1.5 w-1.5 rounded-full bg-graphite/40" />
                 Text mode

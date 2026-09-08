@@ -1,18 +1,16 @@
 /**
  * GET /api/location
  *
- * 100% Free Real-Time Location Finder & Reverse Geocoding API (Zero Key Required):
+ * Real-Time Location Finder & Reverse Geocoding API:
  * - IP Geolocation (ipwho.is & ipapi.co)
  * - Reverse Geocoding via Coordinates (OpenStreetMap Nominatim)
  * - City Autocomplete Search
- *
- * Query Params:
- * - lat, lon: Reverse geocode GPS coordinates to city, region, country
- * - search: City search query for autocomplete
- * - (no params): Auto-detect caller's location from client IP headers
+ * - SSRF Protection: Strict IPv4/IPv6 validation & private IP rejection
+ * - Finite coordinate bounds validation (-90..90, -180..180)
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +28,40 @@ export interface LocationProfile {
   source: "IP-Geolocation" | "GPS-ReverseGeocode" | "Search" | "Default";
 }
 
+const IPV4_REGEX = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
+
+function isSafePublicIp(ip: string): boolean {
+  if (!ip || typeof ip !== "string") return false;
+  const trimmed = ip.trim();
+  if (!IPV4_REGEX.test(trimmed) && !IPV6_REGEX.test(trimmed)) return false;
+
+  // Disallow localhost, private, multicast, carrier NAT, link-local
+  if (
+    trimmed === "127.0.0.1" ||
+    trimmed === "::1" ||
+    trimmed === "localhost" ||
+    trimmed.startsWith("10.") ||
+    trimmed.startsWith("192.168.") ||
+    trimmed.startsWith("169.254.") ||
+    trimmed.startsWith("100.64.") ||
+    trimmed.startsWith("198.18.") ||
+    trimmed.startsWith("198.19.") ||
+    trimmed.startsWith("224.") ||
+    trimmed.startsWith("240.") ||
+    trimmed.startsWith("0.") ||
+    trimmed.startsWith("fc00:") ||
+    trimmed.startsWith("fe80:") ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(trimmed)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function GET(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
     const { searchParams } = new URL(req.url);
     const lat = searchParams.get("lat");
@@ -38,14 +69,21 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
 
     // ─── 1. Reverse Geocode from GPS Coordinates ──────────────────────────────
-    if (lat && lon) {
+    if (lat !== null && lon !== null) {
       const latitude = parseFloat(lat);
       const longitude = parseFloat(lon);
 
-      if (!isNaN(latitude) && !isNaN(longitude)) {
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180
+      ) {
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
+            `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&format=json&addressdetails=1`,
             {
               headers: {
                 "User-Agent": "CareerForge-LocationFinder/1.0",
@@ -87,16 +125,17 @@ export async function GET(req: NextRequest) {
             });
           }
         } catch (geoErr) {
-          console.warn("[Location API] Reverse geocode error:", geoErr);
+          console.warn(`[Location API] Reverse geocode error (${requestId}):`, geoErr);
         }
       }
     }
 
     // ─── 2. City Search / Autocomplete ────────────────────────────────────────
     if (search && search.trim().length > 1) {
+      const sanitizedSearch = search.trim().slice(0, 100);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search.trim())}&format=json&limit=5&addressdetails=1`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(sanitizedSearch)}&format=json&limit=5&addressdetails=1`,
           {
             headers: {
               "User-Agent": "CareerForge-LocationFinder/1.0",
@@ -123,13 +162,15 @@ export async function GET(req: NextRequest) {
           const suggestions = items.map((item) => {
             const city = item.address?.city || item.address?.town || item.display_name.split(",")[0];
             const country = item.address?.country || "";
+            const parsedLat = parseFloat(item.lat);
+            const parsedLon = parseFloat(item.lon);
             return {
               city,
               region: item.address?.state || "",
               country,
               countryCode: (item.address?.country_code || "").toUpperCase(),
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
+              latitude: Number.isFinite(parsedLat) ? parsedLat : 0,
+              longitude: Number.isFinite(parsedLon) ? parsedLon : 0,
               formatted: item.display_name,
             };
           });
@@ -140,20 +181,22 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (searchErr) {
-        console.warn("[Location API] Search error:", searchErr);
+        console.warn(`[Location API] Search error (${requestId}):`, searchErr);
       }
     }
 
     // ─── 3. Auto-detect from Client IP (Primary Zero-Click Location) ───────────
-    const clientIp =
+    const rawIp =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
+      req.headers.get("x-real-ip")?.trim() ||
       "";
 
-    // Try ipwho.is (100% Free, unlimited without key)
+    const isSafeIp = isSafePublicIp(rawIp);
+
+    // Try ipwho.is
     try {
-      const ipUrl = clientIp && !isLocalhostIp(clientIp)
-        ? `https://ipwho.is/${clientIp}`
+      const ipUrl = isSafeIp
+        ? `https://ipwho.is/${encodeURIComponent(rawIp)}`
         : "https://ipwho.is/";
 
       const res = await fetch(ipUrl, {
@@ -169,8 +212,8 @@ export async function GET(req: NextRequest) {
             region: data.region || "",
             country: data.country || "United States",
             countryCode: data.country_code || "US",
-            latitude: data.latitude || 37.7749,
-            longitude: data.longitude || -122.4194,
+            latitude: Number.isFinite(data.latitude) ? data.latitude : 37.7749,
+            longitude: Number.isFinite(data.longitude) ? data.longitude : -122.4194,
             formatted: `${data.city}, ${data.region ? data.region + ", " : ""}${data.country}`,
             timezone: data.timezone?.id || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
             ip: data.ip,
@@ -202,8 +245,8 @@ export async function GET(req: NextRequest) {
             region: data.region || "",
             country: data.country_name || "Worldwide",
             countryCode: data.country_code || "US",
-            latitude: data.latitude || 37.7749,
-            longitude: data.longitude || -122.4194,
+            latitude: Number.isFinite(data.latitude) ? data.latitude : 37.7749,
+            longitude: Number.isFinite(data.longitude) ? data.longitude : -122.4194,
             formatted: `${data.city}, ${data.region ? data.region + ", " : ""}${data.country_name}`,
             timezone: data.timezone || "UTC",
             ip: data.ip,
@@ -238,7 +281,7 @@ export async function GET(req: NextRequest) {
       location: defaultProfile,
     });
   } catch (error) {
-    console.error("[Location API] Fatal error:", error);
+    console.error(`[Location API] Fatal error (${requestId}):`, error);
     return NextResponse.json(
       {
         status: "error",
@@ -257,14 +300,4 @@ export async function GET(req: NextRequest) {
       { status: 200 }
     );
   }
-}
-
-function isLocalhostIp(ip: string): boolean {
-  return (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "localhost" ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("10.")
-  );
 }

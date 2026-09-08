@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,6 +105,8 @@ const ROLE_KEYWORDS: Record<string, string[]> = {
 };
 
 export async function GET(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
     const { searchParams } = new URL(req.url);
     const role = (searchParams.get("role") || "").toLowerCase().trim();
@@ -111,11 +114,22 @@ export async function GET(req: NextRequest) {
     const filterType = (searchParams.get("type") || "all").toLowerCase().trim();
     const locationParam = (searchParams.get("location") || "").trim();
     const countryCodeParam = (searchParams.get("countryCode") || "").toUpperCase().trim();
-    const userLat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null;
-    const userLon = searchParams.get("lon") ? parseFloat(searchParams.get("lon")!) : null;
+
+    const rawLat = searchParams.get("lat");
+    const rawLon = searchParams.get("lon");
+    const parsedLat = rawLat !== null ? parseFloat(rawLat) : null;
+    const parsedLon = rawLon !== null ? parseFloat(rawLon) : null;
+
+    const userLat = (parsedLat !== null && Number.isFinite(parsedLat) && parsedLat >= -90 && parsedLat <= 90)
+      ? parsedLat
+      : null;
+    const userLon = (parsedLon !== null && Number.isFinite(parsedLon) && parsedLon >= -180 && parsedLon <= 180)
+      ? parsedLon
+      : null;
 
     // Detect target country rule
     const countryRule = detectCountryRule(locationParam, countryCodeParam);
+
 
     // Parallel execution across 6 real live job scraping feeds
     const [
@@ -256,9 +270,14 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("[Jobs API] Error fetching jobs:", error);
+    console.error(`[Jobs API] Error fetching jobs (${requestId}):`, error);
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch live job feeds" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch live job feeds.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }

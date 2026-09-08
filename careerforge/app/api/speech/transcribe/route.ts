@@ -4,21 +4,27 @@
  * Central Multilingual Audio Transcription Endpoint:
  * - Multi-Provider Cascade: Azure AI Speech -> Google Cloud Speech -> Whisper LPU Fallback
  * - Language Detection & Multi-Candidate Resolution (English, Hindi, Gujarati, French, Spanish, etc.)
- * - Server-side rate limit & payload safety guards
+ * - Server-side payload size safety guards (10MB) and sanitized error responses
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { AzureSpeechProvider } from "@/lib/speech/providers/azureSpeechProvider";
 import { GoogleSpeechProvider } from "@/lib/speech/providers/googleSpeechProvider";
-import { SpeechProviderType, SpeechResult } from "@/lib/speech/types";
+import { SpeechProviderType } from "@/lib/speech/types";
 import { detectLanguageFromText } from "@/lib/speech/languages";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_BASE64_LENGTH = Math.ceil((MAX_AUDIO_BYTES * 4) / 3) + 1024;
 
 const azureProvider = new AzureSpeechProvider();
 const googleProvider = new GoogleSpeechProvider();
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
     const contentType = req.headers.get("content-type") || "";
 
@@ -29,16 +35,43 @@ export async function POST(req: NextRequest) {
     let mimeType = "audio/webm";
 
     if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
+      let formData: FormData;
+      try {
+        formData = await req.formData();
+      } catch {
+        return NextResponse.json(
+          {
+            code: "BAD_REQUEST",
+            message: "Failed to parse multipart form data.",
+            retryable: false,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+
       const file = (formData.get("audio") || formData.get("file")) as File | null;
       if (!file) {
-        return NextResponse.json({ error: "Audio file is required" }, { status: 400 });
+        return NextResponse.json(
+          {
+            code: "BAD_REQUEST",
+            message: "Audio file is required",
+            retryable: false,
+            requestId,
+          },
+          { status: 400 }
+        );
       }
 
       // 10MB payload size guard
-      if (file.size > 10 * 1024 * 1024) {
+      if (file.size > MAX_AUDIO_BYTES) {
         return NextResponse.json(
-          { error: "Audio payload exceeds maximum limit of 10MB" },
+          {
+            code: "PAYLOAD_TOO_LARGE",
+            message: `Audio payload exceeds maximum limit of ${MAX_AUDIO_BYTES / (1024 * 1024)}MB`,
+            retryable: false,
+            requestId,
+          },
           { status: 413 }
         );
       }
@@ -56,9 +89,43 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      const body = await req.json();
-      if (!body.audio) {
-        return NextResponse.json({ error: "Base64 audio string required" }, { status: 400 });
+      let body: any;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json(
+          {
+            code: "BAD_REQUEST",
+            message: "Invalid JSON request payload.",
+            retryable: false,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!body?.audio || typeof body.audio !== "string") {
+        return NextResponse.json(
+          {
+            code: "BAD_REQUEST",
+            message: "Base64 audio string required",
+            retryable: false,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (body.audio.length > MAX_BASE64_LENGTH) {
+        return NextResponse.json(
+          {
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Audio data exceeds maximum limit of 10MB",
+            retryable: false,
+            requestId,
+          },
+          { status: 413 }
+        );
       }
 
       const buffer = Buffer.from(body.audio, "base64");
@@ -70,11 +137,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (!audioBuffer || audioBuffer.byteLength === 0) {
-      return NextResponse.json({ error: "Invalid audio buffer" }, { status: 400 });
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid audio buffer",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
     }
 
     const audioBlob = new Blob([audioBuffer], { type: mimeType });
-    let lastError: any = null;
 
     // ─── 1. If Azure explicitly requested or in auto mode ──────────────────────
     if (
@@ -96,11 +170,15 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (azureErr) {
-        console.warn("[/api/speech/transcribe] Azure failed, trying fallback:", azureErr);
-        lastError = azureErr;
+        console.warn(`[/api/speech/transcribe] Azure failed (${requestId}):`, azureErr);
         if (preferredProvider === "azure") {
           return NextResponse.json(
-            { error: "Azure transcription failed", details: azureErr },
+            {
+              code: "PROVIDER_UNAVAILABLE",
+              message: "Azure transcription service is temporarily unavailable.",
+              retryable: true,
+              requestId,
+            },
             { status: 502 }
           );
         }
@@ -127,11 +205,15 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (googleErr) {
-        console.warn("[/api/speech/transcribe] Google failed, trying fallback:", googleErr);
-        lastError = googleErr;
+        console.warn(`[/api/speech/transcribe] Google failed (${requestId}):`, googleErr);
         if (preferredProvider === "google") {
           return NextResponse.json(
-            { error: "Google transcription failed", details: googleErr },
+            {
+              code: "PROVIDER_UNAVAILABLE",
+              message: "Google transcription service is temporarily unavailable.",
+              retryable: true,
+              requestId,
+            },
             { status: 502 }
           );
         }
@@ -168,7 +250,7 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (whisperErr) {
-        console.warn("[/api/speech/transcribe] Groq Whisper fallback failed:", whisperErr);
+        console.warn(`[/api/speech/transcribe] Groq Whisper fallback failed (${requestId}):`, whisperErr);
       }
     }
 
@@ -202,7 +284,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (sarvamErr) {
-        console.warn("[/api/speech/transcribe] Sarvam AI fallback failed:", sarvamErr);
+        console.warn(`[/api/speech/transcribe] Sarvam AI fallback failed (${requestId}):`, sarvamErr);
       }
     }
 
@@ -212,14 +294,18 @@ export async function POST(req: NextRequest) {
         language: language || "en",
         provider: "web",
         message: "Cloud providers unconfigured or silent audio. Fall back to browser Web Speech API.",
-        lastError,
       },
       { status: 200 }
     );
-  } catch (err: any) {
-    console.error("[/api/speech/transcribe] Fatal error:", err);
+  } catch (err) {
+    console.error(`[/api/speech/transcribe] Fatal error (${requestId}):`, err);
     return NextResponse.json(
-      { error: err?.message || "Transcription pipeline failed" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Transcription pipeline failed.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }

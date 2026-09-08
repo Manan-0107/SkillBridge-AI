@@ -105,31 +105,30 @@ export const KNOWN_AI_PROMPT_PATTERNS = [
 
 /**
  * Checks if a recognized transcript is an acoustic feedback echo of the AI assistant's own voice.
- * Prevents the AI assistant from detecting its own speech output through device speakers.
+ * Prevents the AI assistant from detecting its own speech output through device speakers,
+ * while allowing immediate user barge-in and answers.
  */
 export function isSelfVoiceEcho(transcript: string): boolean {
   if (!transcript || !transcript.trim()) return false;
   const cleanT = transcript.toLowerCase().trim();
   const now = Date.now();
 
-  // 1. Any incoming audio while AI is speaking or within 1800ms cooldown is self-voice echo
-  if (isSelfSpeaking || now - lastSpeechEndedAt < 1800) {
-    return true;
-  }
-
-  // 2. Reject any transcript that contains AI question prompt fragments
-  for (const pattern of KNOWN_AI_PROMPT_PATTERNS) {
-    if (cleanT.includes(pattern)) {
-      return true;
-    }
-  }
-
-  // 3. User verification answers ("yes", "no") and emails are allowed only if NOT matching prompt patterns
+  // 1. User answers, names, and explicit interruption commands are NEVER echo
   if (
     cleanT === "yes" ||
     cleanT === "no" ||
     cleanT === "correct" ||
     cleanT === "wrong" ||
+    cleanT === "stop" ||
+    cleanT === "wait" ||
+    cleanT === "pause" ||
+    cleanT === "sure" ||
+    cleanT === "go ahead" ||
+    cleanT === "create it" ||
+    cleanT === "create account" ||
+    cleanT === "create my account" ||
+    cleanT === "review" ||
+    cleanT === "review positions" ||
     cleanT === "હા" ||
     cleanT === "ના" ||
     cleanT === "हाँ" ||
@@ -141,10 +140,17 @@ export function isSelfVoiceEcho(transcript: string): boolean {
     return false;
   }
 
-  // 4. Match against recently spoken assistant sentences
-  const recent = recentSpokenPhrases.filter((p) => now - p.time < 8000);
+  // 2. Reject any transcript that contains AI question prompt fragments
+  for (const pattern of KNOWN_AI_PROMPT_PATTERNS) {
+    if (pattern.length >= 6 && cleanT.includes(pattern)) {
+      return true;
+    }
+  }
+
+  // 3. Match against recently spoken assistant sentences
+  const recent = recentSpokenPhrases.filter((p) => now - p.time < 6000);
   for (const { text: phrase } of recent) {
-    if (phrase === cleanT || phrase.includes(cleanT) || (cleanT.length > 15 && cleanT.includes(phrase))) {
+    if (phrase === cleanT || (phrase.length > 10 && cleanT.includes(phrase)) || (cleanT.length > 15 && phrase.includes(cleanT))) {
       return true;
     }
   }
@@ -153,7 +159,7 @@ export function isSelfVoiceEcho(transcript: string): boolean {
 }
 
 export function isAIAudioPlaying(): boolean {
-  return isSelfSpeaking || Date.now() - lastSpeechEndedAt < 1800;
+  return isSelfSpeaking;
 }
 
 let blindGuideActive = false;
@@ -526,11 +532,8 @@ export function speakText(
     return;
   }
 
-  // 1. ABSOLUTE MICROPHONE SHUTDOWN BEFORE TTS
-  stopAllSpeechRecognition();
-  isSelfSpeaking = true;
-
   // Single-Speaker Mutex: Invalidate previous speech session and clear pending timers
+  isSelfSpeaking = true;
   const sessionId = ++currentSpeechSession;
   if (activeSpeechTimeout) {
     clearTimeout(activeSpeechTimeout);
@@ -620,7 +623,6 @@ export function speakText(
     utterance.onstart = () => {
       if (sessionId !== currentSpeechSession) return;
       isSelfSpeaking = true;
-      stopAllSpeechRecognition();
       options?.onStart?.();
     };
 
@@ -659,6 +661,13 @@ export function speakText(
 
 // ─── 5. Multi-Language Speech-to-Text (STT) ───────────────────────────────────
 
+export interface VoiceInteractionToken {
+  sessionId: string;
+  interactionId: string;
+  questionId: string;
+  fieldId: string;
+}
+
 export function isSpeechRecognitionSupported(): boolean {
   if (typeof window === "undefined") return false;
   return "webkitSpeechRecognition" in window || "SpeechRecognition" in window;
@@ -667,6 +676,7 @@ export function isSpeechRecognitionSupported(): boolean {
 export type SpeechRecognitionController = {
   stop: () => void;
   isActive: () => boolean;
+  setLanguage: (lang: string) => void;
 };
 
 export interface SpeechRecognitionOptions {
@@ -699,19 +709,7 @@ export function startSpeechRecognition(
     return null;
   }
 
-  // Safeguard 1: NEVER listen while AI is speaking or within 800ms post-speech echo cooldown
-  if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
-    console.warn("[Voice Guard] Cannot start speech recognition during AI speech or echo cooldown.");
-    callbacksOrOptions.onListeningChange?.(false);
-    return null;
-  }
-
-  const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions || "isBlindGuide" in callbacksOrOptions;
-  const isBlindGuide = isOptionsObject
-    ? !!(callbacksOrOptions as SpeechRecognitionOptions).isBlindGuide
-    : !!optionsArg?.isBlindGuide;
-
-  // Safeguard 2: The user-controlled command bar owns the mic — don't contend for it
+  // Safeguard: The user-controlled command bar owns the mic — don't contend for it
   if (commandBarActive) {
     callbacksOrOptions.onListeningChange?.(false);
     return null;
@@ -720,7 +718,8 @@ export function startSpeechRecognition(
   // Singleton instance protection: abort previous
   stopAllSpeechRecognition();
 
-  const lang = (isOptionsObject ? (callbacksOrOptions as SpeechRecognitionOptions).lang : optionsArg?.lang) || currentLanguage || "en-US";
+  const isOptionsObject = "lang" in callbacksOrOptions || "continuous" in callbacksOrOptions || "isBlindGuide" in callbacksOrOptions;
+  let currentLang = (isOptionsObject ? (callbacksOrOptions as SpeechRecognitionOptions).lang : optionsArg?.lang) || currentLanguage || "en-US";
   const continuous = isOptionsObject
     ? (callbacksOrOptions as SpeechRecognitionOptions).continuous !== false
     : optionsArg?.continuous !== false;
@@ -734,7 +733,7 @@ export function startSpeechRecognition(
   let restartTimeout: any = null;
 
   const createAndStartInstance = () => {
-    if (!running || isSelfSpeaking) return;
+    if (!running) return;
 
     try {
       const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -744,18 +743,13 @@ export function startSpeechRecognition(
 
       recognition.continuous = continuous;
       recognition.interimResults = true;
-      recognition.lang = lang;
+      recognition.lang = currentLang;
 
       recognition.onstart = () => {
         onListeningChange(true);
       };
 
       recognition.onresult = (event: any) => {
-        // Safeguard: If AI is speaking or in post-speech cooldown (800ms), drop
-        if (isSelfSpeaking || Date.now() - lastSpeechEndedAt < 800) {
-          return;
-        }
-
         let interim = "";
         let final = "";
 
@@ -767,29 +761,39 @@ export function startSpeechRecognition(
           }
         }
 
+        const candidate = (final || interim).trim();
+        if (!candidate) return;
+
+        // Barge-in check: If AI is currently speaking, check if this is real user speech
+        if (isSelfSpeaking) {
+          if (isSelfVoiceEcho(candidate)) {
+            // Suppress acoustic speaker reflection into mic
+            return;
+          }
+          // Real user voice interruption -> Immediately halt TTS
+          stopSpeaking();
+        }
+
         if (final) {
           const cleanFinal = final.trim();
           if (!cleanFinal) return;
 
           if (isSelfVoiceEcho(cleanFinal)) {
-            console.warn("[Voice Guard] Suppressed self-voice acoustic echo:", cleanFinal);
             return;
           }
 
-          const detected = detectTextLanguage(cleanFinal);
-          currentLanguage = detected;
           onTranscript(cleanFinal, true);
         } else if (interim) {
-          if (!isSelfSpeaking && Date.now() - lastSpeechEndedAt >= 800) {
-            if (!isSelfVoiceEcho(interim)) {
-              onTranscript(interim, false);
-            }
+          if (!isSelfVoiceEcho(interim)) {
+            onTranscript(interim, false);
           }
         }
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error !== "no-speech" && event.error !== "aborted") {
+        if (event.error === "language-not-supported") {
+          onError("language-not-supported");
+        } else if (event.error !== "no-speech" && event.error !== "aborted") {
           onError(event.error || "Microphone recognition error");
         }
         onListeningChange(false);
@@ -797,11 +801,11 @@ export function startSpeechRecognition(
 
       recognition.onend = () => {
         onListeningChange(false);
-        // Clean restart with fresh instance on Chrome after delay
-        if (running && !isSelfSpeaking && !commandBarActive) {
+        // Clean restart with fresh instance on Chrome after delay to maintain persistent listening
+        if (running && !commandBarActive) {
           if (restartTimeout) clearTimeout(restartTimeout);
           restartTimeout = setTimeout(() => {
-            if (running && !isSelfSpeaking && !commandBarActive) {
+            if (running && !commandBarActive) {
               createAndStartInstance();
             }
           }, 150);
@@ -811,10 +815,10 @@ export function startSpeechRecognition(
       recognition.start();
     } catch (err) {
       console.warn("[Voice] Speech recognition init failed:", err);
-      if (running && !isSelfSpeaking) {
+      if (running && !commandBarActive) {
         if (restartTimeout) clearTimeout(restartTimeout);
         restartTimeout = setTimeout(() => {
-          if (running && !isSelfSpeaking) createAndStartInstance();
+          if (running && !commandBarActive) createAndStartInstance();
         }, 500);
       }
     }
@@ -835,6 +839,15 @@ export function startSpeechRecognition(
       onListeningChange(false);
     },
     isActive: () => running,
+    setLanguage: (newLang: string) => {
+      currentLang = newLang;
+      currentLanguage = newLang;
+      if (activeRec) {
+        try {
+          activeRec.lang = newLang;
+        } catch {}
+      }
+    },
   };
 }
 

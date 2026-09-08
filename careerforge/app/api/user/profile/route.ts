@@ -1,51 +1,63 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUserId } from "@/lib/supabase/auth";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const userId = await getAuthenticatedUserId();
-    if (!userId) {
-      return NextResponse.json({
-        user: {
-          id: "anonymous",
-          email: "",
-          name: null,
-          image: null,
-          requiresTextFallback: false,
-        },
-      });
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
-    const supabase = createSupabaseServerClient();
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("id, email, name, picture, requires_text_fallback")
-      .eq("id", userId)
-      .single();
+    let userState: Record<string, any> = {};
+    let dbUser: any = null;
+
+    try {
+      const supabase = createSupabaseServerClient();
+      const queryPromise = supabase
+        .from("users")
+        .select("id, email, name, picture, state")
+        .eq("email", authUser.email)
+        .maybeSingle();
+
+      const res = (await Promise.race([
+        queryPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("DB timeout")), 1200)),
+      ])) as any;
+
+      if (!res?.error && res?.data) {
+        dbUser = res.data;
+        if (typeof dbUser.state === "object" && dbUser.state !== null) {
+          userState = dbUser.state;
+        }
+      }
+    } catch (dbErr) {
+      console.warn("[api/user/profile] DB query timed out or offline, returning authenticated user defaults");
+    }
+
+    const requiresTextFallback = Boolean(
+      userState.requiresTextFallback ?? userState.accessibility?.requiresTextFallback ?? false
+    );
 
     return NextResponse.json({
       user: {
-        id: userProfile?.id ?? userId,
-        email: userProfile?.email ?? "",
-        name: userProfile?.name ?? null,
-        image: userProfile?.picture ?? null,
-        requiresTextFallback: userProfile?.requires_text_fallback ?? false,
+        id: dbUser?.id ?? authUser.id,
+        email: dbUser?.email ?? authUser.email,
+        name: dbUser?.name ?? authUser.name ?? null,
+        image: dbUser?.picture ?? null,
+        requiresTextFallback,
       },
     });
   } catch (error) {
     console.error("[api/user/profile] Error:", error);
     return NextResponse.json(
-      {
-        user: {
-          id: "fallback",
-          email: "",
-          name: null,
-          image: null,
-          requiresTextFallback: false,
-        },
-      },
-      { status: 200 }
+      { error: "Internal server error" },
+      { status: 500 }
     );
   }
 }
