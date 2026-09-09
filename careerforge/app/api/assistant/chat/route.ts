@@ -120,6 +120,7 @@ interface RequestBody {
     highContrast?: boolean;
     largeText?: boolean;
     reducedMotion?: boolean;
+    voiceLanguage?: string;
   };
   resumeDraftState?: ResumeDraftState;
 }

@@ -442,8 +442,10 @@ export function isSpeaking(): boolean {
 }
 
 let activeRecognitionInstance: any = null;
+let activeRecognitionGeneration = 0;
 
 export function stopAllSpeechRecognition() {
+  activeRecognitionGeneration += 1;
   if (activeRecognitionInstance) {
     try {
       activeRecognitionInstance.abort();
@@ -731,9 +733,10 @@ export function startSpeechRecognition(
   let running = true;
   let activeRec: any = null;
   let restartTimeout: any = null;
+  const generation = activeRecognitionGeneration;
 
   const createAndStartInstance = () => {
-    if (!running) return;
+    if (!running || generation !== activeRecognitionGeneration) return;
 
     try {
       const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -746,10 +749,12 @@ export function startSpeechRecognition(
       recognition.lang = currentLang;
 
       recognition.onstart = () => {
+        if (generation !== activeRecognitionGeneration) return;
         onListeningChange(true);
       };
 
       recognition.onresult = (event: any) => {
+        if (generation !== activeRecognitionGeneration) return;
         let interim = "";
         let final = "";
 
@@ -791,6 +796,7 @@ export function startSpeechRecognition(
       };
 
       recognition.onerror = (event: any) => {
+        if (generation !== activeRecognitionGeneration) return;
         if (event.error === "language-not-supported") {
           onError("language-not-supported");
         } else if (event.error !== "no-speech" && event.error !== "aborted") {
@@ -800,12 +806,13 @@ export function startSpeechRecognition(
       };
 
       recognition.onend = () => {
+        if (generation !== activeRecognitionGeneration) return;
         onListeningChange(false);
         // Clean restart with fresh instance on Chrome after delay to maintain persistent listening
-        if (running && !commandBarActive) {
+        if (running && generation === activeRecognitionGeneration && !commandBarActive) {
           if (restartTimeout) clearTimeout(restartTimeout);
           restartTimeout = setTimeout(() => {
-            if (running && !commandBarActive) {
+            if (running && generation === activeRecognitionGeneration && !commandBarActive) {
               createAndStartInstance();
             }
           }, 150);
@@ -815,10 +822,10 @@ export function startSpeechRecognition(
       recognition.start();
     } catch (err) {
       console.warn("[Voice] Speech recognition init failed:", err);
-      if (running && !commandBarActive) {
+      if (running && generation === activeRecognitionGeneration && !commandBarActive) {
         if (restartTimeout) clearTimeout(restartTimeout);
         restartTimeout = setTimeout(() => {
-          if (running && !commandBarActive) createAndStartInstance();
+          if (running && generation === activeRecognitionGeneration && !commandBarActive) createAndStartInstance();
         }, 500);
       }
     }
@@ -829,6 +836,7 @@ export function startSpeechRecognition(
   return {
     stop: () => {
       running = false;
+      if (generation === activeRecognitionGeneration) activeRecognitionGeneration += 1;
       if (restartTimeout) clearTimeout(restartTimeout);
       try {
         activeRec?.stop();

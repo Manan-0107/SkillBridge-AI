@@ -86,6 +86,38 @@ export function AuthGate() {
   const [phoneOtp, setPhoneOtp] = useState("");
 
   useEffect(() => {
+    const open = googleModalOpen || githubModalOpen || phoneModalOpen;
+    if (!open) return;
+
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusTimer = window.setTimeout(() => {
+      const selector = googleModalOpen
+        ? "input"
+        : githubModalOpen
+        ? "input"
+        : phoneStep === "otp"
+        ? "input"
+        : "select, input";
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+      dialog?.querySelector<HTMLElement>(selector)?.focus();
+    }, 0);
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (googleModalOpen) setGoogleModalOpen(false);
+      if (githubModalOpen) setGithubModalOpen(false);
+      if (phoneModalOpen) setPhoneModalOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", handleEscape);
+      previousFocus?.focus();
+    };
+  }, [googleModalOpen, githubModalOpen, phoneModalOpen, phoneStep]);
+
+  useEffect(() => {
     // When switching mode, reset active section
     setActiveSection(mode === "signup" ? "name" : "email");
     setError("");
@@ -747,7 +779,7 @@ export function AuthGate() {
       {/* ─── Google OAuth Permission Screen Modal ─────────────────────────────── */}
       {googleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" aria-label="Sign in with Google" className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <GoogleMark />
@@ -816,7 +848,7 @@ export function AuthGate() {
       {/* ─── GitHub OAuth Modal ──────────────────────────────────────────────── */}
       {githubModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" aria-label="Sign in with GitHub" className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <GithubMark />
@@ -885,7 +917,7 @@ export function AuthGate() {
       {/* ─── Phone OTP Verification Modal ────────────────────────────────────── */}
       {phoneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" aria-label="Phone authentication" className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <PhoneMark />

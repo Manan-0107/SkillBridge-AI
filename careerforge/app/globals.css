@@ -173,8 +173,33 @@ html.high-contrast textarea {
   outline: 2px solid #FFFF00 !important;
 }
 
+html.high-contrast .bg-white,
+html.high-contrast .bg-paper,
+html.high-contrast .bg-mist,
+html.high-contrast .bg-paper\/90,
+html.high-contrast .bg-white\/95 {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.high-contrast .text-ink,
+html.high-contrast .text-graphite,
+html.high-contrast .text-graphite\/55,
+html.high-contrast .text-graphite\/60,
+html.high-contrast .text-graphite\/80 {
+  color: #FFFFFF !important;
+}
+
 html.large-text {
   font-size: 20px !important;
+}
+
+html.large-text button,
+html.large-text input,
+html.large-text textarea,
+html.large-text select {
+  min-height: 2.75rem;
+  font-size: 1rem !important;
 }
 
 html.reduced-motion * {

@@ -25,6 +25,7 @@ import {
   getFieldPromptMessage,
   VoiceInteractionToken,
 } from "@/lib/voice";
+import { validateYesNo } from "@/lib/speech/questionFlow";
 
 // ─── Profile Questionnaire & Section Definitions ──────────────────────────────
 
@@ -341,8 +342,6 @@ export function restoreAiSession(): PersistedAiSession | null {
   }
 }
 
-let globalVoiceDictatorStarted = false;
-
 export function GlobalVoiceDictator() {
   const {
     user,
@@ -367,6 +366,7 @@ export function GlobalVoiceDictator() {
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [voiceBannerOpen, setVoiceBannerOpen] = useState(true);
+  const autoStartAttemptedRef = useRef(false);
 
   // ─── Explicit 9-State Voice Interaction Machine (Section 8) ────────────────
   const [interactionState, setInteractionState] = useState<VoiceInteractionState>("IDLE");
@@ -377,6 +377,13 @@ export function GlobalVoiceDictator() {
   const [waitingAccountConfirmation, setWaitingAccountConfirmation] = useState(false);
   const waitingAccountConfirmationRef = useRef(false);
   waitingAccountConfirmationRef.current = waitingAccountConfirmation;
+
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    feature: FeatureId | "assistant";
+    title: string;
+  } | null>(null);
+  const pendingNavigationRef = useRef(pendingNavigation);
+  pendingNavigationRef.current = pendingNavigation;
 
   // ─── Interactive AI Voice Agent Dialogue State ──────────────────────────────
   const [aiSpeechPrompt, setAiSpeechPrompt] = useState<string | null>(null);
@@ -393,11 +400,18 @@ export function GlobalVoiceDictator() {
   } | null>(null);
 
   const controllerRef = useRef<SpeechRecognitionController | null>(null);
+  const recognitionErrorCountRef = useRef(0);
   const focusedElementRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wasActiveBeforeBlurRef = useRef(false);
   const currentLangRef = useRef(voiceLanguage);
   currentLangRef.current = voiceLanguage;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.lang =
+      voiceLanguage && voiceLanguage !== "auto" ? voiceLanguage.split("-")[0] : "en";
+  }, [voiceLanguage]);
   const activeRef = useRef(active);
   activeRef.current = active;
   const currentQuestionRef = useRef(currentQuestion);
@@ -583,6 +597,7 @@ export function GlobalVoiceDictator() {
     const controller = startSpeechRecognition(
       {
         onTranscript: (transcript: string, isFinal?: boolean) => {
+          recognitionErrorCountRef.current = 0;
           processSpokenTextRef.current(transcript, !!isFinal);
         },
         onListeningChange: (isList: boolean) => {
@@ -614,6 +629,24 @@ export function GlobalVoiceDictator() {
           }
           setListening(false);
           setInteractionState("ERROR");
+          if (err === "network" || err === "service-not-allowed" || err === "audio-capture") {
+            recognitionErrorCountRef.current += 1;
+          }
+          if (recognitionErrorCountRef.current >= 3) {
+            controllerRef.current?.stop();
+            controllerRef.current = null;
+            setActive(false);
+            activeRef.current = false;
+            setVoiceMode(false);
+            const fallback =
+              "Voice recognition is temporarily unavailable. I switched to text mode so you can continue. Activate Start voice assistant or press Alt plus V to try again.";
+            setAiSpeechPrompt(fallback);
+            showStatus(fallback, 7000);
+            if (accessibilityPrefs.speechOutput) {
+              speakText(fallback, { lang: currentLangRef.current });
+            }
+            return;
+          }
           setTimeout(() => {
             if (activeRef.current) {
               setInteractionState("RECOVERING");
@@ -630,7 +663,7 @@ export function GlobalVoiceDictator() {
     );
 
     controllerRef.current = controller;
-  }, [setVoiceLanguage, showStatus]);
+  }, [accessibilityPrefs.speechOutput, setVoiceLanguage, setVoiceMode, showStatus]);
 
   // ─── Speech Synthesis with Real-Time Barge-In & Persistent Microphone ───────
   const speakAndListen = useCallback(
@@ -694,7 +727,12 @@ export function GlobalVoiceDictator() {
             },
             targetRole: user?.targetRole || interviewStateRef.current.targetRole || "Software Engineer",
             voiceMode: true,
-            accessibilityPrefs,
+            accessibilityPrefs: {
+              ...accessibilityPrefs,
+              voiceLanguage: detectedLang,
+              screenReaderMode: true,
+            },
+            language: detectedLang,
           }),
         });
         const data = await res.json();
@@ -898,6 +936,44 @@ export function GlobalVoiceDictator() {
         }
 
         // Still waiting for clear Yes or No
+        return;
+      }
+
+      // Navigation is a two-step action while a question is active. This
+      // prevents a phrase such as "go to courses" from losing an answer.
+      const pendingNav = pendingNavigationRef.current;
+      if (pendingNav) {
+        const decision = validateYesNo(clean, detectedLang);
+        if (decision.valid && decision.value === true) {
+          pendingNavigationRef.current = null;
+          setPendingNavigation(null);
+          playAccessibleChime("navigate");
+          window.dispatchEvent(
+            new CustomEvent("careerforge:navigate", { detail: { feature: pendingNav.feature } })
+          );
+          const opened = `Opening ${pendingNav.title}.`;
+          setAiSpeechPrompt(opened);
+          speakAndListen(opened, detectedLang);
+        } else if (decision.valid && decision.value === false) {
+          pendingNavigationRef.current = null;
+          setPendingNavigation(null);
+          const currentQ = currentQuestionRef.current;
+          const stay = currentQ
+            ? currentQ.prompts[detectedLang.startsWith("gu") ? "gu" : detectedLang.startsWith("hi") ? "hi" : "en"]
+            : "Okay, we will stay here. What would you like to do next?";
+          setAiSpeechPrompt(stay);
+          speakAndListen(stay, detectedLang);
+        } else {
+          const confirmAgain = detectedLang.startsWith("gu")
+            ? `શું તમે ખરેખર ${pendingNav.title} ખોલવા માંગો છો? હા અથવા ના બોલો.`
+            : detectedLang.startsWith("hi")
+            ? `क्या आप सचमुच ${pendingNav.title} खोलना चाहते हैं? हाँ या नहीं बोलें।`
+            : detectedLang.startsWith("fr")
+            ? `Voulez-vous vraiment ouvrir ${pendingNav.title} ? Dites oui ou non.`
+            : `Would you like to open ${pendingNav.title}? Please say yes or no.`;
+          setAiSpeechPrompt(confirmAgain);
+          speakAndListen(confirmAgain, detectedLang);
+        }
         return;
       }
 
@@ -1355,6 +1431,38 @@ export function GlobalVoiceDictator() {
 
       // ── 3. GENERAL SYSTEM COMMANDS (Navigation / Submit / Clear / Help) ───
 
+      const wantsRepeat =
+        lower === "repeat" ||
+        lower === "repeat question" ||
+        lower === "say that again" ||
+        lower === "again" ||
+        lower.includes("ફરી") ||
+        lower.includes("फिर से") ||
+        lower.includes("répète") ||
+        lower.includes("repite");
+
+      if (wantsRepeat) {
+        const currentQ = currentQuestionRef.current;
+        if (currentQ) {
+          const key = detectedLang.startsWith("gu") ? "gu" : detectedLang.startsWith("hi") ? "hi" : "en";
+          const repeatPrompt = currentQ.prompts[key];
+          setAiSpeechPrompt(repeatPrompt);
+          playAccessibleChime("focus");
+          speakAndListen(repeatPrompt, detectedLang);
+        } else {
+          const repeatPrompt = detectedLang.startsWith("fr")
+            ? "Je peux répéter la dernière question. Que souhaitez-vous faire ensuite ?"
+            : detectedLang.startsWith("hi")
+            ? "मैं पिछला प्रश्न दोहरा सकता हूँ। अब आप क्या करना चाहते हैं?"
+            : detectedLang.startsWith("gu")
+            ? "હું છેલ્લો પ્રશ્ન ફરી કહી શકું છું. હવે તમે શું કરવા માંગો છો?"
+            : "I can repeat the last question. What would you like to do next?";
+          setAiSpeechPrompt(repeatPrompt);
+          speakAndListen(repeatPrompt, detectedLang);
+        }
+        return;
+      }
+
       if (
         lower === "clear" ||
         lower === "erase" ||
@@ -1406,12 +1514,24 @@ export function GlobalVoiceDictator() {
       }
 
       // Navigation commands
-      const isNavResume = lower.includes("go to resume") || lower.includes("resume studio") || lower.includes("રેઝ્યૂમે");
-      const isNavRoadmap = lower.includes("go to roadmap") || lower.includes("career roadmap") || lower.includes("રોડમેપ");
-      const isNavCourses = lower.includes("go to courses") || lower.includes("course section") || lower.includes("કોર્સ");
-      const isNavPractice = lower.includes("go to practice") || lower.includes("practice hub") || lower.includes("પ્રેક્ટિસ");
-      const isNavLocal = lower.includes("go to jobs") || lower.includes("local opportunities") || lower.includes("નોકરી");
-      const isNavAssistant = lower.includes("go to assistant") || lower.includes("career assistant") || lower.includes("સહાયક");
+      const isNavResume =
+        lower.includes("go to resume") || lower.includes("resume studio") || lower.includes("રેઝ્યૂમે") ||
+        lower.includes("ouvrir le cv") || lower.includes("abrir el currículum") || lower.includes("रिज्यूमे");
+      const isNavRoadmap =
+        lower.includes("go to roadmap") || lower.includes("career roadmap") || lower.includes("રોડમેપ") ||
+        lower.includes("feuille de route") || lower.includes("hoja de ruta") || lower.includes("रोडमैप");
+      const isNavCourses =
+        lower.includes("go to courses") || lower.includes("course section") || lower.includes("કોર્સ") ||
+        lower.includes("aller aux cours") || lower.includes("ir a cursos") || lower.includes("पाठ्यक्रम");
+      const isNavPractice =
+        lower.includes("go to practice") || lower.includes("practice hub") || lower.includes("પ્રેક્ટિસ") ||
+        lower.includes("aller à la pratique") || lower.includes("ir a practicar") || lower.includes("अभ्यास");
+      const isNavLocal =
+        lower.includes("go to jobs") || lower.includes("local opportunities") || lower.includes("નોકરી") ||
+        lower.includes("aller aux emplois") || lower.includes("ir a trabajos") || lower.includes("नौकरी");
+      const isNavAssistant =
+        lower.includes("go to assistant") || lower.includes("career assistant") || lower.includes("સહાયક") ||
+        lower.includes("aller à l'assistant") || lower.includes("ir al asistente") || lower.includes("सहायक");
 
       if (isNavResume || isNavRoadmap || isNavCourses || isNavPractice || isNavLocal || isNavAssistant) {
         let dest: FeatureId | "assistant" = "assistant";
@@ -1422,9 +1542,18 @@ export function GlobalVoiceDictator() {
         else if (isNavPractice) { dest = "practice"; title = "Practice Hub"; }
         else if (isNavLocal) { dest = "local"; title = "Local Jobs"; }
 
-        playAccessibleChime("navigate");
-        window.dispatchEvent(new CustomEvent("careerforge:navigate", { detail: { feature: dest } }));
-        showStatus(`🚀 Navigated to ${title}. Speak now to write or ask questions!`, 4000);
+        setPendingNavigation({ feature: dest, title });
+        pendingNavigationRef.current = { feature: dest, title };
+        const confirmNav = detectedLang.startsWith("gu")
+          ? `શું તમે ${title} ખોલવા માંગો છો? હા અથવા ના બોલો.`
+          : detectedLang.startsWith("hi")
+          ? `क्या आप ${title} खोलना चाहते हैं? हाँ या नहीं बोलें।`
+          : detectedLang.startsWith("fr")
+          ? `Voulez-vous ouvrir ${title} ? Dites oui ou non.`
+          : `Would you like to open ${title}? Please say yes or no.`;
+        setAiSpeechPrompt(confirmNav);
+        showStatus(`Waiting for confirmation: ${title}`, 4000);
+        speakAndListen(confirmNav, detectedLang);
         return;
       }
 
@@ -1662,73 +1791,49 @@ export function GlobalVoiceDictator() {
     }
   };
 
-  // ─── Auto-Start Voice Assistant Immediately with Permission Probe & First Gesture (Section 3) ──
-  const autoStartedRef = useRef(false);
-
+  // Voice activation is explicit: the control below, keyboard shortcut, or
+  // an accessible input dispatches this event after the user asks for voice.
+  // an event instead of creating their own SpeechRecognition instance.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const handleVoiceStart = () => {
+      if (!activeRef.current) startVoiceDictation();
+    };
+    window.addEventListener("careerforge:voice-start", handleVoiceStart);
+    return () => window.removeEventListener("careerforge:voice-start", handleVoiceStart);
+  }, [startVoiceDictation]);
 
-    let cleanupListeners: (() => void) | null = null;
+  // Start automatically when the browser has already granted microphone
+  // permission. Otherwise announce the exact accessible action required by
+  // browser security: activate the named Voice Start control or press Alt+V.
+  useEffect(() => {
+    if (!user || autoStartAttemptedRef.current || activeRef.current) return;
+    autoStartAttemptedRef.current = true;
 
-    const tryAutoStart = async () => {
-      if (globalVoiceDictatorStarted || autoStartedRef.current) return;
+    const announceVoiceEntry = () => {
+      const message =
+        "Voice assistant is ready. To start the microphone, activate the Start voice assistant button in the Voice Assistant controls, or press Alt plus V.";
+      setAiSpeechPrompt(message);
+      showStatus(message, 7000);
+      if (accessibilityPrefs.speechOutput && (accessibilityPrefs.voiceNavigation || accessibilityPrefs.screenReaderMode)) {
+        speakText(message, { lang: currentLangRef.current });
+      }
+    };
 
-      // 1. Check if browser already has microphone permission
+    const tryStartWithPermission = async () => {
       try {
         if (navigator.permissions && navigator.permissions.query) {
-          const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
-          if (status.state === "granted") {
-            globalVoiceDictatorStarted = true;
-            autoStartedRef.current = true;
+          const permission = await navigator.permissions.query({ name: "microphone" as PermissionName });
+          if (permission.state === "granted") {
             startVoiceDictation();
             return;
           }
         }
       } catch {}
-
-      // 2. If permission not already granted or requires user gesture,
-      // hook first legitimate user interaction on window
-      const handleFirstInteraction = () => {
-        if (globalVoiceDictatorStarted || autoStartedRef.current) return;
-        globalVoiceDictatorStarted = true;
-        autoStartedRef.current = true;
-        removeInteractionListeners();
-        startVoiceDictation();
-      };
-
-      const removeInteractionListeners = () => {
-        window.removeEventListener("click", handleFirstInteraction, true);
-        window.removeEventListener("keydown", handleFirstInteraction, true);
-        window.removeEventListener("touchstart", handleFirstInteraction, true);
-        window.removeEventListener("pointerdown", handleFirstInteraction, true);
-      };
-
-      window.addEventListener("click", handleFirstInteraction, true);
-      window.addEventListener("keydown", handleFirstInteraction, true);
-      window.addEventListener("touchstart", handleFirstInteraction, true);
-      window.addEventListener("pointerdown", handleFirstInteraction, true);
-
-      cleanupListeners = removeInteractionListeners;
-
-      // Fallback timer if user already interacted or browser allows autoplay
-      const fallbackTimer = setTimeout(() => {
-        if (!globalVoiceDictatorStarted && !autoStartedRef.current) {
-          handleFirstInteraction();
-        }
-      }, 2000);
-
-      return () => {
-        clearTimeout(fallbackTimer);
-        removeInteractionListeners();
-      };
+      announceVoiceEntry();
     };
 
-    void tryAutoStart();
-
-    return () => {
-      if (cleanupListeners) cleanupListeners();
-    };
-  }, [startVoiceDictation]);
+    void tryStartWithPermission();
+  }, [accessibilityPrefs.screenReaderMode, accessibilityPrefs.speechOutput, accessibilityPrefs.voiceNavigation, showStatus, startVoiceDictation, user]);
 
   // ─── Tab-Switch Auto-Pause with Guided Reconnect on Return ──────────────────
   useEffect(() => {
@@ -1790,16 +1895,20 @@ export function GlobalVoiceDictator() {
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {statusMessage || (active ? "Voice assistant is active" : "Voice assistant is off")}
       </div>
+      <div className="sr-only" aria-live="assertive" aria-atomic="true" role="status">
+        {aiSpeechPrompt || statusMessage || ""}
+      </div>
 
       {/* Floating Accessibility Voice HUD Pill */}
       <aside
+        id="voice-assistant-controls"
         role="region"
         aria-label="Universal Voice Assistant and Accessibility Controls"
-        className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 pointer-events-auto select-none"
+        className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 pointer-events-none select-none"
       >
         {/* Live Transcript / AI Prompt Popover */}
         {(active || liveTranscript || interimTranscript || aiSpeechPrompt) && voiceBannerOpen && (
-          <div className="mb-2 max-w-sm rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
+          <div className="pointer-events-auto mb-2 max-w-sm rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between gap-2 border-b border-neutral-100 pb-2 mb-2">
               <div className="flex items-center gap-2">
                 <span className={`flex h-2.5 w-2.5 rounded-full ${listening ? "bg-emerald-500 animate-ping" : "bg-amber-400"}`} />
@@ -1864,7 +1973,7 @@ export function GlobalVoiceDictator() {
         )}
 
         {/* Floating Action Bar */}
-        <div className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white/95 px-3.5 py-2 shadow-xl backdrop-blur-md">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-neutral-300 bg-white/95 px-3.5 py-2 shadow-xl backdrop-blur-md">
           {/* Main Voice Assistant Button */}
           <button
             type="button"
@@ -1876,6 +1985,9 @@ export function GlobalVoiceDictator() {
             }`}
             title="Voice Assistant & Live Dictation (Alt + V)"
             aria-pressed={active}
+            aria-label={active ? "Pause voice assistant" : "Start voice assistant"}
+            aria-keyshortcuts="Alt+V"
+            data-voice-start-control="true"
           >
             <span className="text-sm">{active ? "🛑" : "🎙️"}</span>
             <span>{active ? "Listening..." : "Voice Start"}</span>

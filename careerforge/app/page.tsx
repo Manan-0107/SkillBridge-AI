@@ -52,7 +52,7 @@ export default function Home() {
   const current = view.kind === "assistant" ? "assistant" : view.feature;
 
   return (
-    <main className="min-h-screen bg-paper">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-paper">
       <TopNav
         view={current}
         onAssistant={() => setView({ kind: "assistant" })}

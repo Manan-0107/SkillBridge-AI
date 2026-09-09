@@ -12,6 +12,7 @@ import {
   isSpeechRecognitionSupported,
   normalizeSpokenEmail,
   detectTextLanguage,
+  setGlobalVoiceLanguage,
 } from "@/lib/voice";
 import { LANGUAGE_LIST, getSupportedLanguage } from "@/lib/speech/languages";
 import { SpeechProviderType, QuestionState, ExpectedAnswerType, VoiceState, AnswerType } from "@/lib/speech/types";
@@ -292,6 +293,8 @@ export function AssistantHome({
           const detected = detectTextLanguage(transcript);
           if (detected && voiceLanguage === "auto" && detected !== voiceLang) {
             setVoiceLang(detected);
+            setVoiceLanguage(detected);
+            setGlobalVoiceLanguage(detected);
           }
 
           // ── Verbal Barge-In Interruption Check ──
@@ -362,7 +365,7 @@ export function AssistantHome({
     }
 
     speechControllerRef.current = controller;
-  }, [clearSilenceTimers, speakingMsgId, startSilenceAutoSendCountdown, textFallbackActive, voiceLang, voiceLanguage]);
+  }, [clearSilenceTimers, setVoiceLanguage, speakingMsgId, startSilenceAutoSendCountdown, textFallbackActive, voiceLang, voiceLanguage]);
 
   const toggleListening = useCallback(() => {
     if (listening) {
@@ -926,12 +929,30 @@ export function AssistantHome({
           },
           targetRole: user?.targetRole || "frontend",
           voiceMode,
-          language: voiceLanguage !== "auto" ? voiceLanguage : undefined,
+          language:
+            voiceLanguage !== "auto"
+              ? voiceLanguage
+              : voiceLang !== "auto"
+                ? voiceLang
+                : undefined,
           conversationLanguageState: {
-            detectedLanguage: voiceLanguage !== "auto" ? voiceLanguage : "en",
+            detectedLanguage:
+              voiceLanguage !== "auto"
+                ? voiceLanguage
+                : voiceLang !== "auto"
+                  ? voiceLang
+                  : "en",
           },
           currentPage: "assistant",
-          accessibilityPrefs,
+          accessibilityPrefs: {
+            ...accessibilityPrefs,
+            voiceLanguage:
+              voiceLanguage !== "auto"
+                ? voiceLanguage
+                : voiceLang !== "auto"
+                  ? voiceLang
+                  : undefined,
+          },
           resumeDraftState,
         }),
       });
@@ -1104,6 +1125,12 @@ export function AssistantHome({
           {toastMessage}
         </div>
       )}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {toastMessage ||
+          (micError ? `Microphone error: ${micError}` :
+            voiceStatus === "listening" ? "Voice assistant is listening." :
+            voiceStatus === "speaking" ? "Voice assistant is speaking." : "")}
+      </div>
 
       {/* Share Conversation Modal Dialog */}
       <ShareModal
@@ -1217,6 +1244,17 @@ export function AssistantHome({
                 <div
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActiveConvId(conv.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isActive}
+                  aria-label={`Open conversation ${conv.title}`}
                   className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
                     isActive
                       ? "bg-mist font-semibold text-ink"
@@ -1517,7 +1555,13 @@ export function AssistantHome({
             )}
 
             {/* Message Stream */}
-            <div className="space-y-6 w-full">
+            <div
+              className="space-y-6 w-full"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
+              aria-label="CareerForge conversation"
+            >
               {messages.map((m) => {
                 const isUser = m.role === "user";
                 return (
@@ -1656,7 +1700,7 @@ export function AssistantHome({
           <div className="mx-auto max-w-3xl space-y-3">
             
             {/* Live Spoken Text & Captions Visualizer for Accessibility */}
-            {(liveSpokenText || listening || speakingMsgId) && (
+            {accessibilityPrefs.captions && (liveSpokenText || listening || speakingMsgId) && (
               <div
                 role="region"
                 aria-label="Live Voice Captions"
@@ -1723,7 +1767,11 @@ export function AssistantHome({
               )}
 
               {/* Textarea Input with Instant Enter Submission */}
+              <label htmlFor="assistant-composer" className="sr-only">
+                Message CareerForge AI
+              </label>
               <textarea
+                id="assistant-composer"
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => {
@@ -1773,6 +1821,8 @@ export function AssistantHome({
                   <button
                     type="button"
                     onClick={toggleListening}
+                    aria-pressed={listening}
+                    aria-label={listening ? "Stop voice dictation" : "Start voice dictation"}
                     className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
                         ? "bg-ink text-paper"
