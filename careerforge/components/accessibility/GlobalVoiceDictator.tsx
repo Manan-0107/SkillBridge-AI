@@ -363,9 +363,7 @@ export function GlobalVoiceDictator() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [focusedFieldLabel, setFocusedFieldLabel] = useState<string | null>(null);
-  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [voiceBannerOpen, setVoiceBannerOpen] = useState(true);
   const autoStartAttemptedRef = useRef(false);
 
   // ─── Explicit 9-State Voice Interaction Machine (Section 8) ────────────────
@@ -1798,9 +1796,23 @@ export function GlobalVoiceDictator() {
     const handleVoiceStart = () => {
       if (!activeRef.current) startVoiceDictation();
     };
+    const handleToggleMic = (e: Event) => {
+      const customEvent = e as CustomEvent<{ active?: boolean }>;
+      if (customEvent.detail?.active === true && !activeRef.current) {
+        startVoiceDictation();
+      } else if (customEvent.detail?.active === false && activeRef.current) {
+        pauseVoiceDictation();
+      } else if (customEvent.detail?.active === undefined) {
+        toggleVoiceDictation();
+      }
+    };
     window.addEventListener("careerforge:voice-start", handleVoiceStart);
-    return () => window.removeEventListener("careerforge:voice-start", handleVoiceStart);
-  }, [startVoiceDictation]);
+    window.addEventListener("careerforge:toggle-mic", handleToggleMic);
+    return () => {
+      window.removeEventListener("careerforge:voice-start", handleVoiceStart);
+      window.removeEventListener("careerforge:toggle-mic", handleToggleMic);
+    };
+  }, [startVoiceDictation, pauseVoiceDictation, toggleVoiceDictation]);
 
   // Start automatically when the browser has already granted microphone
   // permission. Otherwise announce the exact accessible action required by
@@ -1883,12 +1895,6 @@ export function GlobalVoiceDictator() {
     };
   }, []);
 
-  const currentLangObj =
-    SUPPORTED_LANGUAGES.find((l) => l.code === voiceLanguage) || SUPPORTED_LANGUAGES[0];
-
-  const totalSteps = PROFILE_QUESTIONS.length;
-  const completedCount = interviewState.completedQuestions.length;
-
   return (
     <>
       {/* Invisible Screen Reader Announcement Region */}
@@ -1898,177 +1904,6 @@ export function GlobalVoiceDictator() {
       <div className="sr-only" aria-live="assertive" aria-atomic="true" role="status">
         {aiSpeechPrompt || statusMessage || ""}
       </div>
-
-      {/* Floating Accessibility Voice HUD Pill */}
-      <aside
-        id="voice-assistant-controls"
-        role="region"
-        aria-label="Universal Voice Assistant and Accessibility Controls"
-        className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 pointer-events-none select-none"
-      >
-        {/* Live Transcript / AI Prompt Popover */}
-        {(active || liveTranscript || interimTranscript || aiSpeechPrompt) && voiceBannerOpen && (
-          <div className="pointer-events-auto mb-2 max-w-sm rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between gap-2 border-b border-neutral-100 pb-2 mb-2">
-              <div className="flex items-center gap-2">
-                <span className={`flex h-2.5 w-2.5 rounded-full ${listening ? "bg-emerald-500 animate-ping" : "bg-amber-400"}`} />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
-                  {isAiAnswering ? "AI Thinking..." : listening ? "Listening (Speak Now)..." : "AI Speaking (Mic Paused)"}
-                </span>
-                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 border border-neutral-200">
-                  {currentLangObj.flag} {currentLangObj.nativeName}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setVoiceBannerOpen(false)}
-                className="text-neutral-400 hover:text-neutral-700 text-xs px-1 cursor-pointer"
-                aria-label="Minimize Voice HUD"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Profile Questionnaire Progress Indicator */}
-            {completedCount < totalSteps && (
-              <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-emerald-50/80 px-2.5 py-1 text-[11px] font-medium text-emerald-900 border border-emerald-200/80">
-                <span>📋 Form Setup Progress:</span>
-                <span className="font-bold text-emerald-800">
-                  {completedCount} / {totalSteps} verified
-                </span>
-              </div>
-            )}
-
-            {/* AI Assistant Spoken Prompt */}
-            {aiSpeechPrompt && (
-              <div className="mb-2 rounded-xl bg-neutral-900 p-2.5 text-xs text-white shadow-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-[11px] text-emerald-400 mb-1">
-                  <span>🤖 CareerForge Voice Assistant:</span>
-                </div>
-                <p className="leading-relaxed">{aiSpeechPrompt}</p>
-              </div>
-            )}
-
-            {/* Live Spoken Transcript */}
-            <div className="text-xs text-neutral-800 font-medium leading-relaxed min-h-[20px]">
-              {liveTranscript && <p className="text-neutral-900 font-semibold">{liveTranscript}</p>}
-              {interimTranscript && (
-                <p className="text-emerald-700 font-medium italic animate-pulse">Typing: {interimTranscript} ...</p>
-              )}
-              {!liveTranscript && !interimTranscript && !aiSpeechPrompt && (
-                <p className="text-neutral-400 italic">Speak in any language to type into fields or ask questions...</p>
-              )}
-            </div>
-
-            {/* Focused Target Field Indicator */}
-            {focusedFieldLabel && (
-              <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-200/60">
-                <span>🎯 Active Section:</span>
-                <span className="font-semibold text-neutral-900 truncate max-w-[180px]">
-                  {focusedFieldLabel}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Floating Action Bar */}
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-neutral-300 bg-white/95 px-3.5 py-2 shadow-xl backdrop-blur-md">
-          {/* Main Voice Assistant Button */}
-          <button
-            type="button"
-            onClick={toggleVoiceDictation}
-            className={`group flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer ${
-              active
-                ? "bg-rose-600 text-white shadow-md hover:bg-rose-700 animate-pulse"
-                : "bg-neutral-900 text-white shadow-sm hover:bg-neutral-800"
-            }`}
-            title="Voice Assistant & Live Dictation (Alt + V)"
-            aria-pressed={active}
-            aria-label={active ? "Pause voice assistant" : "Start voice assistant"}
-            aria-keyshortcuts="Alt+V"
-            data-voice-start-control="true"
-          >
-            <span className="text-sm">{active ? "🛑" : "🎙️"}</span>
-            <span>{active ? "Listening..." : "Voice Start"}</span>
-          </button>
-
-          {/* Quick Help Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!active) startVoiceDictation();
-              const isGu = voiceLanguage === "gu-IN";
-              const isHi = voiceLanguage === "hi-IN";
-              const msg = isGu
-                ? "હું તમારી શું મદદ કરી શકું? તમારો પ્રશ્ન પૂછો અથવા ફોર્મ ભરવા માટે બોલો."
-                : isHi
-                ? "मैं आपकी क्या मदद कर सकता हूँ? अपना सवाल पूछें या फॉर्म भरने के लिए बोलें।"
-                : "How can I help you? Ask any question or speak to fill forms.";
-              setAiSpeechPrompt(msg);
-              speakAndListen(msg, voiceLanguage);
-            }}
-            className="flex items-center gap-1 rounded-full bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-800 border border-neutral-200 cursor-pointer transition-colors"
-            title="Ask AI Assistant for Help"
-          >
-            <span>💡</span>
-            <span>Help</span>
-          </button>
-
-          {/* Language Selector Dropdown Button */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowLanguagePicker(!showLanguagePicker)}
-              className="flex items-center gap-1 rounded-full bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-800 border border-neutral-200 cursor-pointer transition-colors"
-              title="Change Voice Recognition Language"
-            >
-              <span>{currentLangObj.flag}</span>
-              <span className="hidden sm:inline font-semibold">{currentLangObj.nativeName}</span>
-              <span className="text-[10px] text-neutral-500">▼</span>
-            </button>
-
-            {/* Language Selector Menu */}
-            {showLanguagePicker && (
-              <div className="absolute bottom-full right-0 mb-2 w-52 max-h-64 overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1.5 shadow-2xl z-50">
-                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500 border-b border-neutral-100 mb-1">
-                  Select Language (ભાષા)
-                </div>
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    onClick={() => {
-                      setVoiceLanguage(lang.code);
-                      setGlobalVoiceLanguage(lang.code);
-                      currentLangRef.current = lang.code;
-                      setShowLanguagePicker(false);
-                      showStatus(`Language switched to ${lang.nativeName}`, 3000);
-                      if (controllerRef.current) {
-                        controllerRef.current.setLanguage(lang.code);
-                      }
-                      if (active) {
-                        startListeningMic();
-                      }
-                    }}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors ${
-                      voiceLanguage === lang.code
-                        ? "bg-neutral-900 text-white font-semibold"
-                        : "text-neutral-700 hover:bg-neutral-100"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>{lang.flag}</span>
-                      <span>{lang.nativeName}</span>
-                    </span>
-                    <span className="text-[10px] text-neutral-400">{lang.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </aside>
     </>
   );
 }

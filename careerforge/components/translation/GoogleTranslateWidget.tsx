@@ -43,7 +43,7 @@ export function GoogleTranslateWidget() {
         className="google-translate-container text-xs inline-block"
       />
       <style jsx global>{`
-        /* Clean standard Google Translate styling without banner shift or distortion */
+        /* Clean standard Google Translate styling matching dark charcoal aesthetic */
         .goog-te-gadget {
           font-family: inherit !important;
           color: transparent !important;
@@ -52,26 +52,26 @@ export function GoogleTranslateWidget() {
           align-items: center !important;
         }
         .goog-te-gadget-simple {
-          background-color: #ffffff !important;
-          border: 1px solid #e5e7eb !important;
-          padding: 4px 10px !important;
+          background-color: #141416 !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          padding: 5px 12px !important;
           font-size: 12px !important;
           line-height: 1.2 !important;
           display: inline-flex !important;
           align-items: center !important;
           border-radius: 9999px !important;
           cursor: pointer !important;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
           transition: all 0.15s ease !important;
           white-space: nowrap !important;
           text-decoration: none !important;
         }
         .goog-te-gadget-simple:hover {
-          background-color: #f9fafb !important;
-          border-color: #d1d5db !important;
+          background-color: #1c1d22 !important;
+          border-color: rgba(255, 255, 255, 0.2) !important;
         }
         .goog-te-gadget-simple .goog-te-menu-value {
-          color: #374151 !important;
+          color: #d2d5df !important;
           font-family: inherit !important;
           font-size: 12px !important;
           font-weight: 500 !important;
@@ -82,7 +82,7 @@ export function GoogleTranslateWidget() {
         }
         .goog-te-gadget-simple .goog-te-menu-value span {
           border-left: none !important;
-          color: #374151 !important;
+          color: #d2d5df !important;
           font-size: 12px !important;
           font-family: inherit !important;
           white-space: nowrap !important;
@@ -90,8 +90,8 @@ export function GoogleTranslateWidget() {
         }
         .goog-te-gadget-simple .goog-te-menu-value span:last-child {
           font-size: 8px !important;
-          margin-left: 4px !important;
-          color: #9ca3af !important;
+          margin-left: 5px !important;
+          color: #8f94a6 !important;
         }
         /* Hide distorted low-resolution Google sprite icon */
         .goog-te-gadget-icon {
