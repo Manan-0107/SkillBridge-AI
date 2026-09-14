@@ -1,0 +1,156 @@
+{
+  "version": "1.0.0",
+  "roadmapId": "mobile",
+  "title": "Mobile Engineering Roadmap (React Native & Flutter)",
+  "tagline": "Cross-Platform and Native High-Performance Applications",
+  "description": "Native thread architectures, offline sync with SQLite, deep linking, background location, and mobile security.",
+  "updatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "totalEstimatedHours": 160,
+  "tiers": [
+    {
+      "tierNumber": 1,
+      "title": "Mobile Runtimes & Frameworks",
+      "subtitle": "React Native (JSI/Fabric), Flutter Widget Engine"
+    },
+    {
+      "tierNumber": 2,
+      "title": "Native Platform Lifecycles",
+      "subtitle": "Android Activity Lifecycle, iOS Swift ARC"
+    },
+    {
+      "tierNumber": 3,
+      "title": "Offline-First & Local Storage",
+      "subtitle": "SQLite, WatermelonDB, Conflict Resolution"
+    },
+    {
+      "tierNumber": 4,
+      "title": "Native Device APIs & Security",
+      "subtitle": "Background Tasks, Push Notifications, SSL Pinning"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "mob-node-rn",
+      "track": "mobile",
+      "title": "React Native & New Architecture (JSI)",
+      "slug": "react-native-new-architecture",
+      "description": "Fabric rendering engine, TurboModules, synchronous C++ host object calls via JSI, and gesture handlers.",
+      "status": "completed",
+      "level": "fundamental",
+      "tierNumber": 1,
+      "position": {
+        "column": "center",
+        "order": 1
+      },
+      "prerequisites": [],
+      "childrenIds": [
+        "mob-node-offline"
+      ],
+      "keyConcepts": [
+        "JSI vs Legacy Bridge",
+        "Fabric Renderer",
+        "TurboModules",
+        "Reanimated 3 Worklets"
+      ],
+      "checklist": [
+        {
+          "id": "mob-chk-1",
+          "title": "Build a 60fps gesture-driven swipeable card using Reanimated",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "React Native New Architecture Docs",
+          "url": "https://reactnative.dev/docs/the-new-architecture/landing-page",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Modern Mobile",
+      "estimatedHours": 30
+    },
+    {
+      "id": "mob-node-offline",
+      "track": "mobile",
+      "title": "Offline-First Data & SQLite",
+      "slug": "offline-first-data-sqlite",
+      "description": "Embedded databases, optimistic UI mutation queues, offline-first sync protocols, and CRDT conflict resolution.",
+      "status": "in-progress",
+      "level": "intermediate",
+      "tierNumber": 2,
+      "position": {
+        "column": "left",
+        "order": 1
+      },
+      "prerequisites": [
+        "mob-node-rn"
+      ],
+      "childrenIds": [
+        "mob-node-sec"
+      ],
+      "keyConcepts": [
+        "SQLite Embedded Database",
+        "Mutation Sync Queue",
+        "Optimistic State Rollback"
+      ],
+      "checklist": [
+        {
+          "id": "mob-chk-2",
+          "title": "Implement an offline mutation queue that replays when connectivity resumes",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "WatermelonDB Architecture",
+          "url": "https://watermelondb.dev/docs",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Core Pattern",
+      "estimatedHours": 25
+    },
+    {
+      "id": "mob-node-sec",
+      "track": "mobile",
+      "title": "Mobile Security & Biometrics",
+      "slug": "mobile-security-biometrics",
+      "description": "Keychain / Keystore hardware-backed encryption, FaceID/TouchID biometrics, and SSL certificate pinning.",
+      "status": "planned",
+      "level": "advanced",
+      "tierNumber": 3,
+      "position": {
+        "column": "right",
+        "order": 1
+      },
+      "prerequisites": [
+        "mob-node-offline"
+      ],
+      "childrenIds": [],
+      "keyConcepts": [
+        "Secure Enclave / KeyStore",
+        "Biometric Authentication",
+        "SSL Certificate Pinning"
+      ],
+      "checklist": [
+        {
+          "id": "mob-chk-3",
+          "title": "Store sensitive tokens in iOS Keychain and Android KeyStore",
+          "completed": false
+        }
+      ],
+      "resources": [
+        {
+          "title": "OWASP Mobile Security Project",
+          "url": "https://owasp.org/www-project-mobile-security/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Security",
+      "estimatedHours": 20
+    }
+  ]
+}

@@ -85,29 +85,11 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setLastCommand(command.label);
   }, []);
 
-  const routeCommandRef = useRef(routeCommand);
-  routeCommandRef.current = routeCommand;
-
-  const handleFallback = useCallback(() => {
-    // Silence should not permanently terminate the session-long listener.
-    // Re-arm so listening remains restartable/persistent.
-    console.log("[VoiceContext] Handled silence pause - keeping session ready");
-    if (active) {
-      voiceRef.current.resetStrikes();
-      // Brief pause before resuming listener to prevent tight loop on silence
-      setTimeout(() => {
-        if (active) {
-          voiceRef.current.start();
-        }
-      }, 300);
-    }
-  }, [active]);
-
   const voice = useVoiceCommand({
     enabled: active,
     ownsCommandBar: true,
-    onResult: (res) => routeCommandRef.current(res),
-    onFallbackTriggered: handleFallback,
+    onResult: routeCommand,
+    onFallbackTriggered: () => setActive(false),
   });
 
   // `voice`'s identity changes every render; a ref lets the toggle effect call
@@ -135,17 +117,13 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       isSupported: voice.isSupported,
       isActive: active,
       isListening: voice.isListening,
-      transcript: voice.interimTranscript || voice.transcript || "",
+      transcript: [voice.transcript, voice.interimTranscript]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
       lastCommand,
-      startListening: () => {
-        setActive(true);
-        voiceRef.current.resetStrikes();
-        voiceRef.current.start();
-      },
-      stopListening: () => {
-        setActive(false);
-        voiceRef.current.stop();
-      },
+      startListening: () => setActive(true),
+      stopListening: () => setActive(false),
     }),
     [
       voice.isSupported,

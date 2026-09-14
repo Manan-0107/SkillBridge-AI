@@ -1,0 +1,251 @@
+{
+  "version": "1.0.0",
+  "date": "2026-09-14",
+  "track": "fullstack",
+  "trackTitle": "Fullstack Architecture Daily Drill",
+  "generatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "checksum": "28886a4bdf621d83",
+  "totalQuestions": 10,
+  "questions": [
+    {
+      "id": "fs-q1",
+      "type": "architecture",
+      "difficulty": "intermediate",
+      "title": "End-to-End Type Safety",
+      "question": "How does tRPC or Server Actions achieve end-to-end type safety between client and server without manual code generation?",
+      "options": [
+        "By transpiling all backend code to WebAssembly",
+        "By sharing TypeScript type inference directly from server router definitions to client caller hooks",
+        "By running client code directly inside PostgreSQL",
+        "By compiling TypeScript into JSON schema files"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "tRPC leverages TypeScript's type inference engine: the client imports only the `AppRouter` type signature from the server, giving instant autocomplete without build-time code gen.",
+      "tags": [
+        "TypeScript",
+        "Fullstack",
+        "tRPC"
+      ],
+      "hints": [
+        "Importing types, not runtime code."
+      ],
+      "relatedRoadmapNodeId": "fs-node-types"
+    },
+    {
+      "id": "fs-q2",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Next.js Route Handlers vs Server Actions",
+      "question": "What is the primary semantic distinction between Route Handlers (`route.ts`) and Server Actions (`'use server'`)?",
+      "options": [
+        "Route Handlers can only return HTML",
+        "Route Handlers provide standard REST endpoints (useful for webhooks and public APIs), while Server Actions provide RPC function calls directly tied to form submissions and mutations",
+        "Server Actions cannot access headers or cookies",
+        "There is no distinction"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Route Handlers (`app/api/.../route.ts`) are traditional HTTP endpoints with full control over headers, verbs, and webhooks. Server Actions are RPC functions invoked seamlessly from UI interactions.",
+      "tags": [
+        "Next.js",
+        "Server Actions",
+        "Fullstack"
+      ],
+      "hints": [
+        "Webhooks vs UI form actions."
+      ],
+      "relatedRoadmapNodeId": "fs-node-next"
+    },
+    {
+      "id": "fs-q3",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Cross-Site Request Forgery (CSRF)",
+      "question": "Why are `SameSite=Lax` or `SameSite=Strict` HTTP-only cookies critical for securing session authentication?",
+      "options": [
+        "They prevent JavaScript from reading cookies (XSS protection) and prevent cross-site requests from transmitting cookies (CSRF protection)",
+        "They increase cookie storage size to 1GB",
+        "They automatically encrypt the database",
+        "They replace HTTPS"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "`HttpOnly` blocks client-side JavaScript from accessing cookies (mitigating token theft via XSS), while `SameSite=Lax/Strict` prevents third-party websites from attaching session cookies in cross-origin requests.",
+      "tags": [
+        "Security",
+        "Authentication",
+        "Cookies"
+      ],
+      "hints": [
+        "Defense in depth against XSS and CSRF."
+      ],
+      "relatedRoadmapNodeId": "fs-node-sec"
+    },
+    {
+      "id": "fs-q4",
+      "type": "multiple-choice",
+      "difficulty": "advanced",
+      "title": "Database N+1 Query Problem",
+      "question": "What is the most effective architectural solution to resolve the N+1 query problem when fetching relational child records?",
+      "options": [
+        "Query each record in a separate `while` loop",
+        "Use batch loading (`IN` query) with tools like DataLoader or ORM eager loading (`include` / `JOIN`)",
+        "Disable all foreign keys",
+        "Store everything in one giant text file"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "DataLoader or eager joins batch discrete ID lookups into a single `SELECT * FROM table WHERE id IN (...)`, reducing N database queries into 1 or 2 round-trips.",
+      "tags": [
+        "Databases",
+        "GraphQL",
+        "Performance"
+      ],
+      "hints": [
+        "Batching IDs into single SELECT query."
+      ],
+      "relatedRoadmapNodeId": "fs-node-db"
+    },
+    {
+      "id": "fs-q5",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "CORS (Cross-Origin Resource Sharing)",
+      "question": "Under what condition does a web browser trigger an HTTP `OPTIONS` preflight request before sending an API call?",
+      "options": [
+        "For simple GET requests with text/plain headers",
+        "When the cross-origin request uses non-simple HTTP methods (PUT, DELETE, PATCH) or custom headers (e.g. `Authorization`, `Content-Type: application/json`)",
+        "Only when using Internet Explorer",
+        "Whenever an image is requested"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Browsers send an automatic `OPTIONS` preflight to determine if the destination server permits non-simple methods or custom headers from the calling origin.",
+      "tags": [
+        "CORS",
+        "Security",
+        "HTTP"
+      ],
+      "hints": [
+        "Checking server permissions before dangerous mutations."
+      ],
+      "relatedRoadmapNodeId": "fs-node-http"
+    },
+    {
+      "id": "fs-q6",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "CDN Edge Rendering (SSR at the Edge)",
+      "question": "What are the trade-offs of deploying Fullstack applications to Edge Functions (e.g. Cloudflare Workers, Vercel Edge) compared to regional Node.js containers?",
+      "options": [
+        "Edge functions have unlimited RAM and full TCP socket support with zero cold starts",
+        "Edge functions provide ultra-low latency worldwide for static/compute, but may face high latency if accessing a centralized relational database located thousands of miles away",
+        "Edge functions cannot execute JavaScript",
+        "Edge functions only run once per week"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "While Edge computing puts compute physically near the user, if the function must connect to a central database in `us-east-1`, roundtrip latency can negate Edge speed advantages unless read replicas or connection pooling are used.",
+      "tags": [
+        "Edge Computing",
+        "Architecture",
+        "CDN"
+      ],
+      "hints": [
+        "Compute is near user, but where is the database?"
+      ],
+      "relatedRoadmapNodeId": "fs-node-edge"
+    },
+    {
+      "id": "fs-q7",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "WebSocket Connection Lifecycle",
+      "question": "How does a WebSocket connection initialize over HTTP?",
+      "options": [
+        "Through an initial HTTP GET request with `Upgrade: websocket` and `Connection: Upgrade` headers",
+        "Using UDP packets directly on port 53",
+        "By opening an FTP tunnel",
+        "By polling a JSON endpoint every millisecond"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "WebSockets start with a standard HTTP request containing an `Upgrade: websocket` header. If the server agrees, it responds with status `101 Switching Protocols`.",
+      "tags": [
+        "WebSockets",
+        "Networking",
+        "Real-Time"
+      ],
+      "hints": [
+        "HTTP 101 Switching Protocols."
+      ],
+      "relatedRoadmapNodeId": "fs-node-ws"
+    },
+    {
+      "id": "fs-q8",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Database Migrations in Production",
+      "question": "What is the zero-downtime pattern for renaming a production database column?",
+      "options": [
+        "Run `ALTER TABLE users RENAME COLUMN old TO new;` directly in production during peak hours",
+        "Expand-and-Contract: Add new column, dual-write in application, backfill historical data, switch reads to new column, and deprecate old column",
+        "Drop the database and restore from backup",
+        "Lock the entire table for 2 hours"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Direct column renames break running server instances. The Expand-and-Contract (Parallel Run) pattern ensures existing code continues operating safely across phased releases.",
+      "tags": [
+        "DevOps",
+        "Database Migrations",
+        "Reliability"
+      ],
+      "hints": [
+        "Expand, dual-write, contract."
+      ],
+      "relatedRoadmapNodeId": "fs-node-db"
+    },
+    {
+      "id": "fs-q9",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "JWT vs Session Storage",
+      "question": "What is a major limitation of stateless JSON Web Tokens (JWT) compared to server-stored sessions?",
+      "options": [
+        "JWTs cannot be decrypted by anyone",
+        "Revoking a compromised JWT before its expiration time requires maintaining an active blocklist, which reintroduces stateful lookups",
+        "JWTs only work in Python",
+        "JWTs cannot store user IDs"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Because stateless JWTs are validated purely via cryptographic signature without checking a database, revoking an individual token early requires maintaining a revocation blacklist.",
+      "tags": [
+        "Security",
+        "JWT",
+        "Authentication"
+      ],
+      "hints": [
+        "How do you revoke a stolen JWT before expiry?"
+      ],
+      "relatedRoadmapNodeId": "fs-node-auth"
+    },
+    {
+      "id": "fs-q10",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Fullstack Observability: OpenTelemetry",
+      "question": "What is the purpose of propagating the `traceparent` HTTP header across microservices in distributed tracing?",
+      "options": [
+        "To pass user passwords securely",
+        "To correlate logs, spans, and metrics across disparate frontend and backend services into a single unified trace tree",
+        "To compress JSON payloads by 50%",
+        "To bypass CORS"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "The W3C Trace Context standard (`traceparent`) links child spans back to the root request span, allowing engineers to trace a user request across all services and database calls.",
+      "tags": [
+        "Observability",
+        "OpenTelemetry",
+        "Architecture"
+      ],
+      "hints": [
+        "Distributed trace correlation."
+      ],
+      "relatedRoadmapNodeId": "fs-node-obs"
+    }
+  ]
+}

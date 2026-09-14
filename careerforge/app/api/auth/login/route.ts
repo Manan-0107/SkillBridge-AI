@@ -34,21 +34,14 @@ export async function POST(req: NextRequest) {
         name: "Alex Rivera",
         email: "alex.rivera@example.com",
         authProvider: "guest",
-        targetRole: "Software Engineer",
+        targetRole: "frontend",
         token: `guest_${Date.now()}`,
       };
-      const res = NextResponse.json({
+      return NextResponse.json({
         success: true,
         message: "Welcome to CareerForge as Guest!",
         user: guestUser,
       });
-      res.cookies.set("cf_uid", guestUser.email, {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
-      return res;
     }
 
     // 2. Validate Email
@@ -106,7 +99,7 @@ export async function POST(req: NextRequest) {
       console.warn("[Auth API] Database recording note:", dbErr);
     }
 
-    // 6. Return Authenticated User and set persistent session cookie
+    // 6. Return Authenticated User
     const userPayload = {
       name: displayName,
       email: cleanEmail,
@@ -116,20 +109,11 @@ export async function POST(req: NextRequest) {
       token: `cf_token_${Buffer.from(cleanEmail).toString("base64")}`,
     };
 
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: mode === "signup" ? "Account created successfully!" : "Signed in successfully!",
       user: userPayload,
     });
-
-    res.cookies.set("cf_uid", cleanEmail, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-
-    return res;
   } catch (err: any) {
     console.error("[Auth API] Error:", err);
     return NextResponse.json(

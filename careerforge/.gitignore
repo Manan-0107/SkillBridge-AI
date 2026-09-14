@@ -15,5 +15,3 @@ start-tunnel.js
 __pycache__/
 *.pyc
 *.pyo
-*.lnk
-.anon_profiles.json

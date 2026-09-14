@@ -1,0 +1,250 @@
+{
+  "version": "1.0.0",
+  "date": "2026-09-14",
+  "track": "frontend",
+  "trackTitle": "Frontend Engineering Daily Drill",
+  "generatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "checksum": "fdc67981ef6ef761",
+  "totalQuestions": 10,
+  "questions": [
+    {
+      "id": "fe-q1",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "JavaScript Microtasks Execution Priority",
+      "question": "Given the following code, in what order are messages logged to the console?",
+      "codeSnippet": "console.log(\"1\");\nsetTimeout(() => console.log(\"2\"), 0);\nPromise.resolve().then(() => console.log(\"3\"));\nconsole.log(\"4\");",
+      "options": [
+        "1, 2, 3, 4",
+        "1, 4, 3, 2",
+        "1, 4, 2, 3",
+        "1, 3, 4, 2"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Synchronous code runs first (`1`, then `4`). Then the microtask queue (`Promise.then`) is completely drained before macrotasks, logging `3`. Finally, the macrotask (`setTimeout`) executes, logging `2`.",
+      "tags": [
+        "JavaScript",
+        "Event Loop",
+        "Promises"
+      ],
+      "hints": [
+        "Remember that Promises enter the Microtask Queue, while setTimeout enters the Macrotask Queue."
+      ],
+      "relatedRoadmapNodeId": "fe-node-js"
+    },
+    {
+      "id": "fe-q2",
+      "type": "code-analysis",
+      "difficulty": "intermediate",
+      "title": "React useCallback Dependency Equality",
+      "question": "Why does the following child component still re-render when the parent updates unrelated state?",
+      "codeSnippet": "const Child = React.memo(({ onClick, style }) => {\n  return <button onClick={onClick} style={style}>Click</button>;\n});\n// In Parent:\nconst handleClick = useCallback(() => doSomething(), []);\nreturn <Child onClick={handleClick} style={{ margin: 10 }} />;",
+      "options": [
+        "React.memo does not work with buttons",
+        "The `style={{ margin: 10 }}` inline object creates a new reference on every parent render",
+        "useCallback needs doSomething in its dependency array",
+        "Child components inside useCallback always re-render"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`React.memo` does a shallow comparison (`Object.is`) of props. Even though `onClick` maintains referential equality via `useCallback`, the `style={{ margin: 10 }}` object is allocated anew on every parent render, failing shallow equality.",
+      "tags": [
+        "React",
+        "Performance",
+        "Memoization"
+      ],
+      "hints": [
+        "Look closely at the `style` prop passed to Child."
+      ],
+      "relatedRoadmapNodeId": "fe-node-react"
+    },
+    {
+      "id": "fe-q3",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "CSS Layout Box Sizing",
+      "question": "What is the total rendered width of an element with `width: 200px; padding: 20px; border: 5px solid black; box-sizing: border-box;`?",
+      "options": [
+        "250px",
+        "200px",
+        "225px",
+        "240px"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "With `box-sizing: border-box`, the specified `width` encompasses content, padding, and borders. Therefore the total rendered width is strictly 200px.",
+      "tags": [
+        "CSS",
+        "Box Model"
+      ],
+      "hints": [
+        "border-box subtracts padding and border from the content area."
+      ],
+      "relatedRoadmapNodeId": "fe-node-css"
+    },
+    {
+      "id": "fe-q4",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Core Web Vitals - INP Optimization",
+      "question": "Which browser API is specifically recommended to yield execution back to the main thread during long-running tasks to improve Interaction to Next Paint (INP)?",
+      "options": [
+        "requestAnimationFrame()",
+        "scheduler.yield()",
+        "window.stop()",
+        "document.dispatchEvent()"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`scheduler.yield()` is the modern web standard specifically designed to break long tasks into discrete chunks and yield to the browser's rendering queue, lowering INP delay.",
+      "tags": [
+        "Web Vitals",
+        "Performance",
+        "INP"
+      ],
+      "hints": [
+        "It's part of the new Prioritized Task Scheduling API."
+      ],
+      "relatedRoadmapNodeId": "fe-node-perf"
+    },
+    {
+      "id": "fe-q5",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "TypeScript Discriminated Unions",
+      "question": "What makes a union type 'discriminated' in TypeScript?",
+      "options": [
+        "It uses the `any` keyword to bypass checking",
+        "Every member in the union shares a common literal property key with distinct values",
+        "It requires classes instead of interfaces",
+        "It is defined inside a namespace"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "A discriminated union features a shared singleton literal property (e.g. `type: 'success' | 'error'`) that TypeScript uses to narrow down the exact variant inside conditional blocks.",
+      "tags": [
+        "TypeScript",
+        "Type Safety"
+      ],
+      "hints": [
+        "Think about the common 'tag' or 'kind' property."
+      ],
+      "relatedRoadmapNodeId": "fe-node-ts"
+    },
+    {
+      "id": "fe-q6",
+      "type": "code-analysis",
+      "difficulty": "advanced",
+      "title": "Next.js Server Component Boundaries",
+      "question": "Can an async React Server Component (RSC) import and render a Client Component with the 'use client' directive?",
+      "options": [
+        "No, Client Components cannot be rendered inside Server Components",
+        "Yes, Server Components can import and render Client Components and pass serializable props",
+        "Only if wrapped in an iframe",
+        "Only in development mode"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Server Components seamlessly import and render Client Components as leaf nodes or interactive subtrees, passing serializable data as props across the network boundary.",
+      "tags": [
+        "Next.js",
+        "RSC",
+        "Architecture"
+      ],
+      "hints": [
+        "Server components act as the outer shell."
+      ],
+      "relatedRoadmapNodeId": "fe-node-next"
+    },
+    {
+      "id": "fe-q7",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "HTTP Cache-Control Directives",
+      "question": "Which Cache-Control directive instructs browsers to validate cached content with the origin server before using it?",
+      "options": [
+        "no-store",
+        "no-cache",
+        "immutable",
+        "public"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`no-cache` does NOT mean 'do not cache'. It means the browser CAN store the response in cache, but MUST revalidate with the origin server (using ETag or If-Modified-Since) before serving it.",
+      "tags": [
+        "HTTP",
+        "Networking",
+        "Caching"
+      ],
+      "hints": [
+        "Contrast no-cache with no-store."
+      ],
+      "relatedRoadmapNodeId": "fe-node-internet"
+    },
+    {
+      "id": "fe-q8",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Web Accessibility (A11y)",
+      "question": "What is the primary role of the `aria-live='polite'` attribute?",
+      "options": [
+        "It disables keyboard tab focusing",
+        "It instructs screen readers to announce dynamic content updates when the user is idle",
+        "It forces high contrast mode",
+        "It hides the element from screen readers completely"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`aria-live='polite'` notifies assistive technology to queue and announce DOM mutations when the screen reader finishes speaking the current utterance, avoiding rude interruptions.",
+      "tags": [
+        "A11y",
+        "HTML",
+        "Accessibility"
+      ],
+      "hints": [
+        "Contrast 'polite' with 'assertive'."
+      ],
+      "relatedRoadmapNodeId": "fe-node-html"
+    },
+    {
+      "id": "fe-q9",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "State Architecture: TanStack Query",
+      "question": "In TanStack Query, what does `staleTime: 5000` mean?",
+      "options": [
+        "The query will be deleted from cache after 5 seconds",
+        "Data is considered fresh for 5 seconds; background refetches won't trigger on window focus during this window",
+        "Requests will timeout after 5 seconds",
+        "The browser caches the HTTP response for 5000 seconds"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`staleTime` dictates how long data remains fresh. While fresh, queries read directly from cache without initiating network revalidations on component mounts or window focuses.",
+      "tags": [
+        "React Query",
+        "State Management"
+      ],
+      "hints": [
+        "Compare staleTime with gcTime (garbage collection time)."
+      ],
+      "relatedRoadmapNodeId": "fe-node-state"
+    },
+    {
+      "id": "fe-q10",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Preventing Cumulative Layout Shift (CLS)",
+      "question": "What is the most effective CSS technique to prevent CLS when loading dynamic remote images?",
+      "options": [
+        "Setting `display: none` until loaded",
+        "Specifying explicit `width` and `height` attributes or CSS `aspect-ratio` on image containers",
+        "Using SVG filters",
+        "Wrapping images in `<div>` with `overflow: scroll`"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "By declaring `aspect-ratio` or explicit dimensions, the browser calculates layout space before the image binary downloads, preventing layout shifts.",
+      "tags": [
+        "CSS",
+        "Web Vitals",
+        "CLS"
+      ],
+      "hints": [
+        "The browser needs to reserve space upfront."
+      ],
+      "relatedRoadmapNodeId": "fe-node-css"
+    }
+  ]
+}

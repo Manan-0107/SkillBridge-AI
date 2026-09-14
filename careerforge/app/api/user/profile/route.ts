@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const userId = await getAuthenticatedUserId();

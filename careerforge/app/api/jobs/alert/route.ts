@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
         <p style="font-size: 12px; color: #6b7280; text-align: center; margin-top: 24px; border-top: 1px solid #f3f4f6; padding-top: 16px;">
           Direct Registration Link: <br/>
-          <a href="${applyLink}" target="_blank" style="color: #0066cc; word-break: break-all;">${applyLink}</a>
+          <a href="${applyLink}" target="_blank" rel="noopener noreferrer" style="color: #0066cc; word-break: break-all;">${applyLink}</a>
         </p>
 
         <p style="font-size: 11px; color: #9ca3af; text-align: center; margin-top: 12px;">

@@ -1,0 +1,251 @@
+{
+  "version": "1.0.0",
+  "date": "2026-09-14",
+  "track": "backend",
+  "trackTitle": "Backend & Distributed Systems Daily Drill",
+  "generatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "checksum": "d7f163b352944213",
+  "totalQuestions": 10,
+  "questions": [
+    {
+      "id": "be-q1",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "PostgreSQL Index Types",
+      "question": "Which index type in PostgreSQL is best suited for full-text search and JSONB arrays?",
+      "options": [
+        "B-Tree",
+        "GIN (Generalized Inverted Index)",
+        "Hash",
+        "BRIN"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "GIN (Generalized Inverted Index) is designed for composite values where elements need to be indexed individually, making it ideal for JSONB and text arrays.",
+      "tags": [
+        "PostgreSQL",
+        "Database",
+        "Indexing"
+      ],
+      "hints": [
+        "It inverts keys to match multiple occurrences."
+      ],
+      "relatedRoadmapNodeId": "be-node-db"
+    },
+    {
+      "id": "be-q2",
+      "type": "code-analysis",
+      "difficulty": "advanced",
+      "title": "Redis Distributed Lock (Redlock)",
+      "question": "Why must a Redis lock key have an expiration TTL?",
+      "options": [
+        "Redis will crash if keys lack TTL",
+        "To prevent deadlocks if the acquiring worker process crashes before releasing the lock",
+        "Because Redis requires TTL for all string keys",
+        "To speed up memory retrieval"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "If a service crashes while holding a lock without a TTL, no other process can ever acquire the lock, causing a permanent distributed deadlock.",
+      "tags": [
+        "Redis",
+        "Distributed Systems",
+        "Concurrency"
+      ],
+      "hints": [
+        "What happens if the client abruptly dies?"
+      ],
+      "relatedRoadmapNodeId": "be-node-redis"
+    },
+    {
+      "id": "be-q3",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "REST Idempotency",
+      "question": "Which HTTP method is considered idempotent?",
+      "options": [
+        "POST",
+        "PUT",
+        "PATCH",
+        "CONNECT"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`PUT` replaces the entire target resource state. Sending the same PUT request 10 times results in the identical resource state as sending it once, satisfying idempotency.",
+      "tags": [
+        "HTTP",
+        "REST",
+        "API Design"
+      ],
+      "hints": [
+        "Contrast PUT with POST."
+      ],
+      "relatedRoadmapNodeId": "be-node-api"
+    },
+    {
+      "id": "be-q4",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Kafka Partitioning & Ordering",
+      "question": "In Apache Kafka, what is the guarantee regarding message ordering?",
+      "options": [
+        "Total global ordering across all topics and partitions",
+        "Strict ordering is only guaranteed within a single partition",
+        "Kafka provides no ordering guarantees",
+        "Messages are ordered alphabetically by key"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Kafka preserves total chronological order exclusively within an individual partition. If cross-partition ordering is needed, messages must share the identical partition key.",
+      "tags": [
+        "Kafka",
+        "Message Queues",
+        "Streaming"
+      ],
+      "hints": [
+        "Partitions are independent commit logs."
+      ],
+      "relatedRoadmapNodeId": "be-node-kafka"
+    },
+    {
+      "id": "be-q5",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Database Transaction Isolation",
+      "question": "Which isolation level prevents Dirty Reads and Non-Repeatable Reads, but may still permit Phantom Reads in standard ANSI SQL?",
+      "options": [
+        "Read Uncommitted",
+        "Read Committed",
+        "Repeatable Read",
+        "Serializable"
+      ],
+      "correctOptionIndex": 2,
+      "explanation": "In ANSI SQL, Repeatable Read prevents dirty and non-repeatable reads by snapshotting read rows, but another transaction may still insert new qualifying rows (phantom rows).",
+      "tags": [
+        "Databases",
+        "ACID",
+        "Transactions"
+      ],
+      "hints": [
+        "It repeats reads for existing rows."
+      ],
+      "relatedRoadmapNodeId": "be-node-db"
+    },
+    {
+      "id": "be-q6",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "Connection Pooling with PgBouncer",
+      "question": "Why is an external connection pooler like PgBouncer essential for high-concurrency PostgreSQL backends?",
+      "options": [
+        "PostgreSQL uses a process-per-connection model where each client consumes several megabytes of RAM",
+        "PostgreSQL does not support TCP connections natively",
+        "PgBouncer encrypts passwords with AES",
+        "To convert SQL queries into JSON"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "PostgreSQL forks a dedicated backend operating system process per connection. Having thousands of idle connections causes context-switching overhead and memory exhaustion.",
+      "tags": [
+        "PostgreSQL",
+        "Scalability",
+        "DevOps"
+      ],
+      "hints": [
+        "Think about memory per client process."
+      ],
+      "relatedRoadmapNodeId": "be-node-db"
+    },
+    {
+      "id": "be-q7",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Consistent Hashing in Distributed Caches",
+      "question": "What is the primary benefit of consistent hashing when scaling out distributed cache nodes?",
+      "options": [
+        "It eliminates all cache misses",
+        "Adding or removing a server only requires re-mapping k/N keys instead of re-hashing all keys",
+        "It guarantees ACID transactions across all nodes",
+        "It encrypts key payloads"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "With conventional modulo hashing `hash(key) % N`, changing N invalidates nearly 100% of keys. Consistent hashing arranges nodes on a ring so only a fraction `k/N` of keys migrate.",
+      "tags": [
+        "System Design",
+        "Distributed Systems",
+        "Caching"
+      ],
+      "hints": [
+        "Think of the hash ring."
+      ],
+      "relatedRoadmapNodeId": "be-node-system"
+    },
+    {
+      "id": "be-q8",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "gRPC vs REST Efficiency",
+      "question": "Why does gRPC achieve significantly higher throughput and lower serialization overhead than traditional JSON REST?",
+      "options": [
+        "gRPC uses XML which parses faster",
+        "gRPC uses binary Protocol Buffers over HTTP/2 multiplexed streams",
+        "gRPC does not use TCP",
+        "gRPC runs exclusively on GPUs"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Protocol Buffers encode data in compact binary format with pre-compiled schemas, avoiding JSON text parsing overhead, while HTTP/2 enables multiplexing without head-of-line blocking.",
+      "tags": [
+        "gRPC",
+        "Protobuf",
+        "APIs"
+      ],
+      "hints": [
+        "Binary schema serialization over HTTP/2."
+      ],
+      "relatedRoadmapNodeId": "be-node-grpc"
+    },
+    {
+      "id": "be-q9",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "OAuth 2.1 PKCE Flow",
+      "question": "What security vulnerability does Proof Key for Code Exchange (PKCE) mitigate during authorization code flows?",
+      "options": [
+        "SQL Injection in database logins",
+        "Authorization code interception attack on public mobile/SPA clients",
+        "Buffer overflows in C servers",
+        "DDoS attacks on authentication endpoints"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "PKCE dynamically creates a cryptographic `code_verifier` and `code_challenge`, ensuring that only the exact client instance that requested the authorization code can exchange it for tokens.",
+      "tags": [
+        "Security",
+        "OAuth",
+        "Auth"
+      ],
+      "hints": [
+        "Public clients cannot protect client secrets."
+      ],
+      "relatedRoadmapNodeId": "be-node-sec"
+    },
+    {
+      "id": "be-q10",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Circuit Breaker Pattern",
+      "question": "What state does a Circuit Breaker transition to when downstream service error rates exceed a defined threshold?",
+      "options": [
+        "Closed",
+        "Open",
+        "Half-Open",
+        "Terminated"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "In the `Open` state, calls to the failing downstream service fail immediately without making network calls, preventing cascading thread pool exhaustion.",
+      "tags": [
+        "System Design",
+        "Resilience",
+        "Microservices"
+      ],
+      "hints": [
+        "Like an electrical circuit tripping."
+      ],
+      "relatedRoadmapNodeId": "be-node-system"
+    }
+  ]
+}
