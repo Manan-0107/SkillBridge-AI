@@ -621,16 +621,16 @@ export function PracticeHub() {
       {/* ─── QUIZ COMPLETION GLOBAL SUMMARY VIEW ─────────────────────────── */}
       {isQuizCompleted ? (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-          <div className="rounded-2xl border border-emerald-300 bg-emerald-50/40 p-6 sm:p-8 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-emerald-200 pb-5">
+          <div className="rounded-2xl border border-hairline bg-charcoal-900 p-6 sm:p-8 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-hairline pb-5">
               <div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                <span className="rounded-full bg-emerald-950 px-3 py-1 text-xs font-bold text-emerald-400 border border-emerald-800 uppercase tracking-wider">
                   ✓ Quiz Completed
                 </span>
-                <h3 className="font-display text-2xl italic text-neutral-900 mt-2">
+                <h3 className="font-display text-2xl italic text-charcoal-100 mt-2">
                   Global Concept Summary: {role.toUpperCase()} Track
                 </h3>
-                <p className="text-xs text-neutral-600 mt-1">
+                <p className="text-xs text-charcoal-400 mt-1">
                   Comprehensive reference guide of all standard industry definitions and architectural principles tested in this session.
                 </p>
               </div>
@@ -647,27 +647,27 @@ export function PracticeHub() {
               {questions.map((q, i) => (
                 <div
                   key={q.id}
-                  className="rounded-xl border border-line bg-white p-5 shadow-2xs space-y-3"
+                  className="rounded-xl border border-hairline bg-charcoal-850 p-5 shadow-2xs space-y-3"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-hairline pb-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white text-xs font-bold">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-500 text-charcoal-950 text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-xs font-bold text-neutral-900 uppercase">
+                      <span className="text-xs font-bold text-charcoal-100 uppercase">
                         {q.standardConcept.title}
                       </span>
                     </div>
                     <Tag>{q.type}</Tag>
                   </div>
 
-                  <p className="text-xs font-medium text-neutral-500 italic">
+                  <p className="text-xs font-medium text-charcoal-400 italic">
                     &ldquo;{q.question}&rdquo;
                   </p>
 
-                  <div className="rounded-lg bg-neutral-50 p-3.5 text-xs text-neutral-800 leading-relaxed space-y-2 border border-neutral-200/80">
-                    <p className="font-semibold text-neutral-900">Standard Concept Definition:</p>
-                    <div className="prose prose-sm max-w-none text-neutral-700 font-sans">
+                  <div className="rounded-lg bg-charcoal-900 p-3.5 text-xs text-charcoal-200 leading-relaxed space-y-2 border border-hairline">
+                    <p className="font-semibold text-charcoal-100">Standard Concept Definition:</p>
+                    <div className="prose prose-invert prose-sm max-w-none text-charcoal-300 font-sans">
                       <ReactMarkdown>
                         {q.standardConcept.definition}
                       </ReactMarkdown>
@@ -675,10 +675,10 @@ export function PracticeHub() {
                   </div>
 
                   <div className="space-y-1 pt-1">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-charcoal-400">
                       Key Takeaways &amp; Architectural Standards:
                     </p>
-                    <ul className="list-disc pl-4 text-xs text-neutral-600 space-y-0.5">
+                    <ul className="list-disc pl-4 text-xs text-charcoal-300 space-y-0.5">
                       {q.standardConcept.keyTakeaways.map((t) => (
                         <li key={t}>{t}</li>
                       ))}
@@ -693,15 +693,15 @@ export function PracticeHub() {
         /* ─── ACTIVE QUESTION DRILL VIEW ──────────────────────────────────── */
         <div>
           {/* Session Progress Header */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-white px-5 py-3 shadow-2xs">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-hairline bg-charcoal-900 px-5 py-3 shadow-2xs">
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white font-bold text-xs">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-500 text-charcoal-950 font-bold text-xs">
                 {activeQuestionIdx + 1}/{questions.length}
               </span>
               <div>
-                <p className="text-xs font-semibold text-ink">Active Question Drill</p>
-                <p className="text-[11px] text-graphite">
-                  Target Role: <strong className="capitalize text-neutral-900">{role}</strong> ({completedCount} Completed)
+                <p className="text-xs font-semibold text-charcoal-100">Active Question Drill</p>
+                <p className="text-[11px] text-charcoal-400">
+                  Target Role: <strong className="capitalize text-accent-400">{role}</strong> ({completedCount} Completed)
                 </p>
               </div>
             </div>
@@ -723,10 +723,10 @@ export function PracticeHub() {
                   }}
                   className={`h-7 w-7 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                     activeQuestionIdx === idx
-                      ? "bg-neutral-900 text-white ring-2 ring-neutral-400"
+                      ? "bg-accent-500 text-charcoal-950 ring-2 ring-accent-300 font-bold"
                       : completedIds[q.id]
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200"
+                      ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                      : "bg-charcoal-800 text-charcoal-300 hover:bg-charcoal-700 border border-hairline"
                   }`}
                   title={`Question ${idx + 1}: ${q.type}`}
                 >
@@ -737,7 +737,7 @@ export function PracticeHub() {
               <GhostButton
                 type="button"
                 onClick={() => setIsQuizCompleted(true)}
-                className="text-xs ml-2 py-1 px-2.5 bg-neutral-50"
+                className="text-xs ml-2 py-1 px-2.5 bg-charcoal-800 text-charcoal-200 hover:bg-charcoal-700 border border-hairline"
               >
                 Global Summary →
               </GhostButton>
@@ -745,11 +745,11 @@ export function PracticeHub() {
           </div>
 
           {/* Main Question Card */}
-          <div className="mb-10 rounded-2xl border border-neutral-300 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4 mb-4">
+          <div className="mb-10 rounded-2xl border border-hairline bg-charcoal-900 p-6 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-4 mb-4">
               <div className="flex items-center gap-2">
                 <Tag>{activeQuestion.type}</Tag>
-                <span className="text-xs font-semibold text-graphite uppercase tracking-wider">
+                <span className="text-xs font-semibold text-charcoal-400 uppercase tracking-wider">
                   Question {activeQuestionIdx + 1} of {questions.length}
                 </span>
               </div>
@@ -761,8 +761,8 @@ export function PracticeHub() {
                   onClick={handleReadQuestion}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                     speakingQuestion
-                      ? "bg-neutral-900 text-white animate-pulse"
-                      : "bg-mist text-graphite hover:bg-neutral-200 hover:text-ink"
+                      ? "bg-accent-500 text-charcoal-950 font-bold animate-pulse"
+                      : "bg-charcoal-800 text-charcoal-200 hover:bg-charcoal-700 hover:text-charcoal-100 border border-hairline"
                   }`}
                   title="Read question aloud (Speech Synthesis)"
                 >
@@ -773,7 +773,7 @@ export function PracticeHub() {
                 <button
                   type="button"
                   onClick={handleNextQuestion}
-                  className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer"
+                  className="rounded-full border border-hairline bg-charcoal-800 px-3 py-1 text-xs font-medium text-charcoal-300 hover:border-accent-500 hover:text-charcoal-100 transition-colors cursor-pointer"
                 >
                   {activeQuestionIdx === questions.length - 1 ? "Finish & Summary →" : "Next Question →"}
                 </button>
@@ -781,11 +781,11 @@ export function PracticeHub() {
             </div>
 
             {/* Question Title */}
-            <h3 className="font-display text-lg sm:text-xl italic text-ink leading-relaxed">
+            <h3 className="font-display text-lg sm:text-xl italic text-charcoal-100 leading-relaxed">
               &ldquo;{activeQuestion.question}&rdquo;
             </h3>
-            <p className="mt-2 text-xs text-graphite bg-mist/60 p-2.5 rounded-lg border border-line/60">
-              💡 <strong>Standard Focus:</strong> {activeQuestion.hint}
+            <p className="mt-2 text-xs text-charcoal-300 bg-charcoal-850 p-2.5 rounded-lg border border-hairline">
+              💡 <strong className="text-accent-400">Standard Focus:</strong> {activeQuestion.hint}
             </p>
 
             {/* User Answer Textarea & Voice Input */}
@@ -796,7 +796,7 @@ export function PracticeHub() {
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
                   placeholder="Record your response via voice dictation or type your thoughts here..."
-                  className="w-full rounded-xl border border-line bg-mist/30 p-3.5 text-sm text-ink placeholder:text-graphite/60 focus:border-ink focus:bg-white focus:outline-none transition-all"
+                  className="w-full rounded-xl border border-hairline bg-charcoal-950 p-3.5 text-sm text-charcoal-100 placeholder:text-charcoal-500 focus:border-accent-500 focus:outline-none transition-all"
                 />
               </div>
 
@@ -807,8 +807,8 @@ export function PracticeHub() {
                   onClick={handleToggleListening}
                   className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                     listening
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-mist text-ink hover:bg-line"
+                      ? "bg-red-600 text-white animate-pulse"
+                      : "bg-charcoal-800 text-charcoal-200 hover:bg-charcoal-700 border border-hairline"
                   }`}
                 >
                   <span className={`inline-block h-2 w-2 rounded-full ${listening ? "bg-white animate-ping" : "bg-red-500"}`} />
@@ -828,11 +828,11 @@ export function PracticeHub() {
 
             {/* Objective Concept Explanation Output */}
             {explanationOutput && (
-              <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50/90 p-5 text-xs leading-relaxed text-ink space-y-3 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+              <div className="mt-6 rounded-xl border border-hairline bg-charcoal-850 p-5 text-xs leading-relaxed text-charcoal-200 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-hairline pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="font-bold text-neutral-900 text-sm">Objective Concept Explanation</span>
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="font-bold text-charcoal-100 text-sm">Objective Concept Explanation</span>
                   </div>
 
                   {/* SpeechSynthesis Vocalization Button */}
@@ -841,8 +841,8 @@ export function PracticeHub() {
                     onClick={() => handleReadExplanation(explanationOutput)}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                       vocalizingExplanation
-                        ? "bg-neutral-900 text-white animate-pulse"
-                        : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                        ? "bg-accent-500 text-charcoal-950 font-bold animate-pulse"
+                        : "bg-charcoal-800 border border-hairline text-charcoal-200 hover:bg-charcoal-700 hover:text-charcoal-100"
                     }`}
                   >
                     <span>{vocalizingExplanation ? "⏹ Stop Vocalization" : "🔊 Vocalize Explanation"}</span>
@@ -850,20 +850,20 @@ export function PracticeHub() {
                 </div>
 
                 {/* Formatted Markdown Rendering without Escaped Asterisks */}
-                <div className="prose prose-sm max-w-none text-neutral-800 pt-1 font-sans">
+                <div className="prose prose-invert prose-sm max-w-none text-charcoal-300 pt-1 font-sans">
                   <ReactMarkdown
                     components={{
                       strong: ({ ...props }) => (
-                        <strong className="font-bold text-neutral-950" {...props} />
+                        <strong className="font-bold text-charcoal-100" {...props} />
                       ),
                       h3: ({ ...props }) => (
-                        <h3 className="font-bold text-sm text-neutral-900 mt-2 mb-1" {...props} />
+                        <h3 className="font-bold text-sm text-charcoal-100 mt-2 mb-1" {...props} />
                       ),
                       ul: ({ ...props }) => (
-                        <ul className="list-disc pl-4 space-y-1 my-2" {...props} />
+                        <ul className="list-disc pl-4 space-y-1 my-2 text-charcoal-300" {...props} />
                       ),
                       p: ({ ...props }) => (
-                        <p className="mb-2 leading-relaxed" {...props} />
+                        <p className="mb-2 leading-relaxed text-charcoal-300" {...props} />
                       ),
                     }}
                   >
@@ -871,11 +871,11 @@ export function PracticeHub() {
                   </ReactMarkdown>
                 </div>
 
-                <div className="flex justify-end pt-3 border-t border-neutral-200">
+                <div className="flex justify-end pt-3 border-t border-hairline">
                   <button
                     type="button"
                     onClick={handleNextQuestion}
-                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-all cursor-pointer"
+                    className="rounded-lg bg-accent-500 px-4 py-2 text-xs font-semibold text-charcoal-950 hover:bg-accent-400 transition-all cursor-pointer"
                   >
                     {activeQuestionIdx === questions.length - 1 ? "Finish Quiz & View Summary →" : "Proceed to Next Concept →"}
                   </button>
@@ -887,8 +887,9 @@ export function PracticeHub() {
       )}
 
       {/* Gamified Coding Environments & Reference Sandboxes */}
-      <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-graphite">
-        External Practice Environments &amp; Reference Sandboxes
+      <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-charcoal-400 flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span>Curated Practice Environments &amp; Reference Sandboxes</span>
       </h4>
       <div className="grid gap-4 sm:grid-cols-3">
         {externalPracticeTools.map((tool) => (
@@ -897,14 +898,26 @@ export function PracticeHub() {
             href={tool.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block border-2 border-black p-8 transition-colors hover:bg-black hover:text-white"
+            className="block border border-white/[0.08] rounded-2xl bg-charcoal-900/80 p-6 transition-all hover:border-amber-500/40 hover:bg-charcoal-850 hover:scale-[1.02] text-charcoal-200 group shadow-lg backdrop-blur-md cursor-pointer"
           >
-            <p className="text-xs font-medium uppercase tracking-wide">{tool.role}</p>
-            <p className="mt-2 text-xl font-black">{tool.name}</p>
-            <p className="mt-2 text-xs leading-relaxed">{tool.description}</p>
-            <p className="mt-4 text-xs font-black uppercase tracking-widest underline underline-offset-4">
-              Launch Sandbox
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 rounded-full">
+                {tool.role}
+              </span>
+              <span className="text-charcoal-500 group-hover:text-amber-400 transition-colors text-sm">
+                ↗
+              </span>
+            </div>
+            <p className="mt-3 text-lg font-bold text-white group-hover:text-amber-400 transition-colors">
+              {tool.name}
             </p>
+            <p className="mt-2 text-xs leading-relaxed text-charcoal-400">
+              {tool.description}
+            </p>
+            <div className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-400 group-hover:translate-x-1 transition-transform">
+              <span>Launch Sandbox</span>
+              <span>→</span>
+            </div>
           </a>
         ))}
       </div>

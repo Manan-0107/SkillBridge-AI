@@ -19,6 +19,12 @@ const VOICE_CHECKED_KEY = "careerforge_voice_checked";
 const ACCESS_PREFS_KEY = "careerforge_access_prefs";
 const USER_SKILLS_KEY = "careerforge_user_skills";
 const LOCATION_KEY = "careerforge_location";
+export const ACCESSIBILITY_PROFILE_KEY = "careerforge_accessibility_profile";
+export const VOICE_CONSENT_KEY = "careerforge_voice_consent_status";
+
+export type AccessibilityProfile = "blind_low_vision" | "deaf_hard_of_hearing" | "standard";
+export type VoiceConsentStatus = "granted" | "denied" | "not_requested";
+
 export interface AccessibilityPreferences {
   interactionMode: "voice" | "text" | "hybrid";
   speechOutput: boolean;
@@ -63,6 +69,10 @@ interface AppState {
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
   // ─── Voice & Accessibility Mode State ──────────────────────────────────────
+  accessibilityProfile: AccessibilityProfile;
+  setAccessibilityProfile: (profile: AccessibilityProfile) => void;
+  voiceConsentStatus: VoiceConsentStatus;
+  setVoiceConsentStatus: (status: VoiceConsentStatus) => void;
   voiceMode: boolean;
   voiceLanguage: string;
   speechProvider: SpeechProviderType;
@@ -134,6 +144,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeResumeText, setActiveResumeTextState] = useState<string | null>(
     null,
   );
+  const [accessibilityProfile, setAccessibilityProfileState] =
+    useState<AccessibilityProfile>("standard");
+  const [voiceConsentStatus, setVoiceConsentStatusState] =
+    useState<VoiceConsentStatus>("not_requested");
+
+  const setAccessibilityProfile = (profile: AccessibilityProfile) => {
+    setAccessibilityProfileState(profile);
+    try {
+      window.localStorage.setItem(ACCESSIBILITY_PROFILE_KEY, profile);
+    } catch {}
+  };
+
+  const setVoiceConsentStatus = (status: VoiceConsentStatus) => {
+    setVoiceConsentStatusState(status);
+    try {
+      window.localStorage.setItem(VOICE_CONSENT_KEY, status);
+    } catch {}
+  };
 
   // Hydrate instantly from localStorage, then sync with server in background
   useEffect(() => {
@@ -141,6 +169,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Step 1: Immediately restore from localStorage synchronously so UI renders with zero delay
     try {
+      const prof = window.localStorage.getItem(ACCESSIBILITY_PROFILE_KEY);
+      if (prof) setAccessibilityProfileState(prof as AccessibilityProfile);
+
+      const vcs = window.localStorage.getItem(VOICE_CONSENT_KEY);
+      if (vcs) setVoiceConsentStatusState(vcs as VoiceConsentStatus);
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -475,6 +508,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         signInWithPhone,
         signOut,
         setTargetRole,
+        accessibilityProfile,
+        setAccessibilityProfile,
+        voiceConsentStatus,
+        setVoiceConsentStatus,
         voiceMode,
         voiceLanguage,
         speechProvider,
