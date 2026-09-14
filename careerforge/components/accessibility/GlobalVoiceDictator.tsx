@@ -1801,7 +1801,7 @@ export function GlobalVoiceDictator() {
       if (customEvent.detail?.active === true && !activeRef.current) {
         startVoiceDictation();
       } else if (customEvent.detail?.active === false && activeRef.current) {
-        pauseVoiceDictation();
+        stopVoiceDictation();
       } else if (customEvent.detail?.active === undefined) {
         toggleVoiceDictation();
       }
@@ -1812,7 +1812,7 @@ export function GlobalVoiceDictator() {
       window.removeEventListener("careerforge:voice-start", handleVoiceStart);
       window.removeEventListener("careerforge:toggle-mic", handleToggleMic);
     };
-  }, [startVoiceDictation, pauseVoiceDictation, toggleVoiceDictation]);
+  }, [startVoiceDictation, stopVoiceDictation, toggleVoiceDictation]);
 
   // Start automatically when the browser has already granted microphone
   // permission. Otherwise announce the exact accessible action required by
