@@ -4,7 +4,7 @@ import { RoleId } from "@/lib/types";
 import { Card, Tag } from "@/components/ui/Primitives";
 
 export function CourseCards({ role }: { role: RoleId }) {
-  const courses = courseCatalog[role];
+  const courses = courseCatalog[role] || [];
 
   return (
     <Section

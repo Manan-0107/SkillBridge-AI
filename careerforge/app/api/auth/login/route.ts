@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         name: "Alex Rivera",
         email: "alex.rivera@example.com",
         authProvider: "guest",
-        targetRole: "Software Engineer",
+        targetRole: "frontend",
         token: `guest_${Date.now()}`,
       };
       return NextResponse.json({
