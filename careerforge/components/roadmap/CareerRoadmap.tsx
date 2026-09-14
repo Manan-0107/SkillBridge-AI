@@ -6,6 +6,8 @@ import { roadmaps, roleOptions, courseCatalog, roleGitHubProjects } from "@/lib/
 import { RoleId, Course, GitHubProject } from "@/lib/types";
 import { Card, Tag } from "@/components/ui/Primitives";
 import { RoadmapAudiobook } from "./RoadmapAudiobook";
+import { InteractiveRoadmap } from "./InteractiveRoadmap";
+import { TechCategory } from "@/types/roadmapTree";
 
 // Comprehensive topic research resources (Blogs, Books, Video Playlists)
 interface StepResource {
@@ -451,13 +453,22 @@ const stepResourcesByRole: Record<RoleId, Record<number, StepResource>> = {
   },
 };
 
+const roleToCategory: Record<RoleId, TechCategory> = {
+  frontend: "frontend",
+  backend: "backend",
+  data: "data-ai",
+  devops: "devops",
+  product: "system-design",
+  design: "frontend",
+};
+
 export function CareerRoadmap({ role }: { role: RoleId }) {
-  const steps = roadmaps[role];
-  const courses = courseCatalog[role];
+  const steps = roadmaps[role] || [];
+  const courses = courseCatalog[role] || [];
   const githubProjects = roleGitHubProjects[role] || [];
   const roleLabel = roleOptions.find((r) => r.id === role)?.label ?? "";
 
-  const [activeTab, setActiveTab] = useState<"milestones" | "courses" | "projects">("milestones");
+  const [activeTab, setActiveTab] = useState<"visual-tree" | "milestones" | "courses" | "projects">("visual-tree");
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(0);
   const [completedStages, setCompletedStages] = useState<Record<number, boolean>>({});
 
@@ -537,8 +548,20 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
         </div>
       </div>
 
-      {/* Sub-Navigation: Milestones Path vs Full Course Catalog vs GitHub Repos */}
+      {/* Sub-Navigation: Interactive Tree vs Milestones Path vs Course Catalog vs Repos */}
       <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("visual-tree")}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "visual-tree"
+              ? "bg-neutral-900 text-white shadow-xs"
+              : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+          }`}
+        >
+          <span>⚡ roadmap.sh Visual Tree</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveTab("milestones")}
@@ -575,6 +598,16 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
           <span>⭐ Open-Source GitHub Repositories ({githubProjects.length})</span>
         </button>
       </div>
+
+      {/* ─── TAB 0: ROADMAP.SH INTERACTIVE VISUAL TREE ─────────────────────── */}
+      {activeTab === "visual-tree" && (
+        <div className="mb-12">
+          <InteractiveRoadmap
+            initialCategory={roleToCategory[role] || "frontend"}
+            apiEndpoint="/api/roadmap"
+          />
+        </div>
+      )}
 
       {/* ─── TAB 1: MILESTONES & TOPIC RESEARCH PORTAL ─────────────────────── */}
       {activeTab === "milestones" && (

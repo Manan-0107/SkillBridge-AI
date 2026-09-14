@@ -26,7 +26,10 @@ export function Workspace({
   resumeTab?: ResumeTab;
 }) {
   const { user, setTargetRole } = useApp();
-  const role: RoleId = user?.targetRole ?? "frontend";
+  const role: RoleId =
+    user?.targetRole && roleOptions.some((r) => r.id === user.targetRole)
+      ? (user.targetRole as RoleId)
+      : "frontend";
   const heading = copy[feature];
 
   return (
