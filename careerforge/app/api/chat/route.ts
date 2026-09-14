@@ -66,11 +66,6 @@ CRITICAL MULTILINGUAL INSTRUCTIONS:
 
 export async function POST(req: NextRequest) {
   try {
-    const contentLength = Number(req.headers.get("content-length") || "0");
-    if (contentLength > 512 * 1024) {
-      return NextResponse.json({ error: "Payload too large. Maximum size is 512KB." }, { status: 413 });
-    }
-
     const body: GeneralChatRequest = await req.json();
     const messages = body.messages || [];
     const userName = body.userName || "Friend";

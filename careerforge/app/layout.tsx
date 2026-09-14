@@ -27,8 +27,6 @@ export const metadata: Metadata = {
     "Resume tooling, dynamic career roadmaps, curated courses, and local opportunities in one quiet workspace.",
 };
 
-import Script from "next/script";
-
 export default function RootLayout({
   children,
 }: {
@@ -45,7 +43,6 @@ export default function RootLayout({
             </VoiceProvider>
           </GlobalVoiceProvider>
         </AppProvider>
-        <Script src="/accessible-voice-client.js" strategy="afterInteractive" />
       </body>
     </html>
   );

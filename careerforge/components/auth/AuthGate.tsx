@@ -16,8 +16,6 @@ import {
   playAccessibleChime,
   isSpeechRecognitionSupported,
 } from "@/lib/voice";
-import { VoiceSessionManager } from "@/lib/voice/VoiceSessionManager";
-import { VoiceDiagnosticsPanel } from "@/components/voice/VoiceDiagnosticsPanel";
 
 const COUNTRY_CODES = [
   { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
@@ -53,12 +51,6 @@ export function AuthGate() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // Always-On Voice UI State
-  const [vuiStatus, setVuiStatus] = useState<{ state: string; message: string }>({
-    state: "connecting",
-    message: "Connecting to always-on voice assistant...",
-  });
 
   // Active section tracking
   const [activeSection, setActiveSection] = useState<"name" | "email" | "password">(
@@ -120,46 +112,8 @@ export function AuthGate() {
       }
     };
 
-    const handleVuiStatus = (e: Event) => {
-      const custom = e as CustomEvent<{ state: string; message: string }>;
-      if (custom.detail) {
-        setVuiStatus(custom.detail);
-      }
-    };
-
-    const handleAuthComplete = async (e: Event) => {
-      const custom = e as CustomEvent<{ payload: { fullName?: string; email?: string; password?: string } }>;
-      const { fullName, email: userEmail, password: userPassword } = custom.detail?.payload || {};
-      if (userEmail && userPassword) {
-        setLoading(true);
-        try {
-          const res = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: userEmail.trim(),
-              password: userPassword,
-              name: fullName ? fullName.trim() : undefined,
-              mode: "signup",
-            }),
-          });
-          const data = await res.json();
-          if (data.success && data.user) {
-            playAccessibleChime("success");
-            await signIn(data.user.email, data.user.name);
-          }
-        } catch (err) {
-          console.error("Auto voice account creation error:", err);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
     window.addEventListener("careerforge:auth-section", handleAuthSection);
     window.addEventListener("careerforge:auth-value", handleAuthValue);
-    window.addEventListener("careerforge:vui-status", handleVuiStatus);
-    window.addEventListener("careerforge:auth-complete", handleAuthComplete);
 
     // Hydrate existing verified profile from anonymous storage if available
     try {
@@ -184,61 +138,20 @@ export function AuthGate() {
     return () => {
       window.removeEventListener("careerforge:auth-section", handleAuthSection);
       window.removeEventListener("careerforge:auth-value", handleAuthValue);
-      window.removeEventListener("careerforge:vui-status", handleVuiStatus);
-      window.removeEventListener("careerforge:auth-complete", handleAuthComplete);
     };
   }, []);
 
   // Clean up any active field speech recognition when unmounting
   useEffect(() => {
-    const manager = VoiceSessionManager.getInstance();
-
-    manager.registerFieldCommitter("name", (fieldId, val) => {
-      const clean = normalizeSpokenName(val);
-      setName(clean);
-      playAccessibleChime("success");
-      setDictatingField(null);
-      setTimeout(() => {
-        setActiveSection("email");
-        emailInputRef.current?.focus();
-      }, 300);
-      return true;
-    });
-
-    manager.registerFieldCommitter("email", (fieldId, val) => {
-      const clean = normalizeSpokenEmail(val);
-      setEmail(clean);
-      playAccessibleChime("success");
-      setDictatingField(null);
-      setTimeout(() => {
-        setActiveSection("password");
-        passwordInputRef.current?.focus();
-      }, 300);
-      return true;
-    });
-
-    manager.registerFieldCommitter("password", (fieldId, val) => {
-      setPassword(val);
-      playAccessibleChime("success");
-      setDictatingField(null);
-      return true;
-    });
-
     return () => {
-      manager.unregisterFieldCommitter("name");
-      manager.unregisterFieldCommitter("email");
-      manager.unregisterFieldCommitter("password");
       if (fieldControllerRef.current) {
         fieldControllerRef.current.stop();
       }
     };
   }, []);
 
-  // ─── Per-Field Voice Dictation Handler via VoiceSessionManager ──────────────
-  const toggleFieldDictation = async (field: "name" | "email" | "password") => {
-    const manager = VoiceSessionManager.getInstance();
-    await manager.initialize();
-
+  // ─── Per-Field Voice Dictation Handler ──────────────────────────────────────
+  const toggleFieldDictation = (field: "name" | "email" | "password") => {
     if (dictatingField === field) {
       // Stop dictation
       fieldControllerRef.current?.stop();
@@ -247,7 +160,13 @@ export function AuthGate() {
       return;
     }
 
-    // Set focus and state
+    if (!isSpeechRecognitionSupported()) {
+      setError("Speech recognition is not supported in this browser. Please type directly.");
+      return;
+    }
+
+    // Stop previous controller if running
+    fieldControllerRef.current?.stop();
     setActiveSection(field);
     setDictatingField(field);
     playAccessibleChime("start");
@@ -257,12 +176,55 @@ export function AuthGate() {
     if (field === "email") emailInputRef.current?.focus();
     if (field === "password") passwordInputRef.current?.focus();
 
-    // Start authoritative voice interaction
-    manager.startInteraction({
-      fieldId: field,
-      mode: "FIELD_DICTATION",
-      expectedType: field,
+    const controller = startSpeechRecognition({
+      lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      onListeningChange: (isListening) => {
+        if (!isListening && dictatingField === field) {
+          setDictatingField(null);
+        }
+      },
+      onTranscript: (transcript: string, isFinal?: boolean) => {
+        const clean = transcript.trim();
+        if (!clean) return;
+
+        if (field === "name") {
+          const val = normalizeSpokenName(clean);
+          setName(val);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+            // Auto advance to email
+            setTimeout(() => {
+              setActiveSection("email");
+              emailInputRef.current?.focus();
+            }, 300);
+          }
+        } else if (field === "email") {
+          const val = normalizeSpokenEmail(clean);
+          setEmail(val);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+            // Auto advance to password
+            setTimeout(() => {
+              setActiveSection("password");
+              passwordInputRef.current?.focus();
+            }, 300);
+          }
+        } else if (field === "password") {
+          setPassword(clean);
+          if (isFinal) {
+            playAccessibleChime("success");
+            setDictatingField(null);
+          }
+        }
+      },
+      onError: () => {
+        setDictatingField(null);
+      },
     });
+
+    fieldControllerRef.current = controller;
   };
 
   // ─── Direct Form Submit with /api/auth/login API Integration ───────────────
@@ -437,57 +399,6 @@ export function AuthGate() {
 
         {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
-          {/* ─── Always-On Voice Accessibility Status Banner ─────────────── */}
-          <div
-            role="status"
-            aria-live="polite"
-            className="mb-5 flex items-center justify-between rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 to-blue-50/90 p-3 shadow-xs"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-3 w-3">
-                <span
-                  className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    vuiStatus.state === "speaking"
-                      ? "animate-ping bg-blue-500"
-                      : vuiStatus.state === "listening"
-                      ? "animate-ping bg-emerald-500"
-                      : "bg-amber-400"
-                  }`}
-                />
-                <span
-                  className={`relative inline-flex h-3 w-3 rounded-full ${
-                    vuiStatus.state === "speaking"
-                      ? "bg-blue-600"
-                      : vuiStatus.state === "listening"
-                      ? "bg-emerald-600"
-                      : "bg-amber-500"
-                  }`}
-                />
-              </span>
-              <div>
-                <p className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
-                  <span>🎙️ Always-On Voice Assistant</span>
-                  <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 border border-indigo-200">
-                    {vuiStatus.state}
-                  </span>
-                </p>
-                <p className="text-[11px] text-neutral-600">
-                  {vuiStatus.message}
-                </p>
-              </div>
-            </div>
-            {vuiStatus.state === "speaking" && (
-              <button
-                type="button"
-                onClick={() => (window as any).vuiClient?.interruptPlayback()}
-                className="text-[10px] font-semibold text-neutral-600 underline hover:text-neutral-900 cursor-pointer"
-                title="Interrupt assistant speaking"
-              >
-                Interrupt
-              </button>
-            )}
-          </div>
-
           {/* Mode Switcher: Create Account vs Sign In */}
           <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
             <button
@@ -1098,9 +1009,6 @@ export function AuthGate() {
           </div>
         </div>
       )}
-
-      {/* Real-time Voice Diagnostics HUD */}
-      <VoiceDiagnosticsPanel />
     </div>
   );
 }

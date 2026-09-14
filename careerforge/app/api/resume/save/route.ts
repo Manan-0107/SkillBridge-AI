@@ -1,63 +1,45 @@
 /**
  * POST /api/resume/save
  *
+ * Body: {
+ *   userId:        string
+ *   filename:      string
+ *   resumeText:    string
+ *   targetRole:    string
+ *   analysisResult: EnhancedAnalysis
+ * }
+ *
  * Saves the resume + analysis to the `resume_uploads` Supabase table.
- * Uses authoritative getAuthenticatedUserId() to prevent authorization bypass.
  * Returns: { success: boolean; uploadId: string | null }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { saveResumeUpload } from "@/lib/db";
-import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import type { EnhancedAnalysis } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const contentLength = Number(req.headers.get("content-length") || "0");
-    if (contentLength > 2 * 1024 * 1024) {
-      return NextResponse.json(
-        { success: false, error: "Payload too large. Maximum size is 2MB." },
-        { status: 413 }
-      );
-    }
-
-    const authUserId = await getAuthenticatedUserId();
-    if (!authUserId) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
     const body = await req.json();
     const { userId, filename, resumeText, targetRole, analysisResult } = body as {
-      userId?: string;
-      filename?: string;
-      resumeText?: string;
-      targetRole?: string;
-      analysisResult?: EnhancedAnalysis;
+      userId: string;
+      filename: string;
+      resumeText: string;
+      targetRole: string;
+      analysisResult: EnhancedAnalysis;
     };
 
-    if (!resumeText || !targetRole || !analysisResult) {
+    if (!userId || !resumeText || !targetRole) {
       return NextResponse.json(
-        { success: false, error: "resumeText, targetRole, and analysisResult are required" },
+        { success: false, error: "userId, resumeText, and targetRole are required" },
         { status: 400 }
       );
     }
 
-    // Authorization check: cannot save resume under another user's ID
-    if (userId && userId !== authUserId) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: Cannot save resume for another user" },
-        { status: 403 }
-      );
-    }
-
     const uploadId = await saveResumeUpload({
-      userId: authUserId,
-      filename: (filename ?? "resume").slice(0, 255),
-      resumeText: resumeText.slice(0, 100000),
-      targetRole: targetRole.slice(0, 100),
+      userId,
+      filename: filename ?? "resume",
+      resumeText,
+      targetRole,
       atsScore: analysisResult.overallScore,
       matchedSkills: analysisResult.matchedSkills,
       missingSkills: analysisResult.missingSkills,
