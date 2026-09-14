@@ -14,12 +14,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
+import crypto from "crypto";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 
 export const runtime = "nodejs";
+
+const MAX_TOTAL_MESSAGE_LENGTH = 64 * 1024; // 64 KB
+
+const ALLOWED_NAV_PAGES = new Set([
+  "home",
+  "resume",
+  "roadmap",
+  "courses",
+  "practice",
+  "local",
+  "assistant",
+  "dashboard",
+  "/",
+  "/dashboard",
+  "/resume",
+  "/assessment",
+  "/internships",
+  "/internships/view",
+  "/audiobooks",
+  "/progress",
+]);
+
+const ALLOWED_TABS = new Set(["analyzer", "personalizer", "builder"]);
+
+function sanitizeNavPage(page: any): FeatureId | null {
+  if (typeof page !== "string") return null;
+  const clean = page.trim();
+  if (
+    clean.startsWith("javascript:") ||
+    clean.startsWith("data:") ||
+    clean.startsWith("http:") ||
+    clean.startsWith("https:") ||
+    clean.includes("..") ||
+    clean.includes("//")
+  ) {
+    console.warn(`[Navigation Security] Blocked suspicious navigation target: ${clean}`);
+    return null;
+  }
+  const lower = clean.toLowerCase();
+  const stripped = lower.startsWith("/") ? lower.slice(1) : lower;
+  if (stripped.startsWith("internship")) {
+    return "local";
+  }
+  const validFeatures: FeatureId[] = ["resume", "roadmap", "courses", "practice", "local"];
+  if (validFeatures.includes(stripped as FeatureId)) {
+    return stripped as FeatureId;
+  }
+  return null;
+}
+
+function sanitizeTab(tab: any): ResumeTab | undefined {
+  if (typeof tab !== "string") return undefined;
+  const clean = tab.trim().toLowerCase();
+  return ALLOWED_TABS.has(clean) ? (clean as ResumeTab) : undefined;
+}
+
+
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -61,6 +120,7 @@ interface RequestBody {
     highContrast?: boolean;
     largeText?: boolean;
     reducedMotion?: boolean;
+    voiceLanguage?: string;
   };
   resumeDraftState?: ResumeDraftState;
 }
@@ -122,8 +182,37 @@ async function callPythonAIEngine(body: RequestBody): Promise<any> {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body: RequestBody = await req.json();
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to interact with the assistant.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
     const {
       messages,
       userProfile,
@@ -136,7 +225,31 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Messages array required" }, { status: 400 });
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Messages array required",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const totalMessageLength = messages.reduce(
+      (sum, m) => sum + (typeof m?.text === "string" ? m.text.length : 0),
+      0
+    );
+    if (totalMessageLength > MAX_TOTAL_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Messages content exceeds limit (${MAX_TOTAL_MESSAGE_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
     }
 
     // ─── 0. Primary Cognitive Engine: Python AI Assistant Brain ───────────────
@@ -150,10 +263,9 @@ export async function POST(req: NextRequest) {
     }
 
     const lastMessage = messages[messages.length - 1]?.text || "";
-    const userName =
-      userProfile?.name ||
-      (userProfile?.email ? userProfile.email.split("@")[0] : "Candidate");
+    const userName = authUser.name || userProfile?.name || authUser.email.split("@")[0];
     const role = targetRole || userProfile?.targetRole || "Software Engineer";
+
 
     // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1) ──────────────────────
     const groqKey = process.env.GROQ_API_KEY;
@@ -609,8 +721,14 @@ function parseActionFromReply(rawReply: string) {
       if (parsed.tool) {
         toolCall = parsed;
         if (parsed.tool === "navigateTo" || parsed.tool === "openResume") {
-          feature = parsed.page || "resume";
-          resumeTab = parsed.tab;
+          feature = sanitizeNavPage(parsed.page);
+          resumeTab = sanitizeTab(parsed.tab);
+          toolCall.page = feature;
+          toolCall.tab = resumeTab;
+          if (toolCall.parameters) {
+            toolCall.parameters.page = feature;
+            toolCall.parameters.tab = resumeTab;
+          }
         } else if (parsed.tool === "searchJobs") {
           feature = "local";
         } else if (parsed.tool === "searchCourses") {
@@ -620,8 +738,8 @@ function parseActionFromReply(rawReply: string) {
           resumeTab = "analyzer";
         }
       } else if (parsed.feature) {
-        feature = parsed.feature;
-        resumeTab = parsed.resumeTab;
+        feature = sanitizeNavPage(parsed.feature);
+        resumeTab = sanitizeTab(parsed.resumeTab);
         featureTitle = parsed.featureTitle;
       }
     } catch {
@@ -637,6 +755,7 @@ function parseActionFromReply(rawReply: string) {
     toolCall,
   };
 }
+
 
 // ─── 6. Autonomous Cognitive Agent Brain ──────────────────────────────────────
 function generateCognitiveAgentResponse(
@@ -1189,14 +1308,16 @@ function generateCognitiveAgentResponse(
   // ─── I. Website Navigation ("Go to my skill analysis", "Open roadmap", "Practice")
   const intent = parseIntent(query);
   if (intent.feature) {
+    const safeFeature = sanitizeNavPage(intent.feature);
+    const safeTab = sanitizeTab(intent.resumeTab);
     return {
       reply: intent.reply,
-      feature: intent.feature,
-      resumeTab: intent.resumeTab,
+      feature: safeFeature,
+      resumeTab: safeTab,
       featureTitle: intent.featureTitle,
       toolCall: {
         tool: "navigateTo",
-        parameters: { page: intent.feature, tab: intent.resumeTab },
+        parameters: { page: safeFeature, tab: safeTab },
       },
     };
   }

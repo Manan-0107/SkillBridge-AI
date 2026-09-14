@@ -38,6 +38,18 @@ export default function RootLayout({
         <AppProvider>
           <GlobalVoiceProvider>
             <VoiceProvider>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-black focus:px-4 focus:py-3 focus:text-white"
+              >
+                Skip to main content
+              </a>
+              <a
+                href="#voice-assistant-controls"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-black focus:px-4 focus:py-3 focus:text-white"
+              >
+                Skip to voice assistant controls
+              </a>
               {children}
               <GlobalVoiceDictator />
             </VoiceProvider>

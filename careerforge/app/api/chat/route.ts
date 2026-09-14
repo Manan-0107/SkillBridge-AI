@@ -6,16 +6,17 @@
  * Primary Model: Google Gemini 1.5 Flash (gemini-1.5-flash)
  * Multilingual Scope: English, Hindi, Gujarati (Native scripts & Romanized variations / Hinglish / Gujlish)
  *
- * Open-Source Fallback Inference Engines & Links:
- * 1. Llama 3 (Meta): https://huggingface.co/meta-llama
- * 2. Gemma 2 (Google): https://huggingface.co/google/gemma-2-9b-it
- * 3. Sarvam AI (Indic-Optimized): https://huggingface.co/sarvamai
- * 4. High-Precision Autonomous Multilingual Engine (Zero-Key fallback)
+ * Authenticated only. Request body limited to 64KB.
+ * Sanitized error responses with request tracing.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+const MAX_MESSAGES_TEXT_LENGTH = 64 * 1024; // 64 KB
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -65,13 +66,67 @@ CRITICAL MULTILINGUAL INSTRUCTIONS:
 3. Be direct, clear, polite, and structure your responses with markdown formatting (bullet points, bold text, code blocks) where helpful.`;
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body: GeneralChatRequest = await req.json();
-    const messages = body.messages || [];
-    const userName = body.userName || "Friend";
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to use the chat assistant.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: GeneralChatRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const messages = body?.messages || [];
+    const userName = authUser.name || body?.userName || authUser.email.split("@")[0];
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Messages array is required." }, { status: 400 });
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Messages array is required.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const totalChars = messages.reduce(
+      (sum, m) => sum + (typeof (m?.text || m?.content) === "string" ? (m.text || m.content)!.length : 0),
+      0
+    );
+
+    if (totalChars > MAX_MESSAGES_TEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Messages content exceeds limit (${MAX_MESSAGES_TEXT_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
     }
 
     const lastMessage =
@@ -145,12 +200,15 @@ export async function POST(req: NextRequest) {
       fallbacks: OPEN_SOURCE_FALLBACKS,
     });
   } catch (err) {
-    console.error("[/api/chat] General Chat Error:", err);
+    console.error(`[/api/chat] General Chat Error (${requestId}):`, err);
     return NextResponse.json(
       {
-        error: "Internal assistant error",
+        code: "INTERNAL_ERROR",
+        message: "An error occurred while processing the chat message.",
         reply: "Hello! I am ready to help you with any questions in English, Hindi (हिन्दी), or Gujarati (ગુજરાતી). Please ask away!",
         fallbacks: OPEN_SOURCE_FALLBACKS,
+        retryable: true,
+        requestId,
       },
       { status: 500 }
     );

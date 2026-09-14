@@ -44,6 +44,8 @@ interface VoiceContextValue {
   lastCommand: string | null;
   startListening: () => void;
   stopListening: () => void;
+  clearTranscript: () => void;
+  resetStrikes: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextValue | null>(null);
@@ -65,22 +67,32 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
 
+  const voiceRef = useRef<ReturnType<typeof useVoiceCommand> | null>(null);
+
   const routeCommand = useCallback((spoken: string) => {
     const command = parseVoiceCommand(spoken);
     console.log("[VoiceContext] heard:", JSON.stringify(spoken.trim()), "→", command?.label ?? "(no match)");
     if (!command) return;
 
+    // Clear completed command transcript so it doesn't accumulate
+    voiceRef.current?.clearTranscript();
+
     navigate(command.feature, command.resumeTab);
     const { action } = command;
     if (action) {
       // nav → mount → effect; a short delay lets the target subscribe first.
-      setTimeout(
-        () =>
-          window.dispatchEvent(
-            new CustomEvent("careerforge:action", { detail: { action } })
-          ),
-        300
-      );
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("careerforge:action", { detail: { action } })
+        );
+        // Focus the actual target element or heading, not only <main>
+        const target = document.querySelector<HTMLElement>(
+          'h1, h2, [role="heading"], input:not([disabled]), textarea:not([disabled])'
+        );
+        if (target) {
+          target.focus();
+        }
+      }, 300);
     }
     setLastCommand(command.label);
   }, []);
@@ -94,7 +106,6 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
   // `voice`'s identity changes every render; a ref lets the toggle effect call
   // the latest start/stop without re-running on each render.
-  const voiceRef = useRef(voice);
   useEffect(() => {
     voiceRef.current = voice;
   });
@@ -102,10 +113,10 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCommandBarActive(active);
     if (active) {
-      voiceRef.current.resetStrikes();
-      voiceRef.current.start();
+      voiceRef.current?.resetStrikes();
+      voiceRef.current?.start();
     } else {
-      voiceRef.current.stop();
+      voiceRef.current?.stop();
     }
   }, [active]);
 
@@ -122,8 +133,13 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
         .join(" ")
         .trim(),
       lastCommand,
-      startListening: () => setActive(true),
+      startListening: () => {
+        voiceRef.current?.resetStrikes();
+        setActive(true);
+      },
       stopListening: () => setActive(false),
+      clearTranscript: () => voiceRef.current?.clearTranscript(),
+      resetStrikes: () => voiceRef.current?.resetStrikes(),
     }),
     [
       voice.isSupported,

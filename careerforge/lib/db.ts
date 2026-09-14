@@ -187,3 +187,78 @@ export async function getUserResumes(userId: string): Promise<DbResumeUpload[]> 
   }
   return (data ?? []) as DbResumeUpload[];
 }
+
+/**
+ * Executes user verification, target_role update (if role provided), and resume upload insertion
+ * as a unified operation.
+ * Returns { uploadId: string } or error info.
+ */
+export async function saveResumeWithUserConsistency(params: {
+  userId: string;
+  filename: string;
+  resumeText: string;
+  targetRole: string;
+  atsScore: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  analysisJson: Record<string, unknown>;
+}): Promise<{ uploadId: string | null; error?: string }> {
+  if (!supabase) {
+    return { uploadId: null, error: "Database client is not configured" };
+  }
+
+  // 1. Verify user exists
+  const { data: user, error: userErr } = await supabase
+    .from("users")
+    .select("id, target_role")
+    .eq("id", params.userId)
+    .maybeSingle();
+
+  if (userErr) {
+    console.error("[DB] saveResumeWithUserConsistency: User query failed:", userErr.message);
+    return { uploadId: null, error: `Failed to verify user: ${userErr.message}` };
+  }
+
+  if (!user) {
+    return { uploadId: null, error: "User record not found in database" };
+  }
+
+  // 2. Update user's target_role if different
+  if (params.targetRole && user.target_role !== params.targetRole) {
+    const { error: roleErr } = await supabase
+      .from("users")
+      .update({
+        target_role: params.targetRole,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.userId);
+
+    if (roleErr) {
+      console.warn("[DB] saveResumeWithUserConsistency: Failed to update target_role:", roleErr.message);
+    }
+  }
+
+  // 3. Insert resume upload
+  const { data: upload, error: uploadErr } = await supabase
+    .from("resume_uploads")
+    .insert({
+      user_id: params.userId,
+      filename: params.filename,
+      resume_text: params.resumeText,
+      target_role: params.targetRole,
+      ats_score: params.atsScore,
+      matched_skills: params.matchedSkills,
+      missing_skills: params.missingSkills,
+      analysis_json: params.analysisJson,
+    })
+    .select("id")
+    .single();
+
+  if (uploadErr) {
+    console.error("[DB] saveResumeWithUserConsistency: Resume insert failed:", uploadErr.message);
+    return { uploadId: null, error: `Failed to save resume upload: ${uploadErr.message}` };
+  }
+
+  return { uploadId: upload?.id ?? null };
+}
+

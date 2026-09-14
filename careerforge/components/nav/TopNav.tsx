@@ -37,10 +37,11 @@ export function TopNav({
         </div>
 
         {/* Center: Navigation Links in the exact middle */}
-        <nav className="absolute left-1/2 -translate-x-1/2 hidden items-center gap-7 md:flex">
+        <nav aria-label="Primary navigation" className="absolute left-1/2 -translate-x-1/2 hidden items-center gap-7 md:flex">
           <button
             type="button"
             onClick={onAssistant}
+            aria-current={view === "assistant" ? "page" : undefined}
             className={`text-sm font-medium transition-colors ${
               view === "assistant" ? "text-ink font-semibold" : "text-graphite hover:text-ink"
             }`}
@@ -52,6 +53,7 @@ export function TopNav({
               key={l.id}
               type="button"
               onClick={() => onFeature(l.id)}
+              aria-current={view === l.id ? "page" : undefined}
               className={`text-sm font-medium transition-colors ${
                 view === l.id ? "text-ink font-semibold" : "text-graphite hover:text-ink"
               }`}
@@ -85,10 +87,11 @@ export function TopNav({
         </div>
       </div>
 
-      <nav className="flex items-center justify-center gap-6 overflow-x-auto border-t border-line px-6 py-2.5 md:hidden">
+      <nav aria-label="Mobile navigation" className="flex items-center justify-center gap-6 overflow-x-auto border-t border-line px-6 py-2.5 md:hidden">
         <button
           type="button"
           onClick={onAssistant}
+          aria-current={view === "assistant" ? "page" : undefined}
           className="whitespace-nowrap text-sm font-medium text-graphite hover:text-ink"
         >
           Assistant
@@ -98,6 +101,7 @@ export function TopNav({
             key={l.id}
             type="button"
             onClick={() => onFeature(l.id)}
+            aria-current={view === l.id ? "page" : undefined}
             className="whitespace-nowrap text-sm font-medium text-graphite hover:text-ink"
           >
             {l.label}

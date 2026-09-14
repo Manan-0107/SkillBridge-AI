@@ -11,6 +11,7 @@ Thumbs.db
 tsconfig.tsbuildinfo
 *.exe
 cloudflared*
+
 .claude/
 careerforge/start-tunnel.js
 __pycache__/
@@ -18,3 +19,4 @@ __pycache__/
 *.pyo
 *.anon_profiles.json
 .anon_profiles.json
+

@@ -204,7 +204,7 @@ function VoiceMode({
               : "bg-slate-300 dark:bg-slate-700"
           }`}
         />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+        <p role="status" aria-live="polite" className="text-sm text-slate-600 dark:text-slate-300">
           {isListening
             ? "Listening…"
             : isRequestingPermission
@@ -216,6 +216,9 @@ function VoiceMode({
       </div>
 
       <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
         aria-label="Live transcript"
         className="min-h-[3.5rem] rounded-lg bg-slate-50 p-3 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-100"
       >

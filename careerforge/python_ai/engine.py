@@ -140,7 +140,10 @@ class PythonAIAssistant:
         role = target_role or user_profile.get("targetRole") or "Software Engineer"
 
         # ─── Language Detection ───────────────────────────────────────────────
-        detected_lang = detect_message_language(last_user_msg)
+        # Prefer the locale selected by the speech recognizer. Text heuristics
+        # are a fallback because transliterated speech is often ambiguous.
+        requested_lang = (accessibility_prefs or {}).get("voiceLanguage")
+        detected_lang = requested_lang or detect_message_language(last_user_msg)
 
         # ─── MCP Tool Dispatch & Execution ────────────────────────────────────
         query_lower = last_user_msg.lower().strip()

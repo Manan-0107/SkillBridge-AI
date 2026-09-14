@@ -1,25 +1,28 @@
 /**
  * POST /api/resume/analyze
  *
- * Body: { resumeText: string; role: string; userId?: string }
- *
  * Runs 3 analysis engines in parallel and merges results:
  *   1. Enhanced heuristic (local, always available)
  *   2. GitHub trending skills (GitHub Public API, 100% free)
  *   3. Multi-Model AI Engine (GitHub Models / Gemini / Free Open-Source LLM)
  *
- * Returns: EnhancedAnalysis JSON
+ * Authenticated only. Request body limited to 64KB.
+ * Validates AI JSON output against explicit schema, clamps ATS scores to [0, 100],
+ * and gracefully falls back to deterministic heuristics if AI output fails validation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { analyzeResume } from "@/lib/resumeHeuristics";
 import { marketSkills } from "@/lib/data";
 import type { RoleId, EngineResult, SkillGapItem, EnhancedAnalysis } from "@/lib/types";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
+const MAX_RESUME_TEXT_LENGTH = 64 * 1024; // 64 KB
+
 // ─── GitHub Engine ────────────────────────────────────────────────────────────
-// Maps role → GitHub search topics to find trending repos
 const ROLE_TOPICS: Record<string, string[]> = {
   frontend: ["react", "nextjs", "typescript", "frontend"],
   backend:  ["nodejs", "python", "go", "backend", "api"],
@@ -58,13 +61,11 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
     const repos: Array<{ description?: string; topics?: string[] }> =
       json.items ?? [];
 
-    // Extract all topics from top repos
     const trendingTopics = new Set<string>();
     repos.forEach((r) => {
       (r.topics ?? []).forEach((t) => trendingTopics.add(t.toLowerCase()));
     });
 
-    // Score: what fraction of role's required skills appear in trending topics
     const roleSkills = (marketSkills[role as RoleId] ?? []).map((s) => s.toLowerCase());
     const matched = roleSkills.filter((s) =>
       [...trendingTopics].some((t) => t.includes(s) || s.includes(t))
@@ -74,7 +75,7 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
 
     return {
       name: "GitHub Market Demand",
-      score,
+      score: Math.max(0, Math.min(100, score)),
       matchedSkills: matched,
       missingSkills: missing.slice(0, 8),
       suggestions: [
@@ -150,7 +151,9 @@ ${resumeText.slice(0, 5000)}
         const data = await res.json();
         const rawText: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         const parsed = parseJsonSafe(rawText);
-        if (parsed) return formatAiResult(parsed, "Gemini AI Analysis");
+        if (parsed && validateAiSchema(parsed)) {
+          return formatAiResult(parsed, "Gemini AI Analysis");
+        }
       }
     } catch (err) {
       console.warn("[analyze] Gemini error, trying fallback engine:", err);
@@ -180,7 +183,9 @@ ${resumeText.slice(0, 5000)}
         const data = await res.json();
         const raw = data?.choices?.[0]?.message?.content || "";
         const parsed = parseJsonSafe(raw);
-        if (parsed) return formatAiResult(parsed, "GitHub Models AI Analysis");
+        if (parsed && validateAiSchema(parsed)) {
+          return formatAiResult(parsed, "GitHub Models AI Analysis");
+        }
       }
     } catch (err) {
       console.warn("[analyze] GitHub Models error:", err);
@@ -203,7 +208,9 @@ ${resumeText.slice(0, 5000)}
     if (res.ok) {
       const rawText = await res.text();
       const parsed = parseJsonSafe(rawText);
-      if (parsed) return formatAiResult(parsed, "Open-Source AI Analysis");
+      if (parsed && validateAiSchema(parsed)) {
+        return formatAiResult(parsed, "Open-Source AI Analysis");
+      }
     }
   } catch (err) {
     console.warn("[analyze] Free LLM fallback error:", err);
@@ -212,7 +219,7 @@ ${resumeText.slice(0, 5000)}
   return base;
 }
 
-function parseJsonSafe(rawText: string) {
+function parseJsonSafe(rawText: string): any {
   try {
     const clean = rawText
       .replace(/^```json\s*/i, "")
@@ -225,15 +232,68 @@ function parseJsonSafe(rawText: string) {
   }
 }
 
+function validateAiSchema(parsed: any): boolean {
+  if (!parsed || typeof parsed !== "object") return false;
+  if ("atsScore" in parsed && typeof parsed.atsScore !== "number" && !Number.isFinite(Number(parsed.atsScore))) {
+    return false;
+  }
+  return true;
+}
+
+function sanitizeSafeUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return parsed.toString();
+    }
+  } catch {
+    // fallback
+  }
+  return "https://www.google.com";
+}
+
 function formatAiResult(parsed: any, name: string): EngineResult & { roadmap?: SkillGapItem[] } {
+  const rawScore = Number(parsed.atsScore);
+  const score = Number.isFinite(rawScore)
+    ? Math.max(0, Math.min(100, Math.round(rawScore)))
+    : 82;
+
+  const matchedSkills = Array.isArray(parsed.matchedSkills)
+    ? parsed.matchedSkills.map(String).filter((s: string) => s.trim().length > 0)
+    : [];
+
+  const missingSkills = Array.isArray(parsed.missingSkills)
+    ? parsed.missingSkills.map(String).filter((s: string) => s.trim().length > 0)
+    : [];
+
+  const suggestions = Array.isArray(parsed.suggestions)
+    ? parsed.suggestions.map(String).filter((s: string) => s.trim().length > 0)
+    : [];
+
+  const roadmap: SkillGapItem[] = Array.isArray(parsed.skillGapRoadmap)
+    ? parsed.skillGapRoadmap
+        .filter((item: any) => item && typeof item === "object" && item.skill)
+        .map((item: any) => ({
+          skill: String(item.skill || "Core Skill"),
+          priority: item.priority === "high" || item.priority === "low" ? item.priority : "medium",
+          why: String(item.why || "Important for this role"),
+          resources: Array.isArray(item.resources)
+            ? item.resources.map((r: any) => ({
+                label: String(r?.label || "Learn Resource"),
+                url: sanitizeSafeUrl(String(r?.url || "")),
+              }))
+            : [],
+        }))
+    : [];
+
   return {
     name,
-    score: typeof parsed.atsScore === "number" ? parsed.atsScore : 82,
-    matchedSkills: Array.isArray(parsed.matchedSkills) ? parsed.matchedSkills : [],
-    missingSkills: Array.isArray(parsed.missingSkills) ? parsed.missingSkills : [],
-    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+    score,
+    matchedSkills,
+    missingSkills,
+    suggestions,
     available: true,
-    roadmap: Array.isArray(parsed.skillGapRoadmap) ? parsed.skillGapRoadmap : [],
+    roadmap,
   };
 }
 
@@ -277,16 +337,74 @@ function buildFallbackRoadmap(missingSkills: string[], role: string): SkillGapIt
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body = await req.json();
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to analyze resume.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
     const { resumeText, role } = body as {
       resumeText: string;
       role: string;
     };
 
-    if (!resumeText?.trim() || !role) {
+    if (!resumeText || typeof resumeText !== "string" || !resumeText.trim()) {
       return NextResponse.json(
-        { error: "resumeText and role are required" },
+        {
+          code: "BAD_REQUEST",
+          message: "resumeText must be a non-empty string.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (resumeText.length > MAX_RESUME_TEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Resume text exceeds maximum limit (${MAX_RESUME_TEXT_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
+    }
+
+    if (!role || typeof role !== "string" || !role.trim()) {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "role must be a non-empty string.",
+          retryable: false,
+          requestId,
+        },
         { status: 400 }
       );
     }
@@ -305,17 +423,20 @@ export async function POST(req: NextRequest) {
         ? heuristicRaw.value
         : { score: 0, matchedSkills: [], missingSkills: [], suggestions: [] }),
     };
+    heuristic.score = Math.max(0, Math.min(100, Math.round(Number(heuristic.score) || 0)));
 
     const github: EngineResult =
       githubRaw.status === "fulfilled"
         ? githubRaw.value
         : { name: "GitHub Market Demand", score: 0, matchedSkills: [], missingSkills: [], suggestions: [], available: false };
+    github.score = Math.max(0, Math.min(100, Math.round(Number(github.score) || 0)));
 
     const aiResult =
       aiRaw.status === "fulfilled"
         ? aiRaw.value
         : { name: "AI Analysis", score: 0, matchedSkills: [], missingSkills: [], suggestions: [], available: false, roadmap: [] };
     const { roadmap: aiRoadmap, ...ai } = aiResult;
+    ai.score = Math.max(0, Math.min(100, Math.round(Number(ai.score) || 0)));
 
     // Merge matched / missing skills (deduplicated union)
     const allMatched = [...new Set([...heuristic.matchedSkills, ...github.matchedSkills, ...(ai.matchedSkills ?? [])])];
@@ -330,7 +451,8 @@ export async function POST(req: NextRequest) {
     addEngine(heuristic, 40);
     addEngine(github, 30);
     addEngine(ai, 30);
-    const overallScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : heuristic.score;
+    const calculatedScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : heuristic.score;
+    const overallScore = Math.max(0, Math.min(100, calculatedScore));
 
     // Build skill gap roadmap
     const skillGapRoadmap: SkillGapItem[] =
@@ -358,7 +480,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("[analyze] Unexpected error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error(`[analyze] Unexpected error (${requestId}):`, err);
+    return NextResponse.json(
+      {
+        code: "INTERNAL_ERROR",
+        message: "Failed to process resume analysis.",
+        retryable: true,
+        requestId,
+      },
+      { status: 500 }
+    );
   }
 }

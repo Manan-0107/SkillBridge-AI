@@ -130,6 +130,7 @@ export interface UseVoiceCommandReturn {
   start: () => void;
   stop: () => void;
   resetStrikes: () => void;
+  clearTranscript: () => void;
 }
 
 export function useVoiceCommand(
@@ -143,6 +144,14 @@ export function useVoiceCommand(
     enabled = true,
     ownsCommandBar = false,
   } = options;
+
+  // Stale callback avoidance: bind to latest refs
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+  const onFallbackTriggeredRef = useRef(onFallbackTriggered);
+  onFallbackTriggeredRef.current = onFallbackTriggered;
+  const onSpeechDetectedRef = useRef(onSpeechDetected);
+  onSpeechDetectedRef.current = onSpeechDetected;
 
   // Park this recognizer while the command bar owns the mic (unless we *are* it).
   const commandBarActive = useSyncExternalStore(
@@ -176,15 +185,30 @@ export function useVoiceCommand(
    * silence. Reset once per listening cycle, in `onstart`.
    */
   const strikeRegisteredThisCycleRef = useRef(false);
+  const recoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const triggerFallback = useCallback(() => {
     if (fallbackFiredRef.current) return;
     fallbackFiredRef.current = true;
-    intentionalStopRef.current = true;
-    recognitionRef.current?.stop();
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
     setIsListening(false);
-    onFallbackTriggered?.();
-  }, [onFallbackTriggered]);
+    onFallbackTriggeredRef.current?.();
+
+    // Controlled persistent recovery: do not permanently kill the listener on silence strikes!
+    if (recoveryTimeoutRef.current) clearTimeout(recoveryTimeoutRef.current);
+    recoveryTimeoutRef.current = setTimeout(() => {
+      fallbackFiredRef.current = false;
+      strikesRef.current = 0;
+      setStrikes(0);
+      if (!intentionalStopRef.current && !parkedRef.current) {
+        try {
+          recognitionRef.current?.start();
+        } catch {}
+      }
+    }, 2500);
+  }, []);
 
   const registerStrike = useCallback(() => {
     strikesRef.current += 1;
@@ -195,9 +219,15 @@ export function useVoiceCommand(
   }, [triggerFallback]);
 
   const resetStrikes = useCallback(() => {
+    if (recoveryTimeoutRef.current) clearTimeout(recoveryTimeoutRef.current);
     strikesRef.current = 0;
     fallbackFiredRef.current = false;
     setStrikes(0);
+  }, []);
+
+  const clearTranscript = useCallback(() => {
+    setTranscript("");
+    setInterimTranscript("");
   }, []);
 
   const buildRecognition = useCallback((): SpeechRecognitionLike | null => {
@@ -238,7 +268,7 @@ export function useVoiceCommand(
       }
 
       if (!heardSpeechSinceStartRef.current) {
-        onSpeechDetected?.();
+        onSpeechDetectedRef.current?.();
       }
       heardSpeechSinceStartRef.current = true;
       // A successful result resets the strike streak — failures must be
@@ -256,8 +286,12 @@ export function useVoiceCommand(
         }
       }
       if (finalChunk) {
-        setTranscript((prev) => `${prev} ${finalChunk}`.trim());
-        onResult?.(finalChunk.trim());
+        const cleanChunk = finalChunk.trim();
+        setTranscript((prev) => {
+          const combined = `${prev} ${cleanChunk}`.trim();
+          return combined.length > 500 ? combined.slice(-500).trim() : combined;
+        });
+        onResultRef.current?.(cleanChunk);
       }
       setInterimTranscript(interimChunk);
     };
@@ -309,15 +343,18 @@ export function useVoiceCommand(
   }, [
     enabled,
     lang,
-    onResult,
-    onSpeechDetected,
     registerStrike,
     resetStrikes,
     triggerFallback,
   ]);
 
   const start = useCallback(() => {
-    if (!enabled || parkedRef.current || fallbackFiredRef.current) return;
+    // Silence fallback must not permanently disable the session listener
+    fallbackFiredRef.current = false;
+    strikesRef.current = 0;
+    setStrikes(0);
+
+    if (!enabled || parkedRef.current) return;
     const Ctor = resolveSpeechRecognitionCtor();
     if (!Ctor) {
       setIsSupported(false);
@@ -408,5 +445,6 @@ export function useVoiceCommand(
     start,
     stop,
     resetStrikes,
+    clearTranscript,
   };
 }

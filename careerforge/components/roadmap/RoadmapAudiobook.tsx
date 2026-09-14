@@ -161,7 +161,7 @@ export function RoadmapAudiobook({
   );
 
   // ─── Player Controls ────────────────────────────────────────────────────────
-  const handlePlayToggle = () => {
+  const handlePlayToggle = useCallback(() => {
     if (playing) {
       if (paused) {
         resumeSpeaking();
@@ -175,27 +175,76 @@ export function RoadmapAudiobook({
     } else {
       narrateStage(selectedStepIndex);
     }
-  };
+  }, [playing, paused, currentNarratingIndex, narrateStage, selectedStepIndex]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     stopSpeaking();
     setPlaying(false);
     setPaused(false);
     playAccessibleChime("stop");
     setStatusMessage("Audiobook stopped");
-  };
+  }, []);
 
-  const handleNextStage = () => {
+  const handleNextStage = useCallback(() => {
     stopSpeaking();
     const nextIdx = Math.min(steps.length - 1, currentNarratingIndex + 1);
     narrateStage(nextIdx);
-  };
+  }, [steps.length, currentNarratingIndex, narrateStage]);
 
-  const handlePrevStage = () => {
+  const handlePrevStage = useCallback(() => {
     stopSpeaking();
     const prevIdx = Math.max(0, currentNarratingIndex - 1);
     narrateStage(prevIdx);
-  };
+  }, [currentNarratingIndex, narrateStage]);
+
+  const handleExplainAuthor = useCallback(() => {
+    stopSpeaking();
+    setPlaying(true);
+    setPaused(false);
+    const step = steps[currentNarratingIndex];
+    if (!step) return;
+    const explanation = `Here is what the author means for Stage ${currentNarratingIndex + 1}, ${step.title}: ${step.detail}. In professional production environments, mastering this milestone bridges the gap between foundational theory and practical execution by focusing on ${step.skills && step.skills.length > 0 ? step.skills.join(", ") : "core competencies"}.`;
+    setStatusMessage(`Explaining Stage ${currentNarratingIndex + 1}`);
+    speakText(explanation, {
+      lang: selectedLang || "en-US",
+      rate: playbackSpeed,
+      onEnd: () => {
+        setStatusMessage(`Explanation complete for Stage ${currentNarratingIndex + 1}`);
+        setPlaying(false);
+      },
+      onError: () => setPlaying(false),
+    });
+  }, [currentNarratingIndex, steps, selectedLang, playbackSpeed]);
+
+  // ─── Immediate Voice Command Listener (Section 7) ───────────────────────────
+  useEffect(() => {
+    const handleAudiobookEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ action: "stop" | "pause" | "resume" | "back" | "forward" | "explain" }>;
+      if (!custom.detail?.action) return;
+      const { action } = custom.detail;
+
+      if (action === "stop") {
+        handleStop();
+      } else if (action === "pause") {
+        pauseSpeaking();
+        setPaused(true);
+        setStatusMessage("Paused via voice command");
+      } else if (action === "resume") {
+        resumeSpeaking();
+        setPaused(false);
+        setStatusMessage("Resumed via voice command");
+      } else if (action === "back") {
+        handlePrevStage();
+      } else if (action === "forward") {
+        handleNextStage();
+      } else if (action === "explain") {
+        handleExplainAuthor();
+      }
+    };
+
+    window.addEventListener("careerforge:audiobook-control", handleAudiobookEvent);
+    return () => window.removeEventListener("careerforge:audiobook-control", handleAudiobookEvent);
+  }, [handleStop, handlePrevStage, handleNextStage, handleExplainAuthor]);
 
   const changeSpeed = (speed: number) => {
     setPlaybackSpeed(speed);
