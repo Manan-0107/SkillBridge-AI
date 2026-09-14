@@ -1,0 +1,249 @@
+{
+  "version": "1.0.0",
+  "date": "2026-09-14",
+  "track": "mobile",
+  "trackTitle": "Mobile & Native App Daily Drill",
+  "generatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "checksum": "daf81465f1fff712",
+  "totalQuestions": 10,
+  "questions": [
+    {
+      "id": "mob-q1",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "React Native Architecture",
+      "question": "What is the primary architectural improvement of React Native's New Architecture (Fabric)?",
+      "options": [
+        "It replaces JavaScript with Python",
+        "It eliminates the asynchronous JSON bridge using JavaScript Interface (JSI) for direct C++ host object access",
+        "It requires Objective-C only",
+        "It runs webviews inside native apps"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "The New Architecture uses JSI (JavaScript Interface), allowing the JS runtime to directly invoke native C++ methods synchronously without serialization over an async bridge.",
+      "tags": [
+        "React Native",
+        "Mobile",
+        "Architecture"
+      ],
+      "hints": [
+        "Direct C++ pointers via JSI."
+      ],
+      "relatedRoadmapNodeId": "mob-node-rn"
+    },
+    {
+      "id": "mob-q2",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Flutter Widget Tree",
+      "question": "In Flutter, what are the three distinct trees managed by the engine during rendering?",
+      "options": [
+        "Widget Tree, Element Tree, RenderObject Tree",
+        "DOM Tree, CSS Tree, Frame Tree",
+        "State Tree, Prop Tree, Component Tree",
+        "Logic Tree, UI Tree, Hardware Tree"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "Flutter maintains: 1) Widget Tree (immutable configuration), 2) Element Tree (lifecycle & manager), and 3) RenderObject Tree (computes layout sizing & paint instructions).",
+      "tags": [
+        "Flutter",
+        "Dart",
+        "Mobile"
+      ],
+      "hints": [
+        "Widget -> Element -> RenderObject."
+      ],
+      "relatedRoadmapNodeId": "mob-node-flutter"
+    },
+    {
+      "id": "mob-q3",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Android Activity Lifecycle",
+      "question": "Which callback is invoked when an Android Activity is no longer visible to the user?",
+      "options": [
+        "onPause()",
+        "onStop()",
+        "onDestroy()",
+        "onRestart()"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "`onStop()` is called when the activity is no longer visible (e.g. user navigated to home screen or another activity). `onPause()` is called when partially obscured.",
+      "tags": [
+        "Android",
+        "Kotlin",
+        "Lifecycle"
+      ],
+      "hints": [
+        "It's fully stopped from user view."
+      ],
+      "relatedRoadmapNodeId": "mob-node-android"
+    },
+    {
+      "id": "mob-q4",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "iOS Swift ARC (Memory Management)",
+      "question": "What keyword in Swift is used to prevent strong reference cycles (memory retain cycles) between two class instances?",
+      "options": [
+        "mutating",
+        "weak",
+        "static",
+        "defer"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Marking a reference as `weak` prevents ARC from incrementing the object's retain count. When the referenced instance deallocates, weak references automatically become `nil`.",
+      "tags": [
+        "iOS",
+        "Swift",
+        "Memory Management"
+      ],
+      "hints": [
+        "Weak vs Unowned."
+      ],
+      "relatedRoadmapNodeId": "mob-node-ios"
+    },
+    {
+      "id": "mob-q5",
+      "type": "architecture",
+      "difficulty": "advanced",
+      "title": "Mobile Offline Sync Architecture",
+      "question": "What is the recommended approach for handling offline write synchronization in mobile apps?",
+      "options": [
+        "Block the UI until network reconnects",
+        "Write optimistically to local storage (SQLite/WatermelonDB) with a sync mutation queue and vector clocks / CRDTs for conflict resolution",
+        "Delete un-synced data when connection is lost",
+        "Only allow read operations while offline"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Offline-first architectures write transactions immediately to a local embedded database and queue synchronization mutations with conflict resolution algorithms.",
+      "tags": [
+        "Offline Sync",
+        "SQLite",
+        "Architecture"
+      ],
+      "hints": [
+        "Local database first, sync later."
+      ],
+      "relatedRoadmapNodeId": "mob-node-offline"
+    },
+    {
+      "id": "mob-q6",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "Mobile App Deep Linking",
+      "question": "What is the difference between custom URL schemes (e.g. `myapp://`) and Universal Links (iOS) / App Links (Android)?",
+      "options": [
+        "Custom URL schemes are deprecated and forbidden on all app stores",
+        "Universal Links use standard HTTPS domains verified via apple-app-site-association / assetlinks.json, falling back to websites if not installed",
+        "There is no functional difference",
+        "Universal links only work on Wi-Fi"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Universal Links and Android App Links use standard HTTPS domains cryptographically verified via domain JSON association files, preventing hijacking.",
+      "tags": [
+        "Deep Linking",
+        "iOS",
+        "Android"
+      ],
+      "hints": [
+        "Verified HTTPS domains with web fallback."
+      ],
+      "relatedRoadmapNodeId": "mob-node-linking"
+    },
+    {
+      "id": "mob-q7",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Mobile Battery & Background Execution",
+      "question": "What system constraint do iOS and Android place on continuous background location updates?",
+      "options": [
+        "Background location is always completely unlimited",
+        "Apps must request background permissions, use geofencing or significant motion APIs to preserve battery",
+        "Location hardware shuts down automatically after 10 seconds",
+        "Only system apps can access GPS"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Continuous high-accuracy GPS depletes battery rapidly. OS platforms enforce explicit background location permissions and throttle background task execution.",
+      "tags": [
+        "Battery Optimization",
+        "Mobile APIs"
+      ],
+      "hints": [
+        "Aggressive power management."
+      ],
+      "relatedRoadmapNodeId": "mob-node-battery"
+    },
+    {
+      "id": "mob-q8",
+      "type": "multiple-choice",
+      "difficulty": "intermediate",
+      "title": "Expo vs Bare React Native",
+      "question": "What feature enables developers to use arbitrary custom native iOS/Android code inside modern Expo apps?",
+      "options": [
+        "Expo Prebuild (Continuous Native Generation)",
+        "Expo does not allow any custom native code",
+        "Expo Web",
+        "EAS Update"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "Expo Prebuild generates the native `ios` and `android` project folders dynamically from config plugins, enabling arbitrary native modules without abandoning the managed workflow.",
+      "tags": [
+        "Expo",
+        "React Native",
+        "DevOps"
+      ],
+      "hints": [
+        "Config plugins generate native projects."
+      ],
+      "relatedRoadmapNodeId": "mob-node-expo"
+    },
+    {
+      "id": "mob-q9",
+      "type": "multiple-choice",
+      "difficulty": "advanced",
+      "title": "Mobile App Security: Certificate Pinning",
+      "question": "What attack vector does SSL/TLS Certificate Pinning defend against on mobile clients?",
+      "options": [
+        "Cross-Site Scripting (XSS)",
+        "Man-in-the-Middle (MITM) proxy inspection using compromised or user-installed root Certificate Authorities",
+        "SQL injection on local SQLite",
+        "SIM swap attacks"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Certificate Pinning verifies that the server's public key matches the hardcoded certificate hash in the app bundle, rejecting forged certificates from rogue CAs.",
+      "tags": [
+        "Mobile Security",
+        "SSL Pinning"
+      ],
+      "hints": [
+        "Mitigating proxy tools like Charles or mitmproxy."
+      ],
+      "relatedRoadmapNodeId": "mob-node-sec"
+    },
+    {
+      "id": "mob-q10",
+      "type": "multiple-choice",
+      "difficulty": "beginner",
+      "title": "Mobile Frame Rate Target",
+      "question": "What is the target frame render budget to ensure 60 frames-per-second (fps) smooth animations without stutter on mobile displays?",
+      "options": [
+        "16.6ms",
+        "33.3ms",
+        "100ms",
+        "5ms"
+      ],
+      "correctOptionIndex": 0,
+      "explanation": "1000ms / 60 frames = approximately 16.6 milliseconds per frame. Exceeding this render budget leads to frame drops (jank).",
+      "tags": [
+        "Performance",
+        "UI",
+        "FPS"
+      ],
+      "hints": [
+        "1 second divided by 60."
+      ],
+      "relatedRoadmapNodeId": "mob-node-perf"
+    }
+  ]
+}

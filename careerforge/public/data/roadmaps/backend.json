@@ -1,0 +1,298 @@
+{
+  "version": "1.0.0",
+  "roadmapId": "backend",
+  "title": "Backend Engineering & Systems Roadmap",
+  "tagline": "Distributed Systems, High-Concurrency Runtimes, and Cloud Scalability",
+  "description": "From asynchronous I/O and PostgreSQL to Redis caching, message streaming with Kafka, and distributed consensus.",
+  "updatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "totalEstimatedHours": 195,
+  "tiers": [
+    {
+      "tierNumber": 1,
+      "title": "Runtimes & Operating Systems",
+      "subtitle": "Linux internals, Async I/O, POSIX"
+    },
+    {
+      "tierNumber": 2,
+      "title": "Relational Databases & SQL",
+      "subtitle": "PostgreSQL, ACID, B-Tree & GIN Indexes"
+    },
+    {
+      "tierNumber": 3,
+      "title": "In-Memory Caching & Stores",
+      "subtitle": "Redis, Redlock, Cache-Aside Patterns"
+    },
+    {
+      "tierNumber": 4,
+      "title": "APIs & Protocols",
+      "subtitle": "REST, gRPC, Protobuf, WebSockets"
+    },
+    {
+      "tierNumber": 5,
+      "title": "Distributed Messaging & Scale",
+      "subtitle": "Kafka, Partitions, Consensus, Circuit Breakers"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "be-node-runtime",
+      "track": "backend",
+      "title": "Asynchronous I/O & Linux Systems",
+      "slug": "async-io-linux-systems",
+      "description": "Understand non-blocking event-driven architectures (epoll/kqueue), memory allocation, and systemd process management.",
+      "status": "completed",
+      "level": "fundamental",
+      "tierNumber": 1,
+      "position": {
+        "column": "center",
+        "order": 1
+      },
+      "prerequisites": [],
+      "childrenIds": [
+        "be-node-db"
+      ],
+      "keyConcepts": [
+        "Non-blocking I/O",
+        "Process vs Thread",
+        "File Descriptors & Sockets"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-1",
+          "title": "Build a high-concurrency TCP echo server handling 10,000 connections",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "The Linux Command Line",
+          "url": "https://linuxcommand.org/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Core",
+      "estimatedHours": 20
+    },
+    {
+      "id": "be-node-db",
+      "track": "backend",
+      "title": "PostgreSQL & Database Internals",
+      "slug": "postgresql-database-internals",
+      "description": "Master ACID transactions, WAL write-ahead logging, B-Tree and GIN indexes, query planning with EXPLAIN ANALYZE, and connection pooling.",
+      "status": "in-progress",
+      "level": "intermediate",
+      "tierNumber": 2,
+      "position": {
+        "column": "left",
+        "order": 1
+      },
+      "prerequisites": [
+        "be-node-runtime"
+      ],
+      "childrenIds": [
+        "be-node-redis",
+        "be-node-api"
+      ],
+      "keyConcepts": [
+        "ACID Isolation Levels",
+        "B-Tree vs GIN Index",
+        "PgBouncer Pooling",
+        "Query Optimization"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-2",
+          "title": "Optimize a slow query by analyzing EXPLAIN (ANALYZE, BUFFERS)",
+          "completed": true
+        },
+        {
+          "id": "be-chk-3",
+          "title": "Implement zero-downtime schema migrations",
+          "completed": false
+        }
+      ],
+      "resources": [
+        {
+          "title": "Use The Index, Luke!",
+          "url": "https://use-the-index-luke.com/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Crucial",
+      "estimatedHours": 30
+    },
+    {
+      "id": "be-node-redis",
+      "track": "backend",
+      "title": "Redis Caching & Concurrency",
+      "slug": "redis-caching-concurrency",
+      "description": "In-memory data structures, cache-aside pattern, distributed locking with Redlock, sliding-window rate limiters, and Pub/Sub.",
+      "status": "in-progress",
+      "level": "intermediate",
+      "tierNumber": 3,
+      "position": {
+        "column": "right",
+        "order": 1
+      },
+      "prerequisites": [
+        "be-node-db"
+      ],
+      "childrenIds": [
+        "be-node-system"
+      ],
+      "keyConcepts": [
+        "Redis Hashes & Sorted Sets",
+        "Sliding-Window Rate Limiting",
+        "Distributed Redlock",
+        "Cache Stampede Prevention"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-4",
+          "title": "Implement a distributed rate-limiter using Redis ZSET",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "Redis Official Architecture Docs",
+          "url": "https://redis.io/docs/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "High Impact",
+      "estimatedHours": 18
+    },
+    {
+      "id": "be-node-api",
+      "track": "backend",
+      "title": "API Design: REST, gRPC & WebSockets",
+      "slug": "api-design-rest-grpc-websockets",
+      "description": "Design resilient public and internal APIs. Protocol Buffers, HTTP/2 streaming with gRPC, OpenAPI 3.1 specs, and WebSocket channels.",
+      "status": "in-progress",
+      "level": "intermediate",
+      "tierNumber": 4,
+      "position": {
+        "column": "left",
+        "order": 1
+      },
+      "prerequisites": [
+        "be-node-db"
+      ],
+      "childrenIds": [
+        "be-node-kafka"
+      ],
+      "keyConcepts": [
+        "Idempotency",
+        "Protocol Buffers",
+        "gRPC Bidirectional Streaming",
+        "OpenAPI"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-5",
+          "title": "Define a gRPC service and compile client stubs",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "gRPC Official Guide",
+          "url": "https://grpc.io/docs/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Architecture",
+      "estimatedHours": 25
+    },
+    {
+      "id": "be-node-kafka",
+      "track": "backend",
+      "title": "Message Brokers & Kafka",
+      "slug": "kafka-event-driven-streaming",
+      "description": "Event-driven architecture, distributed commit logs, partitions, consumer groups, offset commits, and dead letter queues.",
+      "status": "planned",
+      "level": "advanced",
+      "tierNumber": 5,
+      "position": {
+        "column": "center",
+        "order": 1
+      },
+      "prerequisites": [
+        "be-node-api",
+        "be-node-redis"
+      ],
+      "childrenIds": [
+        "be-node-system"
+      ],
+      "keyConcepts": [
+        "Partition Ordering",
+        "Consumer Group Rebalancing",
+        "At-Least-Once Delivery",
+        "DLQ"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-6",
+          "title": "Build an event-driven worker consuming from partitioned topic",
+          "completed": false
+        }
+      ],
+      "resources": [
+        {
+          "title": "Confluent Kafka Architecture Guide",
+          "url": "https://developer.confluent.io/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Enterprise Scale",
+      "estimatedHours": 30
+    },
+    {
+      "id": "be-node-system",
+      "track": "backend",
+      "title": "Distributed Systems & Scalability",
+      "slug": "distributed-systems-scalability",
+      "description": "Consistent hashing rings, circuit breakers, CQRS, database sharding, CAP theorem trade-offs, and distributed tracing.",
+      "status": "planned",
+      "level": "advanced",
+      "tierNumber": 5,
+      "position": {
+        "column": "right",
+        "order": 2
+      },
+      "prerequisites": [
+        "be-node-kafka"
+      ],
+      "childrenIds": [],
+      "keyConcepts": [
+        "Consistent Hashing",
+        "Circuit Breakers",
+        "Distributed Tracing",
+        "CAP Theorem"
+      ],
+      "checklist": [
+        {
+          "id": "be-chk-7",
+          "title": "Design a globally distributed URL shortener handling 100k requests/sec",
+          "completed": false
+        }
+      ],
+      "resources": [
+        {
+          "title": "System Design Primer by Donne Martin",
+          "url": "https://github.com/donnemartin/system-design-primer",
+          "type": "github",
+          "isFree": true
+        }
+      ],
+      "badge": "Architect Level",
+      "estimatedHours": 40
+    }
+  ]
+}

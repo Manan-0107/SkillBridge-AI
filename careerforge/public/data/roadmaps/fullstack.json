@@ -1,0 +1,155 @@
+{
+  "version": "1.0.0",
+  "roadmapId": "fullstack",
+  "title": "Fullstack Engineering Roadmap",
+  "tagline": "Connecting Scalable Cloud Backends with Polished Client Applications",
+  "description": "End-to-end type safety, Server Actions, database replication, CDN edge caching, and distributed observability.",
+  "updatedAt": "2026-09-14T06:24:54.995785+00:00",
+  "totalEstimatedHours": 200,
+  "tiers": [
+    {
+      "tierNumber": 1,
+      "title": "End-to-End Type Safety",
+      "subtitle": "TypeScript, tRPC, Shared Schemas"
+    },
+    {
+      "tierNumber": 2,
+      "title": "Fullstack Frameworks",
+      "subtitle": "Next.js App Router, Server Actions, Remix"
+    },
+    {
+      "tierNumber": 3,
+      "title": "Database Scalability & Caching",
+      "subtitle": "PostgreSQL, Prisma/Drizzle, Redis"
+    },
+    {
+      "tierNumber": 4,
+      "title": "Security, Auth & Edge Infrastructure",
+      "subtitle": "OAuth2/OIDC, Cloudflare Workers, OpenTelemetry"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "fs-node-types",
+      "track": "fullstack",
+      "title": "End-to-End Type Safety & Contracts",
+      "slug": "end-to-end-type-safety-contracts",
+      "description": "Zero-cost type inference between frontend client hooks and backend database models using tRPC, Zod, and Prisma/Drizzle.",
+      "status": "completed",
+      "level": "fundamental",
+      "tierNumber": 1,
+      "position": {
+        "column": "center",
+        "order": 1
+      },
+      "prerequisites": [],
+      "childrenIds": [
+        "fs-node-next"
+      ],
+      "keyConcepts": [
+        "Type Inference Across Network",
+        "Zod Validation",
+        "Database ORM Types"
+      ],
+      "checklist": [
+        {
+          "id": "fs-chk-1",
+          "title": "Build a tRPC procedure validating input schemas with Zod",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "tRPC Official Documentation",
+          "url": "https://trpc.io/docs",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Type Safety",
+      "estimatedHours": 20
+    },
+    {
+      "id": "fs-node-next",
+      "track": "fullstack",
+      "title": "Server Actions & Modern Fullstack Routing",
+      "slug": "server-actions-fullstack-routing",
+      "description": "Unify server mutations and client UI updates using Server Actions, optimistic revalidation, and streaming SSR.",
+      "status": "in-progress",
+      "level": "intermediate",
+      "tierNumber": 2,
+      "position": {
+        "column": "left",
+        "order": 1
+      },
+      "prerequisites": [
+        "fs-node-types"
+      ],
+      "childrenIds": [
+        "fs-node-edge"
+      ],
+      "keyConcepts": [
+        "Server Actions",
+        "Optimistic Mutations",
+        "Cache Invalidation (`revalidatePath`)"
+      ],
+      "checklist": [
+        {
+          "id": "fs-chk-2",
+          "title": "Implement optimistic UI mutations with rollback on network failure",
+          "completed": true
+        }
+      ],
+      "resources": [
+        {
+          "title": "Next.js Server Actions Guide",
+          "url": "https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Core",
+      "estimatedHours": 30
+    },
+    {
+      "id": "fs-node-edge",
+      "track": "fullstack",
+      "title": "Edge Compute & Observability",
+      "slug": "edge-compute-observability",
+      "description": "Deploy to CDN Edge Workers worldwide, mitigate central database latency, and instrument distributed tracing with OpenTelemetry.",
+      "status": "planned",
+      "level": "advanced",
+      "tierNumber": 3,
+      "position": {
+        "column": "center",
+        "order": 1
+      },
+      "prerequisites": [
+        "fs-node-next"
+      ],
+      "childrenIds": [],
+      "keyConcepts": [
+        "Edge Functions",
+        "OpenTelemetry Distributed Tracing",
+        "Read Replicas"
+      ],
+      "checklist": [
+        {
+          "id": "fs-chk-3",
+          "title": "Instrument OpenTelemetry tracing across frontend and backend services",
+          "completed": false
+        }
+      ],
+      "resources": [
+        {
+          "title": "OpenTelemetry Documentation",
+          "url": "https://opentelemetry.io/docs/",
+          "type": "docs",
+          "isFree": true
+        }
+      ],
+      "badge": "Enterprise",
+      "estimatedHours": 25
+    }
+  ]
+}
