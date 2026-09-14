@@ -269,12 +269,56 @@ wss.on('connection', (clientWs) => {
 
   initGoogleSpeechStream();
 
-  // 3. Conversational State Machine & Entity Extractor
+  // 3. Conversational State Machine & Dialogue Manager Integration
   const processTranscript = async (userText) => {
     console.log(`[VUI] User transcript: "${userText}"`);
+
+    // ── Try Python AI Brain Dialogue Manager first ────────────────────────────
+    try {
+      const pythonPort = process.env.PYTHON_AI_PORT || '8000';
+      const intentUrl = `http://127.0.0.1:${pythonPort}/api/voice/intent`;
+      const response = await fetch(intentUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: userText,
+          sessionId,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[VUI] Dialogue Manager resolved:`, data.intent, `Follow-up:`, data.requiresFollowup);
+
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(
+            JSON.stringify({
+              type: 'DIALOGUE_INTENT',
+              sessionId,
+              intent: data.intent,
+              action: data.action,
+              target: data.target,
+              replyText: data.replyText,
+              requiresFollowup: data.requiresFollowup,
+              expectedSlot: data.expectedSlot,
+              slots: data.slots,
+              timestamp: Date.now(),
+            })
+          );
+        }
+
+        speakText(data.replyText);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[VUI] Python dialogue manager fallback: ${e.message}`);
+    }
+
+    // ── Fallback to Local State Machine ───────────────────────────────────────
     const session = await getSession(sessionId);
 
-    // ── Check if already in the Final Handoff Confirmation State ──────────────
+    // Check if already in the Final Handoff Confirmation State
     if (session.handoffReady && !session.completed) {
       if (AFFIRMATIVE_REGEX.test(userText.trim())) {
         session.completed = true;
@@ -298,7 +342,7 @@ wss.on('connection', (clientWs) => {
       }
     }
 
-    // ── Entity Extraction & Next-Question Formulation ─────────────────────────
+    // Entity Extraction & Next-Question Formulation
     const extracted = extractFieldsLocally(userText, session);
     const updates = {};
 
@@ -338,7 +382,6 @@ wss.on('connection', (clientWs) => {
     const updatedSession = { ...session, ...updates };
     await saveSession(sessionId, updatedSession);
 
-    // ── Check Completeness for Final Handoff Intercept ────────────────────────
     const isComplete = updatedSession.fullName && updatedSession.email && updatedSession.password;
 
     if (isComplete && !updatedSession.handoffReady) {
@@ -358,7 +401,6 @@ wss.on('connection', (clientWs) => {
       }
       speakText(handoffMessage);
     } else {
-      // Prompt for whichever field is next missing in natural flow
       let nextReply = '';
       if (!updatedSession.fullName) {
         nextReply = updates.email || updates.password

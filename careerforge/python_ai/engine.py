@@ -30,6 +30,7 @@ if current_dir not in sys.path:
 
 from web_browser import web_browser
 from mcp_tools import mcp_registry
+from llm_providers import llm_orchestrator
 
 # Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env.local"))
@@ -152,38 +153,22 @@ class PythonAIAssistant:
             f"Detected Language: {detected_lang.upper()}.",
         ]
 
-        # 1. Check for Cloud Providers (Groq / OpenAI / Gemini) if keys are provided
-        if self.groq_key and len(self.groq_key) > 5:
-            try:
-                res = self._call_groq(messages, user_name, voice_mode, detected_lang)
-                if res and res.get("reply"):
-                    res["reply"] = clean_output_text(res["reply"])
-                    res["thinking"] = thinking_steps + res.get("thinking", [])
-                    return res
-            except Exception as e:
-                print(f"[Python AI] Groq error: {e}", file=sys.stderr)
+        # ─── Unified LLM Provider Orchestrator (Claude / OpenAI / Groq / Gemini / Dynamic)
+        orch_res = llm_orchestrator.generate(
+            messages=messages,
+            user_name=user_name,
+            voice_mode=voice_mode,
+            detected_lang=detected_lang,
+        )
+        if orch_res and orch_res.reply:
+            return {
+                "reply": clean_output_text(orch_res.reply),
+                "thinking": thinking_steps + orch_res.thinking,
+                "engine": orch_res.engine,
+                "suggestions": orch_res.suggestions,
+            }
 
-        if self.openai_key and len(self.openai_key) > 5:
-            try:
-                res = self._call_openai(messages, user_name, voice_mode, detected_lang)
-                if res and res.get("reply"):
-                    res["reply"] = clean_output_text(res["reply"])
-                    res["thinking"] = thinking_steps + res.get("thinking", [])
-                    return res
-            except Exception as e:
-                print(f"[Python AI] OpenAI error: {e}", file=sys.stderr)
-
-        if self.gemini_key and len(self.gemini_key) > 5:
-            try:
-                res = self._call_gemini(messages, user_name, voice_mode, detected_lang)
-                if res and res.get("reply"):
-                    res["reply"] = clean_output_text(res["reply"])
-                    res["thinking"] = thinking_steps + res.get("thinking", [])
-                    return res
-            except Exception as e:
-                print(f"[Python AI] Gemini error: {e}", file=sys.stderr)
-
-        # ─── 2. Fast MCP Dynamic Cognitive Synthesizer (ChatGPT / Claude Quality) ─
+        # Fallback to MCP cognitive response
         return self._generate_mcp_cognitive_response(
             last_user_msg=last_user_msg,
             messages=messages,

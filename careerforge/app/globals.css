@@ -16,23 +16,23 @@ html {
 }
 
 body {
-  background-color: #FAFAF8;
-  color: #17171A;
+  background-color: #0B0B0D;
+  color: #D2D5DF;
 }
 
 ::selection {
-  background-color: #17171A;
-  color: #FAFAF8;
+  background-color: #22242B;
+  color: #F0F2F7;
 }
 
 /* visible keyboard focus, everywhere */
 :focus-visible {
-  outline: 2px solid #17171A;
+  outline: 2px solid #F59E0B;
   outline-offset: 2px;
 }
 
 .hairline {
-  border-color: #DEDEDA;
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 /* =========================================================
@@ -116,7 +116,7 @@ body {
 
 /* thin numbered-step connector used by the roadmap module */
 .step-line {
-  background: linear-gradient(to bottom, #DEDEDA, #DEDEDA);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12));
 }
 
 /* =========================================================

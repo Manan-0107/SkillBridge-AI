@@ -1117,11 +1117,11 @@ export function AssistantHome({
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-paper">
+    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-charcoal-950 text-charcoal-200">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-ink px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-charcoal-800 border border-hairline px-4 py-2.5 text-xs font-semibold text-charcoal-100 shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
           {toastMessage}
         </div>
       )}
@@ -1142,20 +1142,20 @@ export function AssistantHome({
 
       {/* ─── LEFT AI SIDEBAR (Vertical List of Chats) ───────────────────────── */}
       <aside
-        className={`flex flex-col border-r border-line bg-white transition-all duration-200 z-20 ${
+        className={`flex flex-col border-r border-hairline bg-charcoal-900 transition-all duration-200 z-20 ${
           sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
       >
         {/* Top Action: New Chat */}
-        <div className="p-3.5 border-b border-line space-y-3">
+        <div className="p-3.5 border-b border-hairline space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-display text-base italic text-ink">
+            <span className="font-display text-base italic text-charcoal-100">
               Assistant
             </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink sm:hidden"
+              className="rounded p-1 text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-100 sm:hidden"
               title="Close sidebar"
             >
               ✕
@@ -1165,7 +1165,7 @@ export function AssistantHome({
           <button
             type="button"
             onClick={createNewConversation}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-ink/90 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent-500 py-2.5 px-3 text-xs font-bold text-charcoal-950 shadow-xs hover:bg-accent-400 transition-all cursor-pointer"
           >
             <span className="text-sm font-bold">+</span>
             <span>New Chat</span>
@@ -1173,19 +1173,19 @@ export function AssistantHome({
         </div>
 
         {/* Vertical Navigation Sections */}
-        <div className="p-2 space-y-1 border-b border-line">
+        <div className="p-2 space-y-1 border-b border-hairline">
           <button
             type="button"
             onClick={() => setSidebarTab("all")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "all"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-charcoal-800 text-charcoal-100 font-semibold"
+                : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
             }`}
           >
-            <ChatBubbleIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-accent-400 shrink-0" />
             <span className="flex-1 text-left">All Recent Chats</span>
-            <span className="text-[11px] text-graphite/55">
+            <span className="text-[11px] text-charcoal-400">
               {conversations.filter((c) => !c.archived).length}
             </span>
           </button>
@@ -1195,13 +1195,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("pinned")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "pinned"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-charcoal-800 text-charcoal-100 font-semibold"
+                : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
             }`}
           >
-            <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <PinIcon filled className="w-3.5 h-3.5 text-accent-400 shrink-0" />
             <span className="flex-1 text-left">Pinned &amp; Starred</span>
-            <span className="text-[11px] text-graphite/55">
+            <span className="text-[11px] text-charcoal-400">
               {conversations.filter((c) => c.pinned && !c.archived).length}
             </span>
           </button>
@@ -1211,13 +1211,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("archived")}
             className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               sidebarTab === "archived"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-charcoal-800 text-charcoal-100 font-semibold"
+                : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
             }`}
           >
-            <ArchiveIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
+            <ArchiveIcon className="w-3.5 h-3.5 text-charcoal-400 shrink-0" />
             <span className="flex-1 text-left">Archived Chats</span>
-            <span className="text-[11px] text-graphite/55">
+            <span className="text-[11px] text-charcoal-400">
               {conversations.filter((c) => c.archived).length}
             </span>
           </button>
@@ -1225,12 +1225,12 @@ export function AssistantHome({
 
         {/* Vertical Conversation List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-graphite/60">
+          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-charcoal-400">
             {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "History"}
           </p>
 
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-xs text-graphite/55">
+            <div className="p-4 text-center text-xs text-charcoal-400">
               {sidebarTab === "pinned"
                 ? "No pinned chats. Click the pin icon to keep important chats at top."
                 : sidebarTab === "archived"
@@ -1257,12 +1257,12 @@ export function AssistantHome({
                   aria-label={`Open conversation ${conv.title}`}
                   className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
                     isActive
-                      ? "bg-mist font-semibold text-ink"
-                      : "text-graphite hover:bg-paper hover:text-ink"
+                      ? "bg-charcoal-800 font-semibold text-charcoal-100 border border-hairline"
+                      : "text-charcoal-300 hover:bg-charcoal-850 hover:text-charcoal-100"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-600 shrink-0" />}
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-accent-400 shrink-0" />}
                     <span className="truncate">{conv.title}</span>
                   </div>
 
@@ -1272,7 +1272,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-amber-600 transition-colors"
+                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-accent-400 transition-colors"
                     >
                       <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
                     </button>
@@ -1281,7 +1281,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-ink transition-colors"
+                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors"
                     >
                       <ArchiveIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1290,7 +1290,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-graphite/60 hover:bg-mist hover:text-red-600 transition-colors"
+                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-red-400 transition-colors"
                     >
                       <TrashIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1302,12 +1302,12 @@ export function AssistantHome({
         </div>
 
         {/* Sidebar Footer: Delete All Chats */}
-        <div className="p-3 border-t border-line bg-paper/40">
+        <div className="p-3 border-t border-hairline bg-charcoal-950">
           <button
             type="button"
             onClick={clearAllConversations}
             disabled={conversations.length === 0 || (conversations.length === 1 && conversations[0].messages.length === 0)}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-graphite hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-hairline bg-charcoal-900 px-3 py-2 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:border-red-900/50 hover:bg-red-950/30 transition-colors cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
             title="Delete all chat history and start fresh"
           >
             <TrashIcon className="w-3.5 h-3.5" />
@@ -1317,15 +1317,15 @@ export function AssistantHome({
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-charcoal-950">
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-line bg-white px-3 sm:px-4 py-2 gap-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-hairline bg-charcoal-950 px-3 sm:px-4 py-2 gap-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-charcoal-900 px-2.5 py-1.5 text-xs font-semibold text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 shadow-xs cursor-pointer"
               title="Toggle Sidebar"
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
@@ -1333,7 +1333,7 @@ export function AssistantHome({
               <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
-            <span className="text-xs font-semibold text-ink truncate max-w-[140px] sm:max-w-xs">
+            <span className="text-xs font-semibold text-charcoal-100 truncate max-w-[140px] sm:max-w-xs">
               {activeConversation?.title || "Career Copilot"}
             </span>
 
@@ -1446,18 +1446,18 @@ export function AssistantHome({
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-semibold text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 shadow-xs cursor-pointer"
               title="Share conversation link or transcript"
               aria-label="Share Conversation"
             >
-              <ShareHeaderIcon className="w-3.5 h-3.5 text-graphite" />
+              <ShareHeaderIcon className="w-3.5 h-3.5 text-charcoal-400" />
               <span className="hidden sm:inline">Share</span>
             </button>
 
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:bg-paper cursor-pointer shadow-xs"
+              className="flex items-center gap-1 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 cursor-pointer shadow-xs"
               title="Start new chat"
               aria-label="Start New Chat"
             >
@@ -1468,7 +1468,7 @@ export function AssistantHome({
               <button
                 type="button"
                 onClick={(e) => deleteConversation(activeConversation.id, e)}
-                className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:text-red-600 hover:bg-red-50/50 cursor-pointer shadow-xs transition-colors"
+                className="flex items-center gap-1 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:bg-red-950/40 cursor-pointer shadow-xs transition-colors"
                 title="Delete this chat"
                 aria-label="Delete Current Chat"
               >
@@ -1484,12 +1484,12 @@ export function AssistantHome({
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
               <div className="mb-10 max-w-xl space-y-5">
-                <h1 className="font-display text-4xl italic leading-[1.1] text-ink md:text-5xl">
+                <h1 className="font-display text-4xl italic leading-[1.1] text-charcoal-100 md:text-5xl">
                   {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
-                  <span className="block text-graphite">Where should we start?</span>
+                  <span className="block text-accent-400">Where should we start?</span>
                 </h1>
 
-                <p className="max-w-md text-sm leading-relaxed text-graphite">
+                <p className="max-w-md text-sm leading-relaxed text-charcoal-400">
                   I can help you build or sharpen your resume, choose skills to learn,
                   find projects worth doing, and track down jobs. Speak or type &mdash;
                   whichever is easier.
@@ -1535,9 +1535,9 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/90 cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-full bg-accent-500 px-5 py-2.5 text-sm font-bold text-charcoal-950 transition-colors hover:bg-accent-400 cursor-pointer shadow-xs"
                   >
-                    <MicIcon className="w-4 h-4 text-paper" />
+                    <MicIcon className="w-4 h-4 text-charcoal-950" />
                     <span>Start talking</span>
                   </button>
 
@@ -1546,7 +1546,7 @@ export function AssistantHome({
                     onClick={() => {
                       textareaRef.current?.focus();
                     }}
-                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-graphite underline decoration-line underline-offset-4 transition-colors hover:text-ink cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-charcoal-400 underline decoration-hairline underline-offset-4 transition-colors hover:text-charcoal-100 cursor-pointer"
                   >
                     <span>Type instead</span>
                   </button>
@@ -1619,14 +1619,14 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink text-paper rounded-tr-xs"
-                            : "bg-white text-ink rounded-tl-xs border border-line/60"
+                            ? "bg-accent-500 text-charcoal-950 font-medium rounded-tr-xs shadow-xs"
+                            : "bg-charcoal-900 text-charcoal-100 rounded-tl-xs border border-hairline shadow-xs"
                         }`}
                       >
                         {isUser ? (
                           <p className="whitespace-pre-line">{m.text}</p>
                         ) : (
-                          <div className="prose prose-sm max-w-none text-ink space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-ink [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-ink [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-ink [&>pre]:text-paper [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>code]:bg-paper [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
+                          <div className="prose prose-invert prose-sm max-w-none text-charcoal-200 space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-charcoal-100 [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-charcoal-100 [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-charcoal-950 [&>pre]:text-charcoal-100 [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>code]:bg-charcoal-800 [&>code]:text-charcoal-100 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent-400 [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent-500 [&>blockquote]:pl-3 [&>blockquote]:italic">
                             <ReactMarkdown>{m.text}</ReactMarkdown>
                           </div>
                         )}
@@ -1745,20 +1745,20 @@ export function AssistantHome({
             {/* AI Rounded Card Box */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-line bg-paper p-3 shadow-sm focus-within:border-graphite focus-within:bg-white focus-within:ring-2 focus-within:ring-ink/5 transition-colors"
+              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-hairline bg-charcoal-900 p-3 shadow-sm focus-within:border-accent-500 focus-within:bg-charcoal-850 transition-colors"
             >
               {/* Attached Document Preview Badge */}
               {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-line bg-white px-3 py-1.5 text-xs text-ink animate-in fade-in shadow-2xs">
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-hairline bg-charcoal-800 px-3 py-1.5 text-xs text-charcoal-100 animate-in fade-in shadow-2xs">
                   <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+                    <PaperclipIcon className="w-3.5 h-3.5 text-accent-400 shrink-0" />
                     <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-graphite/55">Ready to review</span>
+                    <span className="text-[10px] text-charcoal-400">Ready to review</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-graphite/55 hover:text-red-600 cursor-pointer"
+                    className="rounded p-1 text-charcoal-400 hover:text-red-400 cursor-pointer"
                     title="Remove attachment"
                   >
                     ✕
@@ -1795,11 +1795,11 @@ export function AssistantHome({
                     ? `Ask anything about ${attachedFile.name}...`
                     : "Message CareerForge AI or attach a document..."
                 }
-                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-ink placeholder:text-graphite/55 focus:outline-none"
+                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-charcoal-100 placeholder:text-charcoal-500 focus:outline-none"
               />
 
               {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-line mt-1">
+              <div className="flex items-center justify-between pt-2 border-t border-hairline mt-1">
                 {/* Left Controls: Clean Attach & Unlimited Voice */}
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1807,12 +1807,12 @@ export function AssistantHome({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parsingDoc}
                     title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-graphite border-t-transparent animate-spin" />
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent-400 border-t-transparent animate-spin" />
                     ) : (
-                      <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
+                      <PaperclipIcon className="w-3.5 h-3.5 text-charcoal-400" />
                     )}
                     <span className="hidden sm:inline">Attach</span>
                   </button>
@@ -1825,8 +1825,8 @@ export function AssistantHome({
                     aria-label={listening ? "Stop voice dictation" : "Start voice dictation"}
                     className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-ink text-paper"
-                        : "text-graphite hover:bg-mist hover:text-ink"
+                        ? "bg-red-600 text-white animate-pulse"
+                        : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
                     }`}
                     title={
                       listening
@@ -1834,12 +1834,12 @@ export function AssistantHome({
                         : "Voice Dictation in any language (Auto-sends on pause)"
                     }
                   >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-paper" : "text-graphite/80"}`} />
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-white" : "text-charcoal-400"}`} />
                     <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
                   </button>
 
                   {micError && (
-                    <span className="text-[10px] text-red-600 truncate max-w-[140px]">
+                    <span className="text-[10px] text-red-400 truncate max-w-[140px]">
                       {micError}
                     </span>
                   )}
@@ -1851,8 +1851,8 @@ export function AssistantHome({
                   disabled={busy || (!input.trim() && !attachedFile)}
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
                     input.trim() || attachedFile
-                      ? "bg-ink text-white hover:bg-ink/90 scale-100 cursor-pointer"
-                      : "bg-mist text-graphite/55 cursor-not-allowed opacity-60"
+                      ? "bg-accent-500 text-charcoal-950 font-bold hover:bg-accent-400 scale-100 cursor-pointer"
+                      : "bg-charcoal-800 text-charcoal-600 cursor-not-allowed opacity-60"
                   }`}
                   title="Send prompt (or press Enter)"
                 >
@@ -1869,10 +1869,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("left")}
                 disabled={!canScrollLeft}
                 aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-hairline bg-charcoal-900 shadow-sm backdrop-blur-xs transition-colors ${
                   canScrollLeft
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
+                    ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
+                    : "opacity-0 pointer-events-none text-charcoal-600"
                 }`}
               >
                 <ChevronLeftIcon className="w-4 h-4" />
@@ -1890,7 +1890,7 @@ export function AssistantHome({
                     key={pill.label}
                     type="button"
                     onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-line bg-white px-3.5 py-1.5 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer whitespace-nowrap"
+                    className="shrink-0 rounded-full border border-hairline bg-charcoal-900 px-3.5 py-1.5 text-xs font-medium text-charcoal-300 hover:border-accent-500 hover:text-charcoal-100 hover:bg-charcoal-850 transition-colors cursor-pointer whitespace-nowrap"
                   >
                     {pill.label}
                   </button>
@@ -1903,10 +1903,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("right")}
                 disabled={!canScrollRight}
                 aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-hairline bg-charcoal-900 shadow-sm backdrop-blur-xs transition-colors ${
                   canScrollRight
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
+                    ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
+                    : "opacity-0 pointer-events-none text-charcoal-600"
                 }`}
               >
                 <ChevronRightIcon className="w-4 h-4" />

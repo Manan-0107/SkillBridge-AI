@@ -33,26 +33,26 @@ export function Workspace({
   const heading = copy[feature];
 
   return (
-    <div className="min-h-[calc(100vh-4.25rem)]">
-      <div className="border-b border-line py-10">
+    <div className="min-h-[calc(100vh-4.25rem)] bg-charcoal-950 text-charcoal-200">
+      <div className="border-b border-hairline py-10 bg-charcoal-950">
         <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-graphite">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-accent-400">
               {heading.eyebrow}
             </p>
-            <h1 className="mt-2 font-display text-3xl italic text-ink md:text-4xl">
+            <h1 className="mt-2 font-display text-3xl italic text-charcoal-100 md:text-4xl">
               {heading.title}
             </h1>
           </div>
-          <label className="flex items-center gap-2 text-[13px] text-graphite">
+          <label className="flex items-center gap-2 text-[13px] text-charcoal-400">
             Target role
             <select
               value={role}
               onChange={(e) => setTargetRole(e.target.value as RoleId)}
-              className="rounded-md border border-line bg-white px-2.5 py-1.5 text-sm text-ink"
+              className="rounded-md border border-hairline bg-charcoal-900 px-3 py-1.5 text-sm text-charcoal-100 focus:border-accent-500 focus:outline-none"
             >
               {roleOptions.map((r) => (
-                <option key={r.id} value={r.id}>
+                <option key={r.id} value={r.id} className="bg-charcoal-900 text-charcoal-100">
                   {r.label}
                 </option>
               ))}

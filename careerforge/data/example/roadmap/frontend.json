@@ -1,0 +1,395 @@
+{
+  "roadmapId": "frontend",
+  "version": 1,
+  "generatedAt": "2026-09-14T00:00:00Z",
+  "nodes": [
+    {
+      "id": "html-semantics",
+      "title": "Modern HTML5 & Semantic Web",
+      "description": "Master accessible markup, landmark structures, document outlines, and form validations compliant with modern WCAG 2.2 specifications.",
+      "status": "completed",
+      "track": "frontend",
+      "depth": 0,
+      "parentIds": [],
+      "children": ["css-modern-layouts", "js-core-execution"],
+      "concepts": [
+        { "id": "html-landmarks", "label": "Semantic Landmarks (header, nav, main, article, aside, footer)" },
+        { "id": "html-a11y", "label": "Accessible Forms, Fieldsets, Labels & ARIA attributes" },
+        { "id": "html-meta", "label": "Document Metadata, Open Graph, Viewport & Resource Hints" }
+      ],
+      "prerequisites": [],
+      "resources": [
+        { "title": "MDN HTML Semantics Guide", "url": "https://developer.mozilla.org/en-US/docs/Glossary/Semantics", "type": "docs" },
+        { "title": "WebAIM Semantic Structure & WCAG", "url": "https://webaim.org/techniques/semanticstructure/", "type": "article" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "css-modern-layouts",
+      "title": "Modern CSS: Flexbox & Grid Layouts",
+      "description": "Design responsive, fluid, and robust user interfaces using CSS Flexbox, 2-dimensional Grid layouts, and container queries.",
+      "status": "completed",
+      "track": "frontend",
+      "depth": 0,
+      "parentIds": ["html-semantics"],
+      "children": ["css-architecture", "web-apis-dom"],
+      "concepts": [
+        { "id": "css-box-model", "label": "Box Model, Margin Collapsing & Box-Sizing" },
+        { "id": "css-flexbox", "label": "Flexbox Direction, Alignment, Grow/Shrink Factors" },
+        { "id": "css-grid", "label": "Grid Template Areas, Auto-Fill, Auto-Fit & MinMax" },
+        { "id": "css-container-queries", "label": "Container Queries & Dynamic Viewport Units" }
+      ],
+      "prerequisites": ["html-semantics"],
+      "resources": [
+        { "title": "Complete Guide to CSS Grid (CSS-Tricks)", "url": "https://css-tricks.com/snippets/css/complete-guide-grid/", "type": "article" },
+        { "title": "Modern CSS Layout by Kevin Powell", "url": "https://www.youtube.com/watch?v=qm0IfG1GyZU", "type": "video" }
+      ],
+      "position": { "branch": 1, "order": 1 }
+    },
+    {
+      "id": "css-architecture",
+      "title": "CSS Architecture & Design Systems",
+      "description": "Structure scalable design systems using CSS Custom Properties (variables), utility-first patterns, cascade layers, and fluid typography.",
+      "status": "in-progress",
+      "track": "frontend",
+      "depth": 1,
+      "parentIds": ["css-modern-layouts"],
+      "children": ["react-components-jsx"],
+      "concepts": [
+        { "id": "css-variables", "label": "CSS Custom Properties & Dynamic Theming" },
+        { "id": "css-cascade-layers", "label": "Cascade Layers (@layer) & Specificity Management" },
+        { "id": "css-design-tokens", "label": "Design Token Pipelines & Fluid Typography" }
+      ],
+      "prerequisites": ["css-modern-layouts"],
+      "resources": [
+        { "title": "MDN CSS Cascade Layers", "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@layer", "type": "docs" },
+        { "title": "Refactoring UI Tactics", "url": "https://www.refactoringui.com/", "type": "course" }
+      ],
+      "position": { "branch": 1, "order": 0 }
+    },
+    {
+      "id": "js-core-execution",
+      "title": "JavaScript Core Runtime & Closures",
+      "description": "Understand execution contexts, lexical scoping, the call stack, memory management, garbage collection, and lexical closures.",
+      "status": "completed",
+      "track": "frontend",
+      "depth": 1,
+      "parentIds": ["html-semantics"],
+      "children": ["js-async-events", "ts-fundamentals"],
+      "concepts": [
+        { "id": "js-execution-context", "label": "Global & Function Execution Contexts, Hoisting" },
+        { "id": "js-lexical-closures", "label": "Lexical Scope Chain & Private Closures" },
+        { "id": "js-prototypes", "label": "Prototypal Inheritance, Object Methods & Object.create" },
+        { "id": "js-this-binding", "label": "Explicit, Implicit & Arrow Function 'this' Binding" }
+      ],
+      "prerequisites": ["html-semantics"],
+      "resources": [
+        { "title": "You Don't Know JS: Scope & Closures", "url": "https://github.com/getify/You-Dont-Know-JS", "type": "article" },
+        { "title": "JavaScript Runtime Deep Dive", "url": "https://javascript.info/", "type": "docs" }
+      ],
+      "position": { "branch": -1, "order": 1 }
+    },
+    {
+      "id": "js-async-events",
+      "title": "Asynchronous JS & Event Loop",
+      "description": "Master asynchronous JavaScript execution, task/microtask queue priority, Promises, async/await, and abort signals.",
+      "status": "in-progress",
+      "track": "frontend",
+      "depth": 2,
+      "parentIds": ["js-core-execution"],
+      "children": ["web-apis-dom", "ts-fundamentals"],
+      "concepts": [
+        { "id": "js-event-loop", "label": "Microtask Queue vs Macrotask Queue Priority" },
+        { "id": "js-promises", "label": "Promise Chaining, Combinators (all, allSettled, race, any)" },
+        { "id": "js-async-await", "label": "Async/Await Synchronous-Style Error Handling" },
+        { "id": "js-abort-controller", "label": "AbortController & Request Cancellation" }
+      ],
+      "prerequisites": ["js-core-execution"],
+      "resources": [
+        { "title": "What the heck is the event loop anyway? (Philip Roberts)", "url": "https://www.youtube.com/watch?v=8aGhZQkoFbQ", "type": "video" },
+        { "title": "JavaScript Visualized: Event Loop", "url": "https://dev.to/lydiahallie/javascript-visualized-event-loop-3dif", "type": "article" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "web-apis-dom",
+      "title": "Browser Platform, DOM & Events",
+      "description": "Direct interaction with the browser Document Object Model, event bubbling/capturing, IntersectionObserver, and Web Workers.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 2,
+      "parentIds": ["css-modern-layouts", "js-async-events"],
+      "children": ["react-components-jsx"],
+      "concepts": [
+        { "id": "dom-traversal", "label": "DOM Tree Manipulation, DocumentFragment & Repaint/Reflow" },
+        { "id": "dom-events", "label": "Event Propagation: Capturing, Target, Bubbling & Delegation" },
+        { "id": "browser-observers", "label": "IntersectionObserver, ResizeObserver & MutationObserver" },
+        { "id": "web-storage", "label": "Web Storage Quotas, IndexedDB & CacheStorage" }
+      ],
+      "prerequisites": ["css-modern-layouts", "js-async-events"],
+      "resources": [
+        { "title": "MDN DOM Event Architecture", "url": "https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events", "type": "docs" },
+        { "title": "Fast DOM Updates & Rendering", "url": "https://web.dev/critical-rendering-path/", "type": "article" }
+      ],
+      "position": { "branch": 0, "order": 1 }
+    },
+    {
+      "id": "ts-fundamentals",
+      "title": "TypeScript Essentials & Type Soundness",
+      "description": "Establish compile-time type safety with primitives, interfaces, type aliases, union/intersection types, and strict compiler flags.",
+      "status": "completed",
+      "track": "frontend",
+      "depth": 2,
+      "parentIds": ["js-core-execution", "js-async-events"],
+      "children": ["ts-advanced", "react-components-jsx"],
+      "concepts": [
+        { "id": "ts-primitives", "label": "Primitive Types, Arrays, Tuples & Readonly Modifiers" },
+        { "id": "ts-interfaces", "label": "Interfaces vs Type Aliases & Structural Subtyping" },
+        { "id": "ts-unions", "label": "Discriminated Unions & Exhaustive Type Narrowing" },
+        { "id": "ts-strict", "label": "tsconfig.json Strict Flags (noImplicitAny, strictNullChecks)" }
+      ],
+      "prerequisites": ["js-core-execution"],
+      "resources": [
+        { "title": "Official TypeScript Handbook", "url": "https://www.typescriptlang.org/docs/handbook/", "type": "docs" },
+        { "title": "Total TypeScript Fundamentals", "url": "https://www.totaltypescript.com/", "type": "course" }
+      ],
+      "position": { "branch": 1, "order": 2 }
+    },
+    {
+      "id": "ts-advanced",
+      "title": "Advanced TypeScript & Generics",
+      "description": "Master reusable generic functions and classes, conditional types, mapped types, utility types, and template literal types.",
+      "status": "in-progress",
+      "track": "frontend",
+      "depth": 3,
+      "parentIds": ["ts-fundamentals"],
+      "children": ["react-hooks-lifecycle", "state-management"],
+      "concepts": [
+        { "id": "ts-generics", "label": "Generic Type Constraints & Inference (infer keyword)" },
+        { "id": "ts-conditional", "label": "Conditional Types & Distributed Union Execution" },
+        { "id": "ts-mapped", "label": "Mapped Types, Key Remapping & Index Access" },
+        { "id": "ts-utility", "label": "Pick, Omit, Record, Partial, ReturnType & Awaited" }
+      ],
+      "prerequisites": ["ts-fundamentals"],
+      "resources": [
+        { "title": "Effective TypeScript by Dan Vanderkam", "url": "https://effectivetypescript.com/", "type": "article" },
+        { "title": "Type Challenges Interactive Sandbox", "url": "https://github.com/type-challenges/type-challenges", "type": "docs" }
+      ],
+      "position": { "branch": 1, "order": 0 }
+    },
+    {
+      "id": "react-components-jsx",
+      "title": "React Architecture & Declarative Components",
+      "description": "Build modern UIs using functional components, JSX compilation mechanics, props interfaces, and unidirectional data flow.",
+      "status": "completed",
+      "track": "frontend",
+      "depth": 3,
+      "parentIds": ["web-apis-dom", "ts-fundamentals", "css-architecture"],
+      "children": ["react-hooks-lifecycle", "react-fiber-rendering"],
+      "concepts": [
+        { "id": "react-jsx-transpile", "label": "JSX to React.createElement / jsx-runtime Transformation" },
+        { "id": "react-unidirectional", "label": "Props Drilling, Pure Components & Immutability" },
+        { "id": "react-composition", "label": "Component Composition Patterns & Children Props" },
+        { "id": "react-keys", "label": "Stable Keys & Sibling Element Identification" }
+      ],
+      "prerequisites": ["ts-fundamentals", "web-apis-dom"],
+      "resources": [
+        { "title": "React.dev: Thinking in React", "url": "https://react.dev/learn/thinking-in-react", "type": "docs" },
+        { "title": "Jack Herrington React 18/19 Deep Dive", "url": "https://www.youtube.com/watch?v=1r05d9Hq0wY", "type": "video" }
+      ],
+      "position": { "branch": -1, "order": 1 }
+    },
+    {
+      "id": "react-hooks-lifecycle",
+      "title": "React Hooks & Effect Lifecycles",
+      "description": "Deep dive into useState, useReducer, useEffect, useLayoutEffect, and custom hooks with strict synchronization rules.",
+      "status": "in-progress",
+      "track": "frontend",
+      "depth": 4,
+      "parentIds": ["react-components-jsx", "ts-advanced"],
+      "children": ["react-fiber-rendering", "state-management"],
+      "concepts": [
+        { "id": "react-state-reducer", "label": "State Updater Functions, Batching & useReducer State Machines" },
+        { "id": "react-effect-deps", "label": "Dependency Arrays, Stale Closures & Cleanup Handlers" },
+        { "id": "react-ref-imperative", "label": "useRef Instance Variables & useImperativeHandle" },
+        { "id": "react-custom-hooks", "label": "Encapsulating Headless Logic into Custom Hooks" }
+      ],
+      "prerequisites": ["react-components-jsx"],
+      "resources": [
+        { "title": "A Complete Guide to useEffect (Dan Abramov)", "url": "https://overreacted.io/a-complete-guide-to-useeffect/", "type": "article" },
+        { "title": "React.dev Managing State", "url": "https://react.dev/learn/managing-state", "type": "docs" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "react-fiber-rendering",
+      "title": "React Fiber Engine & Performance",
+      "description": "Understand the double-buffered Fiber Tree reconciliation engine, Concurrent Mode time-slicing, and React.memo heuristics.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 4,
+      "parentIds": ["react-components-jsx", "react-hooks-lifecycle"],
+      "children": ["state-management", "web-performance"],
+      "concepts": [
+        { "id": "react-fiber-nodes", "label": "Fiber Work Units, Render Phase vs Commit Phase" },
+        { "id": "react-memo-callbacks", "label": "useMemo, useCallback & Referential Identity Stability" },
+        { "id": "react-transitions", "label": "useTransition & useDeferredValue Priority Lanes" },
+        { "id": "react-devtools-profiler", "label": "React Profiler Flamegraphs & Re-Render Auditing" }
+      ],
+      "prerequisites": ["react-hooks-lifecycle"],
+      "resources": [
+        { "title": "Inside Fiber: in-depth overview of the new reconciliation algorithm", "url": "https://indepth.dev/posts/1008/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react", "type": "article" },
+        { "title": "React Profiler Performance Guide", "url": "https://kentcdodds.com/blog/profile-a-react-app-for-performance", "type": "article" }
+      ],
+      "position": { "branch": 1, "order": 1 }
+    },
+    {
+      "id": "state-management",
+      "title": "Client State & Architecture Patterns",
+      "description": "Architect global and contextual state stores without boilerplate, using lightweight state machines and atomic stores.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 5,
+      "parentIds": ["react-hooks-lifecycle", "react-fiber-rendering"],
+      "children": ["server-state-query", "unit-testing"],
+      "concepts": [
+        { "id": "state-context-slices", "label": "React Context Split-Provider Performance Pattern" },
+        { "id": "state-atomic-zustand", "label": "Zustand Atomic Selectors & Transient Subscriptions" },
+        { "id": "state-finite-machines", "label": "Finite State Machines & Predictable Transitions" }
+      ],
+      "prerequisites": ["react-hooks-lifecycle"],
+      "resources": [
+        { "title": "Zustand Documentation & Recipes", "url": "https://zustand-demo.pmnd.rs/", "type": "docs" },
+        { "title": "Application State Management with React", "url": "https://kentcdodds.com/blog/application-state-management-with-react", "type": "article" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "server-state-query",
+      "title": "Server State & Async Caching",
+      "description": "Manage asynchronous server state, background revalidation, optimistic updates, and cache invalidation via TanStack Query.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 5,
+      "parentIds": ["state-management"],
+      "children": ["web-performance", "unit-testing"],
+      "concepts": [
+        { "id": "query-keys", "label": "Query Key Hierarchies & Cache Invalidation Strategies" },
+        { "id": "query-stale-time", "label": "Stale-While-Revalidate Caching Lifecycle (staleTime vs gcTime)" },
+        { "id": "query-mutations", "label": "Mutations, Optimistic Updates & Rollback Handlers" }
+      ],
+      "prerequisites": ["state-management"],
+      "resources": [
+        { "title": "TanStack Query Official Docs", "url": "https://tanstack.com/query/latest/docs/framework/react/overview", "type": "docs" },
+        { "title": "TkDodo's Practical React Query Blog", "url": "https://tkdodo.eu/blog/practical-react-query", "type": "article" }
+      ],
+      "position": { "branch": 1, "order": 1 }
+    },
+    {
+      "id": "web-performance",
+      "title": "Core Web Vitals & Web Performance",
+      "description": "Audit, diagnose, and optimize real-world frontend performance: Largest Contentful Paint, Interaction to Next Paint, and Cumulative Layout Shift.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 5,
+      "parentIds": ["react-fiber-rendering", "server-state-query"],
+      "children": ["build-tools", "ci-cd-deployment"],
+      "concepts": [
+        { "id": "cwv-lcp", "label": "Largest Contentful Paint (LCP) Resource Prioritization" },
+        { "id": "cwv-inp", "label": "Interaction to Next Paint (INP) Long Task Minimization" },
+        { "id": "cwv-cls", "label": "Cumulative Layout Shift (CLS) Explicit Aspect Ratios" },
+        { "id": "perf-lazy-loading", "label": "Dynamic Route Code-Splitting & React.lazy Loading" }
+      ],
+      "prerequisites": ["react-fiber-rendering"],
+      "resources": [
+        { "title": "web.dev: Learn Core Web Vitals", "url": "https://web.dev/explore/learn-core-web-vitals", "type": "docs" },
+        { "title": "High Performance Browser Networking (Ilya Grigorik)", "url": "https://hpbn.co/", "type": "article" }
+      ],
+      "position": { "branch": 0, "order": 2 }
+    },
+    {
+      "id": "unit-testing",
+      "title": "Unit & Integration Testing (Vitest & RTL)",
+      "description": "Write deterministic unit and integration tests using Vitest and React Testing Library focusing on accessible user-centric queries.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 6,
+      "parentIds": ["state-management", "server-state-query"],
+      "children": ["e2e-testing", "build-tools"],
+      "concepts": [
+        { "id": "test-rtl-queries", "label": "Accessible ARIA Queries (getByRole, findByLabelText)" },
+        { "id": "test-mocking", "label": "MSW (Mock Service Worker) Network Layer Interception" },
+        { "id": "test-user-event", "label": "Simulating User Interactions via @testing-library/user-event" }
+      ],
+      "prerequisites": ["state-management"],
+      "resources": [
+        { "title": "React Testing Library Guiding Principles", "url": "https://testing-library.com/docs/guiding-principles", "type": "docs" },
+        { "title": "Vitest Fast Test Runner Guide", "url": "https://vitest.dev/guide/", "type": "docs" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "e2e-testing",
+      "title": "End-to-End Testing (Playwright)",
+      "description": "Automate resilient end-to-end browser user flows, visual regressions, and multi-page authentication sequences with Playwright.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 6,
+      "parentIds": ["unit-testing"],
+      "children": ["ci-cd-deployment"],
+      "concepts": [
+        { "id": "e2e-locators", "label": "Playwright Locator Strategies & Auto-Waiting Assertions" },
+        { "id": "e2e-storage-state", "label": "Preserving Authentication State via storageState JSON" },
+        { "id": "e2e-trace-viewer", "label": "Debugging Flaky Tests with Playwright Trace Viewer" }
+      ],
+      "prerequisites": ["unit-testing"],
+      "resources": [
+        { "title": "Playwright Official Docs", "url": "https://playwright.dev/docs/intro", "type": "docs" },
+        { "title": "Fast Reliable E2E Testing with Playwright", "url": "https://www.youtube.com/watch?v=Xz6lhEzgI5I", "type": "video" }
+      ],
+      "position": { "branch": 1, "order": 1 }
+    },
+    {
+      "id": "build-tools",
+      "title": "Modern Bundlers & Build Tooling",
+      "description": "Deep dive into ES Modules, tree-shaking, code splitting, asset hashing, and Vite/Webpack/Turbopack compilation pipelines.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 7,
+      "parentIds": ["web-performance", "unit-testing"],
+      "children": ["ci-cd-deployment"],
+      "concepts": [
+        { "id": "build-esm-cjs", "label": "ES Modules vs CommonJS Interoperability & Dual Package Hazard" },
+        { "id": "build-tree-shaking", "label": "Static Analysis, SideEffects Flag & Dead Code Elimination" },
+        { "id": "build-chunking", "label": "Manual Chunk Splitting & Vendor Cache Invalidation" }
+      ],
+      "prerequisites": ["web-performance"],
+      "resources": [
+        { "title": "How Bundlers Work (Webpack / Rollup / Vite)", "url": "https://lihautan.com/how-bundlers-work/", "type": "article" },
+        { "title": "Vite Guide & Plugin Architecture", "url": "https://vitejs.dev/guide/", "type": "docs" }
+      ],
+      "position": { "branch": -1, "order": 0 }
+    },
+    {
+      "id": "ci-cd-deployment",
+      "title": "Edge CDN, Caching & Production CI/CD",
+      "description": "Deploy secure, CDN-first client applications using HTTP cache-control headers, immutable asset buckets, and automated GitHub Actions.",
+      "status": "planned",
+      "track": "frontend",
+      "depth": 7,
+      "parentIds": ["e2e-testing", "build-tools", "web-performance"],
+      "children": [],
+      "concepts": [
+        { "id": "cdn-cache-headers", "label": "Cache-Control: public, max-age=86400, immutable & S3/R2 Invalidation" },
+        { "id": "ci-github-actions", "label": "Automated Lint, Typecheck, Test & S3 Deploy Pipelines" },
+        { "id": "security-headers", "label": "Content Security Policy (CSP), HSTS, and X-Frame-Options" }
+      ],
+      "prerequisites": ["build-tools", "e2e-testing"],
+      "resources": [
+        { "title": "MDN HTTP Caching Guide", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching", "type": "docs" },
+        { "title": "Cloudflare R2 & Edge CDN Best Practices", "url": "https://developers.cloudflare.com/r2/", "type": "docs" }
+      ],
+      "position": { "branch": 0, "order": 1 }
+    }
+  ]
+}

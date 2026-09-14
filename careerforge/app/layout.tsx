@@ -21,6 +21,9 @@ const body = Inter({
   variable: "--font-body",
 });
 
+import { FloatingControlBar } from "@/components/accessibility/FloatingControlBar";
+import { AccessibilityProfileModal } from "@/components/accessibility/AccessibilityProfileModal";
+
 export const metadata: Metadata = {
   title: "CareerForge — Build the path, not just the resume",
   description:
@@ -34,7 +37,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="font-body antialiased">
+      <body className="font-body antialiased bg-charcoal-950 text-charcoal-200 min-h-screen selection:bg-charcoal-700 selection:text-charcoal-100">
         <AppProvider>
           <GlobalVoiceProvider>
             <VoiceProvider>
@@ -51,6 +54,8 @@ export default function RootLayout({
                 Skip to voice assistant controls
               </a>
               {children}
+              <FloatingControlBar />
+              <AccessibilityProfileModal />
               <GlobalVoiceDictator />
             </VoiceProvider>
           </GlobalVoiceProvider>
