@@ -887,8 +887,9 @@ export function PracticeHub() {
       )}
 
       {/* Gamified Coding Environments & Reference Sandboxes */}
-      <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-charcoal-400">
-        External Practice Environments &amp; Reference Sandboxes
+      <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-charcoal-400 flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span>Curated Practice Environments &amp; Reference Sandboxes</span>
       </h4>
       <div className="grid gap-4 sm:grid-cols-3">
         {externalPracticeTools.map((tool) => (
@@ -897,14 +898,26 @@ export function PracticeHub() {
             href={tool.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block border border-hairline rounded-xl bg-charcoal-900 p-6 transition-all hover:border-accent-500 hover:bg-charcoal-850 text-charcoal-200 group"
+            className="block border border-white/[0.08] rounded-2xl bg-charcoal-900/80 p-6 transition-all hover:border-amber-500/40 hover:bg-charcoal-850 hover:scale-[1.02] text-charcoal-200 group shadow-lg backdrop-blur-md cursor-pointer"
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-accent-400">{tool.role}</p>
-            <p className="mt-2 text-xl font-bold text-charcoal-100">{tool.name}</p>
-            <p className="mt-2 text-xs leading-relaxed text-charcoal-400">{tool.description}</p>
-            <p className="mt-4 text-xs font-bold uppercase tracking-widest text-accent-400 group-hover:underline underline-offset-4">
-              Launch Sandbox →
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 rounded-full">
+                {tool.role}
+              </span>
+              <span className="text-charcoal-500 group-hover:text-amber-400 transition-colors text-sm">
+                ↗
+              </span>
+            </div>
+            <p className="mt-3 text-lg font-bold text-white group-hover:text-amber-400 transition-colors">
+              {tool.name}
             </p>
+            <p className="mt-2 text-xs leading-relaxed text-charcoal-400">
+              {tool.description}
+            </p>
+            <div className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-400 group-hover:translate-x-1 transition-transform">
+              <span>Launch Sandbox</span>
+              <span>→</span>
+            </div>
           </a>
         ))}
       </div>

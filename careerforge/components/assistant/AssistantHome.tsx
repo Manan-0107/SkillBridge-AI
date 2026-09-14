@@ -57,18 +57,18 @@ function ThinkingProcess({ steps }: { steps: string[] }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="group inline-flex items-center gap-2 rounded-full border border-line/80 bg-paper/80 px-3 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-all cursor-pointer shadow-2xs"
+        className="group inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-charcoal-850 px-3 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-all cursor-pointer shadow-2xs"
         aria-expanded={open}
         aria-label="Toggle thinking process"
       >
-        <span className="flex h-2 w-2 rounded-full bg-accent animate-pulse" />
+        <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
         <span className="flex items-center gap-1">
-          <span className="text-accent font-semibold">Thought</span>
-          <span className="text-graphite/40">·</span>
+          <span className="text-amber-400 font-semibold">Thought</span>
+          <span className="text-charcoal-500">·</span>
           <span>{steps.length} reasoning steps</span>
         </span>
         <svg
-          className={`w-3.5 h-3.5 text-graphite/60 transition-transform duration-200 ${
+          className={`w-3.5 h-3.5 text-charcoal-400 transition-transform duration-200 ${
             open ? "rotate-180" : ""
           }`}
           fill="none"
@@ -80,18 +80,18 @@ function ThinkingProcess({ steps }: { steps: string[] }) {
       </button>
 
       {open && (
-        <div className="mt-2 space-y-1.5 rounded-xl border border-line/70 bg-paper/60 p-3 text-xs text-graphite shadow-2xs animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="flex items-center justify-between pb-1 border-b border-line/40 text-[10px] font-semibold text-graphite/60 uppercase tracking-wider">
+        <div className="mt-2 space-y-1.5 rounded-xl border border-white/[0.08] bg-charcoal-900/90 p-3 text-xs text-charcoal-300 shadow-2xs animate-in fade-in slide-in-from-top-1 duration-150 backdrop-blur-md">
+          <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.06] text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider">
             <span>Deliberative Reasoning Process</span>
-            <span className="text-accent/90 font-normal normal-case">Claude & ChatGPT Paradigm</span>
+            <span className="text-amber-400/90 font-normal normal-case">Cascading Intelligence</span>
           </div>
           <div className="space-y-1.5 pt-1">
             {steps.map((step, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 border border-line/40 text-graphite text-[11px] leading-relaxed"
+                className="flex items-start gap-2 rounded-lg bg-charcoal-800/60 px-2.5 py-1.5 border border-white/[0.04] text-charcoal-200 text-[11px] leading-relaxed"
               >
-                <span className="text-accent font-bold select-none shrink-0">•</span>
+                <span className="text-amber-400 font-bold select-none shrink-0">•</span>
                 <span>{step}</span>
               </div>
             ))}
@@ -1390,16 +1390,15 @@ export function AssistantHome({
               onChange={(e) => setVoiceLanguage(e.target.value)}
               title="Select speech and assistant language"
               aria-label="Speech Language Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer"
+              className="rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-850 hover:text-charcoal-100 focus:outline-none focus:ring-1 focus:ring-amber-500/40 cursor-pointer"
             >
-              <option value="auto">🌐 Auto Detect Language</option>
+              <option value="auto" className="bg-charcoal-900 text-charcoal-200">🌐 Auto Detect</option>
               {LANGUAGE_LIST.map((l) => (
-                <option key={l.code} value={l.code}>
+                <option key={l.code} value={l.code} className="bg-charcoal-900 text-charcoal-200">
                   {l.flag} {l.nativeName} ({l.name})
                 </option>
               ))}
             </select>
-
 
             {/* Repeat Button */}
             <button
@@ -1407,7 +1406,7 @@ export function AssistantHome({
               onClick={repeatLastResponse}
               title="Repeat last spoken response"
               aria-label="Repeat last spoken response"
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium text-graphite hover:bg-paper hover:text-ink transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-colors cursor-pointer"
             >
               <SpeakerIcon className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Repeat</span>
@@ -1420,7 +1419,7 @@ export function AssistantHome({
                 onClick={stopAllVoice}
                 title="Stop audio and listening immediately"
                 aria-label="Stop audio and listening"
-                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer shadow-xs"
               >
                 <StopIcon className="w-3 h-3 text-white" />
                 <span>Stop</span>
@@ -1433,10 +1432,10 @@ export function AssistantHome({
               onClick={toggleMute}
               title={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
               aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
                 accessibilityPrefs.speechOutput
-                  ? "border-accent/25 bg-accent/10 text-accent hover:bg-accent/20"
-                  : "border-line bg-mist text-graphite/80 hover:bg-mist"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                  : "border-white/[0.08] bg-charcoal-900 text-charcoal-400 hover:bg-charcoal-850"
               }`}
             >
               <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "" : "opacity-40"}`} />
@@ -1446,7 +1445,7 @@ export function AssistantHome({
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-semibold text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 shadow-xs cursor-pointer"
               title="Share conversation link or transcript"
               aria-label="Share Conversation"
             >
@@ -1457,7 +1456,7 @@ export function AssistantHome({
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 cursor-pointer shadow-xs"
+              className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 cursor-pointer shadow-xs"
               title="Start new chat"
               aria-label="Start New Chat"
             >
@@ -1468,7 +1467,7 @@ export function AssistantHome({
               <button
                 type="button"
                 onClick={(e) => deleteConversation(activeConversation.id, e)}
-                className="flex items-center gap-1 rounded-lg border border-hairline bg-charcoal-900 px-2 py-1 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:bg-red-950/40 cursor-pointer shadow-xs transition-colors"
+                className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:bg-red-950/40 cursor-pointer shadow-xs transition-colors"
                 title="Delete this chat"
                 aria-label="Delete Current Chat"
               >
@@ -1483,16 +1482,21 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-10 max-w-xl space-y-5">
-                <h1 className="font-display text-4xl italic leading-[1.1] text-charcoal-100 md:text-5xl">
-                  {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
-                  <span className="block text-accent-400">Where should we start?</span>
+              <div className="mb-10 max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-400 backdrop-blur-md">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Autonomous Career Intelligence & Voice Copilot</span>
+                </div>
+
+                <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.15]">
+                  {userDisplayName ? `Welcome back, ${userDisplayName}.` : "Welcome to CareerForge."}
+                  <span className="block mt-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 bg-clip-text text-transparent italic">
+                    Where should we take your career next?
+                  </span>
                 </h1>
 
-                <p className="max-w-md text-sm leading-relaxed text-charcoal-400">
-                  I can help you build or sharpen your resume, choose skills to learn,
-                  find projects worth doing, and track down jobs. Speak or type &mdash;
-                  whichever is easier.
+                <p className="max-w-xl text-sm sm:text-base leading-relaxed text-charcoal-300">
+                  Your voice-enabled career companion for ATS resume optimization, step-by-step learning roadmaps, daily code drills, and local opportunities. Speak naturally or type anytime.
                 </p>
 
                 {/* Primary Voice vs Text Entry Options */}
@@ -1535,7 +1539,7 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-full bg-accent-500 px-5 py-2.5 text-sm font-bold text-charcoal-950 transition-colors hover:bg-accent-400 cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-3 text-sm font-bold text-charcoal-950 transition-all hover:from-amber-400 hover:to-amber-500 hover:scale-105 cursor-pointer shadow-lg shadow-amber-500/20"
                   >
                     <MicIcon className="w-4 h-4 text-charcoal-950" />
                     <span>Start talking</span>
@@ -1546,9 +1550,40 @@ export function AssistantHome({
                     onClick={() => {
                       textareaRef.current?.focus();
                     }}
-                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-charcoal-400 underline decoration-hairline underline-offset-4 transition-colors hover:text-charcoal-100 cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-charcoal-900/80 px-6 py-3 text-sm font-medium text-charcoal-300 transition-all hover:bg-charcoal-800 hover:text-charcoal-100 cursor-pointer"
                   >
                     <span>Type instead</span>
+                  </button>
+                </div>
+
+                {/* 3 Interactive Quick Suggestion Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 w-full">
+                  <button
+                    type="button"
+                    onClick={() => runPrompt("Help me audit my resume for ATS compliance")}
+                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-xs"
+                  >
+                    <div className="text-xl mb-2">📄</div>
+                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">ATS Resume Audit</div>
+                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Score and fix keywords for your target role</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runPrompt("Show me my complete career roadmap")}
+                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-xs"
+                  >
+                    <div className="text-xl mb-2">🗺️</div>
+                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">Career Roadmap</div>
+                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Visual skill graph from basics to mastery</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runPrompt("I want to practice interview questions")}
+                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-xs"
+                  >
+                    <div className="text-xl mb-2">🎙️</div>
+                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">Mock Interview</div>
+                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Real-time interview simulation with instant feedback</div>
                   </button>
                 </div>
               </div>
@@ -1569,10 +1604,10 @@ export function AssistantHome({
                     key={m.id}
                     className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-graphite/55 px-1">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-charcoal-400 px-1">
                       <span>{isUser ? userDisplayName : "CareerForge AI"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] text-graphite/45">
+                        <span className="text-[10px] text-charcoal-500">
                           {m.engine}
                         </span>
                       )}
@@ -1582,14 +1617,14 @@ export function AssistantHome({
                           onClick={() => toggleSpeech(m.id, m.text)}
                           className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
                             speakingMsgId === m.id
-                              ? "bg-accent/10 text-accent border border-accent/25"
-                              : "text-graphite/80 hover:bg-mist hover:text-ink"
+                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                              : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
                           }`}
                           title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
                         >
                           {speakingMsgId === m.id ? (
                             <>
-                              <StopIcon className="w-2.5 h-2.5 text-accent" />
+                              <StopIcon className="w-2.5 h-2.5 text-amber-400" />
                               <span>Stop</span>
                             </>
                           ) : (
@@ -1600,13 +1635,13 @@ export function AssistantHome({
                           )}
                         </button>
                       )}
-                      {m.time && <span className="text-graphite/45">{m.time}</span>}
+                      {m.time && <span className="text-charcoal-500">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
                       {m.attachedDocName && (
-                        <div className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-2.5 py-1 text-xs text-graphite w-fit">
-                          <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
+                        <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs text-charcoal-300 w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-amber-400" />
                           <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
                         </div>
                       )}
@@ -1619,14 +1654,14 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-accent-500 text-charcoal-950 font-medium rounded-tr-xs shadow-xs"
-                            : "bg-charcoal-900 text-charcoal-100 rounded-tl-xs border border-hairline shadow-xs"
+                            ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 font-semibold rounded-tr-xs shadow-md shadow-amber-500/15"
+                            : "bg-charcoal-900/95 text-charcoal-100 rounded-tl-xs border border-white/[0.08] shadow-lg shadow-black/20 backdrop-blur-sm"
                         }`}
                       >
                         {isUser ? (
                           <p className="whitespace-pre-line">{m.text}</p>
                         ) : (
-                          <div className="prose prose-invert prose-sm max-w-none text-charcoal-200 space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-charcoal-100 [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-charcoal-100 [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-charcoal-950 [&>pre]:text-charcoal-100 [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>code]:bg-charcoal-800 [&>code]:text-charcoal-100 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent-400 [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent-500 [&>blockquote]:pl-3 [&>blockquote]:italic">
+                          <div className="prose prose-invert prose-sm max-w-none text-charcoal-200 space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-charcoal-100 [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-charcoal-100 [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-charcoal-950 [&>pre]:text-charcoal-100 [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-white/[0.06] [&>code]:bg-charcoal-800 [&>code]:text-charcoal-100 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-amber-400 [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-amber-500 [&>blockquote]:pl-3 [&>blockquote]:italic">
                             <ReactMarkdown>{m.text}</ReactMarkdown>
                           </div>
                         )}
@@ -1634,27 +1669,27 @@ export function AssistantHome({
 
                       {/* Interactive Workspace Action */}
                       {m.intent?.feature && (
-                        <div className="rounded-xl border border-line bg-paper p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
+                        <div className="rounded-xl border border-white/[0.08] bg-charcoal-900 p-4 shadow-sm space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="flex h-2 w-2 rounded-full bg-accent" />
-                              <span className="text-xs font-semibold text-ink">
+                              <span className="flex h-2 w-2 rounded-full bg-amber-500" />
+                              <span className="text-xs font-semibold text-charcoal-100">
                                 {m.intent.featureTitle || "Workspace Tool"}
                               </span>
                             </div>
                             {m.redirecting && redirectCountdown !== null && (
-                              <span className="text-[11px] font-medium text-graphite">
+                              <span className="text-[11px] font-medium text-amber-400">
                                 Opening in 3s
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-line">
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/[0.06]">
                             {m.redirecting && (
                               <button
                                 type="button"
                                 onClick={cancelRedirect}
-                                className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors cursor-pointer"
+                                className="rounded-lg border border-white/[0.08] bg-charcoal-800 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors cursor-pointer"
                               >
                                 Stay in Chat
                               </button>
@@ -1662,7 +1697,7 @@ export function AssistantHome({
                             <button
                               type="button"
                               onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-white hover:bg-ink/90 transition-colors shadow-sm cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-xs font-bold text-charcoal-950 hover:from-amber-400 hover:to-amber-500 transition-all shadow-sm cursor-pointer"
                             >
                               <span>Open {m.intent.featureTitle || "Tool"}</span>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1679,14 +1714,14 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-graphite/55 px-1">
+                  <div className="mb-1 text-[11px] font-medium text-charcoal-400 px-1">
                     CareerForge AI is thinking…
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-line bg-white px-4 py-3 shadow-xs">
+                  <div className="rounded-2xl rounded-tl-xs border border-white/[0.08] bg-charcoal-900 px-4 py-3 shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce" />
+                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce" />
                     </div>
                   </div>
                 </div>
@@ -1695,8 +1730,8 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS MATCHING PHOTO 3 ─────────── */}
-        <div className="border-t border-line bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
+        {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS ─────────── */}
+        <div className="border-t border-white/[0.08] bg-charcoal-950/90 px-4 pb-6 pt-3 backdrop-blur-xl">
           <div className="mx-auto max-w-3xl space-y-3">
             
             {/* Live Spoken Text & Captions Visualizer for Accessibility */}
@@ -1705,16 +1740,16 @@ export function AssistantHome({
                 role="region"
                 aria-label="Live Voice Captions"
                 aria-live="polite"
-                className="flex items-center justify-between rounded-xl border border-accent/25 bg-accent/10 px-3.5 py-2 text-xs text-accent shadow-sm animate-in fade-in slide-in-from-bottom-2"
+                className="flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-300 shadow-sm animate-in fade-in slide-in-from-bottom-2 backdrop-blur-md"
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-ping" />
+                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 animate-ping" />
                   <div className="truncate">
-                    <span className="font-semibold text-accent">
+                    <span className="font-semibold text-amber-400">
                       {listening ? "Listening" : "Speaking"}
-                      <span className="mx-1.5 text-accent/40">/</span>
+                      <span className="mx-1.5 text-amber-500/40">/</span>
                     </span>
-                    <span className="font-normal text-accent">
+                    <span className="font-normal text-amber-200">
                       {listening ? (input ? `"${input}"` : "Speak now, I'm listening") : liveSpokenText}
                     </span>
                   </div>
@@ -1724,7 +1759,7 @@ export function AssistantHome({
                   <button
                     type="button"
                     onClick={stopAllVoice}
-                    className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/25 transition-colors cursor-pointer"
+                    className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors cursor-pointer"
                   >
                     Dismiss
                   </button>
@@ -1745,13 +1780,13 @@ export function AssistantHome({
             {/* AI Rounded Card Box */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-hairline bg-charcoal-900 p-3 shadow-sm focus-within:border-accent-500 focus-within:bg-charcoal-850 transition-colors"
+              className="relative flex flex-col rounded-3xl border border-white/[0.1] bg-charcoal-900/90 p-3.5 shadow-xl shadow-black/40 focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20 transition-all backdrop-blur-md"
             >
               {/* Attached Document Preview Badge */}
               {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-hairline bg-charcoal-800 px-3 py-1.5 text-xs text-charcoal-100 animate-in fade-in shadow-2xs">
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-white/[0.08] bg-charcoal-800 px-3 py-1.5 text-xs text-charcoal-100 animate-in fade-in shadow-2xs">
                   <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-accent-400 shrink-0" />
+                    <PaperclipIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                     <span className="font-semibold truncate">{attachedFile.name}</span>
                     <span className="text-[10px] text-charcoal-400">Ready to review</span>
                   </div>
@@ -1793,24 +1828,24 @@ export function AssistantHome({
                 placeholder={
                   attachedFile
                     ? `Ask anything about ${attachedFile.name}...`
-                    : "Message CareerForge AI or attach a document..."
+                    : "Ask about resumes, roadmaps, technical practice, or voice interview prep..."
                 }
-                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-charcoal-100 placeholder:text-charcoal-500 focus:outline-none"
+                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-1 text-sm text-charcoal-100 placeholder:text-charcoal-500 focus:outline-none"
               />
 
               {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-hairline mt-1">
+              <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-1">
                 {/* Left Controls: Clean Attach & Unlimited Voice */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parsingDoc}
                     title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-charcoal-800/80 px-3 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent-400 border-t-transparent animate-spin" />
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
                     ) : (
                       <PaperclipIcon className="w-3.5 h-3.5 text-charcoal-400" />
                     )}
@@ -1823,10 +1858,10 @@ export function AssistantHome({
                     onClick={toggleListening}
                     aria-pressed={listening}
                     aria-label={listening ? "Stop voice dictation" : "Start voice dictation"}
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-red-600 text-white animate-pulse"
-                        : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
+                        ? "bg-red-600 text-white animate-pulse shadow-md shadow-red-600/30"
+                        : "border border-white/[0.06] bg-charcoal-800/80 text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100"
                     }`}
                     title={
                       listening
@@ -1834,7 +1869,7 @@ export function AssistantHome({
                         : "Voice Dictation in any language (Auto-sends on pause)"
                     }
                   >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-white" : "text-charcoal-400"}`} />
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-white" : "text-amber-400"}`} />
                     <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
                   </button>
 
@@ -1849,10 +1884,10 @@ export function AssistantHome({
                 <button
                   type="submit"
                   disabled={busy || (!input.trim() && !attachedFile)}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-md ${
                     input.trim() || attachedFile
-                      ? "bg-accent-500 text-charcoal-950 font-bold hover:bg-accent-400 scale-100 cursor-pointer"
-                      : "bg-charcoal-800 text-charcoal-600 cursor-not-allowed opacity-60"
+                      ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 font-bold hover:from-amber-400 hover:to-amber-500 scale-100 cursor-pointer shadow-amber-500/20 active:scale-95"
+                      : "bg-charcoal-800 text-charcoal-600 cursor-not-allowed opacity-50"
                   }`}
                   title="Send prompt (or press Enter)"
                 >
@@ -1861,15 +1896,15 @@ export function AssistantHome({
               </div>
             </form>
 
-            {/* ─── HORIZONTAL SCROLLABLE PROMPT CAROUSEL MATCHING PHOTO 3 ───────── */}
-            <div className="relative flex items-center group/carousel">
+            {/* ─── HORIZONTAL SCROLLABLE PROMPT CAROUSEL ───────── */}
+            <div className="relative flex items-center group/carousel pt-1">
               {/* Left Scroll Button */}
               <button
                 type="button"
                 onClick={() => scrollPrompts("left")}
                 disabled={!canScrollLeft}
                 aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-hairline bg-charcoal-900 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-charcoal-900 shadow-lg backdrop-blur-md transition-colors ${
                   canScrollLeft
                     ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
                     : "opacity-0 pointer-events-none text-charcoal-600"
@@ -1890,20 +1925,20 @@ export function AssistantHome({
                     key={pill.label}
                     type="button"
                     onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-hairline bg-charcoal-900 px-3.5 py-1.5 text-xs font-medium text-charcoal-300 hover:border-accent-500 hover:text-charcoal-100 hover:bg-charcoal-850 transition-colors cursor-pointer whitespace-nowrap"
+                    className="shrink-0 rounded-full border border-white/[0.08] bg-charcoal-900/80 px-4 py-1.5 text-xs font-medium text-charcoal-300 hover:border-amber-500/40 hover:text-white hover:bg-charcoal-850 hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap shadow-xs backdrop-blur-xs"
                   >
                     {pill.label}
                   </button>
                 ))}
               </div>
 
-              {/* Right Scroll Button (Matching Photo 3) */}
+              {/* Right Scroll Button */}
               <button
                 type="button"
                 onClick={() => scrollPrompts("right")}
                 disabled={!canScrollRight}
                 aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-hairline bg-charcoal-900 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-charcoal-900 shadow-lg backdrop-blur-md transition-colors ${
                   canScrollRight
                     ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
                     : "opacity-0 pointer-events-none text-charcoal-600"

@@ -34,22 +34,23 @@ export function Workspace({
 
   return (
     <div className="min-h-[calc(100vh-4.25rem)] bg-charcoal-950 text-charcoal-200">
-      <div className="border-b border-hairline py-10 bg-charcoal-950">
+      <div className="border-b border-white/[0.08] py-8 sm:py-10 bg-gradient-to-b from-charcoal-900/60 to-charcoal-950/90 backdrop-blur-md">
         <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-accent-400">
-              {heading.eyebrow}
-            </p>
-            <h1 className="mt-2 font-display text-3xl italic text-charcoal-100 md:text-4xl">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span>{heading.eyebrow}</span>
+            </div>
+            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
               {heading.title}
             </h1>
           </div>
-          <label className="flex items-center gap-2 text-[13px] text-charcoal-400">
-            Target role
+          <label className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-charcoal-900/90 px-3.5 py-2 text-xs font-medium text-charcoal-300 shadow-sm backdrop-blur-md">
+            <span className="text-charcoal-400">Target Track:</span>
             <select
               value={role}
               onChange={(e) => setTargetRole(e.target.value as RoleId)}
-              className="rounded-md border border-hairline bg-charcoal-900 px-3 py-1.5 text-sm text-charcoal-100 focus:border-accent-500 focus:outline-none"
+              className="rounded-lg border border-white/10 bg-charcoal-800 px-2.5 py-1 text-xs font-semibold text-amber-400 focus:border-amber-500 focus:outline-none cursor-pointer"
             >
               {roleOptions.map((r) => (
                 <option key={r.id} value={r.id} className="bg-charcoal-900 text-charcoal-100">

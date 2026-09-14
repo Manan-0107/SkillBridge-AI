@@ -38,6 +38,7 @@ export function FloatingControlBar() {
   const [settings, setSettings] = useState<AccessibilitySettings>(DEFAULT_SETTINGS);
   const [ariaAnnouncement, setAriaAnnouncement] = useState<string>("");
   const [permissionBlockedNotice, setPermissionBlockedNotice] = useState<boolean>(false);
+  const [minimized, setMinimized] = useState<boolean>(false);
 
   const micButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
@@ -213,286 +214,328 @@ export function FloatingControlBar() {
         {ariaAnnouncement}
       </div>
 
-      {/* Main Persistent Accessible Control Bar */}
-      <section
-        id="voice-assistant-controls"
-        role="region"
-        aria-label="Accessibility and Voice Assistant Controls"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[94vw] max-w-4xl transition-all duration-300"
-      >
-        {/* Permission Denied Dismissible Notice */}
-        {permissionBlockedNotice && (
-          <div
-            role="alert"
-            className="mb-2 flex items-center justify-between rounded-xl border border-amber-500/50 bg-neutral-900 px-4 py-2 text-xs text-amber-300 shadow-lg"
+      {/* Minimized Floating Orb (when user collapses the control bar) */}
+      {minimized ? (
+        <aside
+          id="voice-assistant-controls"
+          role="region"
+          aria-label="Accessibility and Voice Assistant Controls"
+          className="fixed bottom-4 right-4 z-50 animate-in fade-in zoom-in-95 duration-200"
+        >
+          <button
+            type="button"
+            onClick={() => setMinimized(false)}
+            aria-label="Expand Voice and Accessibility Controls. Shortcut: Alt plus V"
+            className="flex items-center gap-2.5 rounded-full border border-white/[0.15] bg-charcoal-900/95 px-4 py-2 text-xs font-semibold text-charcoal-100 shadow-2xl shadow-black/80 backdrop-blur-xl hover:bg-charcoal-800 hover:border-amber-500/40 transition-all cursor-pointer group"
           >
-            <span>
-              Microphone access is blocked in your browser settings. To use voice navigation, please enable microphone permission for this site.
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                voiceState === "listening"
+                  ? "bg-amber-400 animate-ping"
+                  : voiceState === "speaking"
+                  ? "bg-emerald-400 animate-pulse"
+                  : "bg-amber-500"
+              }`}
+            />
+            <span className="group-hover:text-amber-400 transition-colors">Voice Assistant</span>
+            <span className="text-[10px] text-charcoal-400 bg-charcoal-800 px-1.5 py-0.5 rounded border border-white/5">
+              Alt+V
             </span>
-            <button
-              type="button"
-              onClick={() => setPermissionBlockedNotice(false)}
-              className="ml-3 rounded font-bold hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        <div className="rounded-2xl border-2 border-neutral-700 bg-neutral-900/95 p-3 sm:p-4 text-white shadow-2xl backdrop-blur-md">
-          {/* Top Row: State Pill, Visual Amplitude Meter, Live Captions, Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left: State Pill & Audio Amplitude Meter (Completely unmounted for deaf profile) */}
-            {!isDeafProfile ? (
-              <div className="flex items-center gap-3">
-                {/* Mic Toggle Button */}
-                <button
-                  ref={micButtonRef}
-                  type="button"
-                  onClick={toggleAssistant}
-                  aria-pressed={voiceState === "listening"}
-                  aria-label={`Voice Assistant: currently ${voiceState}. Press Alt+V to toggle`}
-                  className={`relative flex items-center justify-center rounded-xl px-4 py-2.5 font-semibold text-sm transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400 ${
-                    voiceState === "listening"
-                      ? "bg-amber-500 text-black shadow-lg shadow-amber-500/40 animate-pulse"
-                      : voiceState === "speaking"
-                      ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/40"
-                      : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`inline-block h-2.5 w-2.5 rounded-full ${
-                        voiceState === "listening"
-                          ? "bg-black animate-ping"
-                          : voiceState === "speaking"
-                          ? "bg-black"
-                          : "bg-neutral-400"
-                      }`}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      {voiceState === "listening"
-                        ? "Listening"
-                        : voiceState === "processing"
-                        ? "Thinking..."
-                        : voiceState === "speaking"
-                        ? "Speaking"
-                        : "Voice Assistant"}
-                    </span>
-                  </span>
-                </button>
-
-                {/* Real-time Audio Amplitude Meter */}
-                <div
-                  className="flex items-end gap-1 h-6 w-16 px-1 py-1 rounded bg-neutral-800/80 border border-neutral-700"
-                  aria-hidden="true"
-                  title={`Microphone input level: ${Math.round(amplitude * 100)}%`}
-                >
-                  {[0.2, 0.4, 0.6, 0.8, 1.0].map((threshold, idx) => {
-                    const isActive = amplitude >= threshold || (voiceState === "listening" && idx === 0);
-                    return (
-                      <div
-                        key={idx}
-                        className={`w-2 rounded-t transition-all duration-75 ${
-                          isActive
-                            ? idx >= 3
-                              ? "bg-amber-400"
-                              : "bg-emerald-400"
-                            : "bg-neutral-700"
-                        }`}
-                        style={{
-                          height: isActive ? `${Math.max(20, amplitude * 100)}%` : "15%",
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-800 border border-neutral-700 text-xs font-semibold text-neutral-300">
-                <span aria-hidden="true">🦻</span>
-                <span>Visual / Captions Mode (Mic Inactive)</span>
-              </div>
-            )}
-
-            {/* Middle: Live Synchronized Captions (Mandatory for deaf / hard of hearing) */}
+          </button>
+        </aside>
+      ) : (
+        /* Main Persistent Accessible Floating Capsule Bar */
+        <aside
+          id="voice-assistant-controls"
+          role="region"
+          aria-label="Accessibility and Voice Assistant Controls"
+          className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-[94vw] max-w-2xl transition-all duration-300"
+        >
+          {/* Permission Denied Notice */}
+          {permissionBlockedNotice && (
             <div
-              className="flex-1 min-w-[200px] overflow-hidden rounded-lg bg-black/50 px-3 py-2 border border-neutral-800"
-              role="status"
-              aria-live="polite"
+              role="alert"
+              className="mb-2 flex items-center justify-between rounded-xl border border-amber-500/50 bg-charcoal-900 px-4 py-2 text-xs text-amber-300 shadow-lg backdrop-blur-md"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                  {speakerLabel}:
-                </span>
-                <p className={`truncate font-medium text-neutral-100 ${captionSizeClass}`}>
-                  {liveCaption || (
-                    <span className="italic text-neutral-400">
-                      {isDeafProfile
-                        ? "Live captions will appear here."
-                        : "Press Alt+V or click Voice Assistant to speak..."}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* Right: Accessibility Settings Drawer Toggle */}
-            <div className="flex items-center gap-2">
+              <span>
+                Microphone access is blocked in your browser settings. Enable microphone permission to speak.
+              </span>
               <button
                 type="button"
-                onClick={() => setSettingsOpen(!settingsOpen)}
-                aria-expanded={settingsOpen}
-                aria-controls="accessibility-settings-panel"
-                aria-label="Open Accessibility and Display Settings"
-                className="rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs font-semibold text-neutral-200 hover:bg-neutral-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                onClick={() => setPermissionBlockedNotice(false)}
+                className="ml-3 rounded font-bold hover:text-white"
               >
-                ⚙ Settings
+                ✕
               </button>
             </div>
-          </div>
+          )}
 
-          {/* Expandable Accessibility Settings Panel */}
-          {settingsOpen && (
-            <div
-              id="accessibility-settings-panel"
-              ref={settingsPanelRef}
-              role="dialog"
-              aria-label="Accessibility Settings"
-              className="mt-4 border-t border-neutral-800 pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
-            >
-              {/* Accessibility Profile Switcher */}
-              <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-4 border-b border-neutral-800 pb-3">
-                <label className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                  Active Accessibility Profile
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+          <div className="rounded-2xl sm:rounded-full border border-white/[0.12] bg-charcoal-900/95 p-2 sm:px-3 sm:py-2 text-white shadow-2xl shadow-black/70 backdrop-blur-2xl">
+            {/* Top Row: State Pill, Visual Amplitude Meter, Live Captions, Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+              {/* Left: State Pill & Audio Amplitude Meter (Completely unmounted for deaf profile) */}
+              {!isDeafProfile ? (
+                <div className="flex items-center gap-2">
+                  {/* Mic Toggle Button */}
                   <button
+                    ref={micButtonRef}
                     type="button"
-                    onClick={() => setAccessibilityProfile("blind_low_vision")}
-                    className={`p-2.5 rounded-xl border text-left text-xs transition-colors ${
-                      accessibilityProfile === "blind_low_vision"
-                        ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                        : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-600"
+                    onClick={toggleAssistant}
+                    aria-pressed={voiceState === "listening"}
+                    aria-label={`Voice Assistant: currently ${voiceState}. Press Alt+V to toggle`}
+                    className={`relative flex items-center justify-center rounded-full px-3.5 py-1.5 font-semibold text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 cursor-pointer ${
+                      voiceState === "listening"
+                        ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 shadow-lg shadow-amber-500/40 animate-pulse font-bold"
+                        : voiceState === "speaking"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-charcoal-950 shadow-lg shadow-emerald-500/40 font-bold"
+                        : "bg-charcoal-800 text-charcoal-200 hover:bg-charcoal-700 hover:text-white border border-white/[0.08]"
                     }`}
                   >
-                    <div className="font-semibold">👁️ Blind / Low Vision</div>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">Always-on voice & TTS</div>
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                          voiceState === "listening"
+                            ? "bg-charcoal-950 animate-ping"
+                            : voiceState === "speaking"
+                            ? "bg-charcoal-950"
+                            : "bg-amber-400"
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {voiceState === "listening"
+                          ? "Listening"
+                          : voiceState === "processing"
+                          ? "Thinking…"
+                          : voiceState === "speaking"
+                          ? "Speaking"
+                          : "Voice Assistant"}
+                      </span>
+                    </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setAccessibilityProfile("deaf_hard_of_hearing")}
-                    className={`p-2.5 rounded-xl border text-left text-xs transition-colors ${
-                      accessibilityProfile === "deaf_hard_of_hearing"
-                        ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                        : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-600"
-                    }`}
+                  {/* Real-time Audio Amplitude Meter */}
+                  <div
+                    className="flex items-end gap-1 h-5 w-12 px-1 py-0.5 rounded-full bg-charcoal-950/80 border border-white/[0.08]"
+                    aria-hidden="true"
+                    title={`Microphone input level: ${Math.round(amplitude * 100)}%`}
                   >
-                    <div className="font-semibold">🦻 Deaf / Hard of Hearing</div>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">Zero mic access & captions</div>
-                  </button>
+                    {[0.2, 0.4, 0.6, 0.8, 1.0].map((threshold, idx) => {
+                      const isActive = amplitude >= threshold || (voiceState === "listening" && idx === 0);
+                      return (
+                        <div
+                          key={idx}
+                          className={`w-1.5 rounded-t transition-all duration-75 ${
+                            isActive
+                              ? idx >= 3
+                                ? "bg-amber-400"
+                                : "bg-emerald-400"
+                              : "bg-charcoal-800"
+                          }`}
+                          style={{
+                            height: isActive ? `${Math.max(25, amplitude * 100)}%` : "20%",
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-800 border border-white/[0.08] text-xs font-semibold text-charcoal-300">
+                  <span aria-hidden="true">🦻</span>
+                  <span>Captions Mode</span>
+                </div>
+              )}
 
-                  <button
-                    type="button"
-                    onClick={() => setAccessibilityProfile("standard")}
-                    className={`p-2.5 rounded-xl border text-left text-xs transition-colors ${
-                      accessibilityProfile === "standard"
-                        ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                        : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-600"
-                    }`}
-                  >
-                    <div className="font-semibold">💻 Standard Experience</div>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">Voice off by default</div>
-                  </button>
+              {/* Middle: Live Synchronized Captions */}
+              <div
+                className="flex-1 min-w-[140px] overflow-hidden rounded-full bg-charcoal-950/80 px-3 py-1 border border-white/[0.06]"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 shrink-0">
+                    {speakerLabel}:
+                  </span>
+                  <p className={`truncate font-medium text-charcoal-200 text-xs ${captionSizeClass}`}>
+                    {liveCaption || (
+                      <span className="italic text-charcoal-400">
+                        {isDeafProfile
+                          ? "Live captions will appear here."
+                          : "Press Alt+V to speak..."}
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
 
-              {/* High Contrast Mode */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="high-contrast-toggle" className="text-xs font-semibold text-neutral-300">
-                  High Contrast
-                </label>
+              {/* Right: Settings & Minimize Controls */}
+              <div className="flex items-center gap-1 shrink-0">
                 <button
-                  id="high-contrast-toggle"
                   type="button"
-                  onClick={() => setSettings((s) => ({ ...s, highContrast: !s.highContrast }))}
-                  aria-pressed={settings.highContrast}
-                  className={`rounded-lg py-1.5 px-3 text-xs font-medium border text-left transition-colors ${
-                    settings.highContrast
-                      ? "border-amber-400 bg-amber-500/20 text-amber-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-300"
-                  }`}
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                  aria-expanded={settingsOpen}
+                  aria-controls="accessibility-settings-panel"
+                  aria-label="Open Accessibility and Display Settings"
+                  className="rounded-full border border-white/[0.08] bg-charcoal-800 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-white transition-colors cursor-pointer"
+                  title="Accessibility settings"
                 >
-                  {settings.highContrast ? "✓ High Contrast (ON)" : "Standard Contrast"}
+                  ⚙
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMinimized(true)}
+                  aria-label="Minimize Voice Assistant Bar"
+                  className="rounded-full border border-white/[0.08] bg-charcoal-800 px-2 py-1 text-xs font-medium text-charcoal-400 hover:bg-charcoal-700 hover:text-white transition-colors cursor-pointer"
+                  title="Minimize bar"
+                >
+                  ✕
                 </button>
               </div>
-
-              {/* Text Zoom / Size */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="font-size-select" className="text-xs font-semibold text-neutral-300">
-                  Text Scale
-                </label>
-                <select
-                  id="font-size-select"
-                  value={settings.fontSizeMultiplier}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, fontSizeMultiplier: parseFloat(e.target.value) }))
-                  }
-                  className="rounded-lg border border-neutral-700 bg-neutral-800 py-1.5 px-2 text-xs text-neutral-200 focus-visible:ring-2 focus-visible:ring-amber-400"
-                >
-                  <option value={1.0}>100% (Default)</option>
-                  <option value={1.25}>125% (Large)</option>
-                  <option value={1.5}>150% (Extra Large)</option>
-                </select>
-              </div>
-
-              {/* Speech Speed */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="speech-rate-select" className="text-xs font-semibold text-neutral-300">
-                  Assistant Speech Speed
-                </label>
-                <select
-                  id="speech-rate-select"
-                  value={settings.speechRate}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, speechRate: parseFloat(e.target.value) }))
-                  }
-                  className="rounded-lg border border-neutral-700 bg-neutral-800 py-1.5 px-2 text-xs text-neutral-200 focus-visible:ring-2 focus-visible:ring-amber-400"
-                >
-                  <option value={0.85}>0.85x (Slower)</option>
-                  <option value={1.0}>1.0x (Standard)</option>
-                  <option value={1.2}>1.2x (Fast)</option>
-                  <option value={1.4}>1.4x (Screen Reader Fast)</option>
-                </select>
-              </div>
-
-              {/* Caption Size */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="caption-size-select" className="text-xs font-semibold text-neutral-300">
-                  Captions Display
-                </label>
-                <select
-                  id="caption-size-select"
-                  value={settings.captionSize}
-                  onChange={(e) =>
-                    setSettings((s) => ({
-                      ...s,
-                      captionSize: e.target.value as AccessibilitySettings["captionSize"],
-                    }))
-                  }
-                  className="rounded-lg border border-neutral-700 bg-neutral-800 py-1.5 px-2 text-xs text-neutral-200 focus-visible:ring-2 focus-visible:ring-amber-400"
-                >
-                  <option value="normal">Normal Text</option>
-                  <option value="large">Large Text</option>
-                  <option value="xlarge">Extra Large Text</option>
-                </select>
-              </div>
             </div>
-          )}
-        </div>
-      </section>
+
+            {/* Expandable Accessibility Settings Panel */}
+            {settingsOpen && (
+              <div
+                id="accessibility-settings-panel"
+                ref={settingsPanelRef}
+                role="dialog"
+                aria-label="Accessibility Settings"
+                className="mt-3 border-t border-white/[0.08] pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs"
+              >
+                {/* Accessibility Profile Switcher */}
+                <div className="flex flex-col gap-1 sm:col-span-2 md:col-span-4 border-b border-white/[0.06] pb-3">
+                  <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                    Active Accessibility Profile
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setAccessibilityProfile("blind_low_vision")}
+                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                        accessibilityProfile === "blind_low_vision"
+                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
+                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="font-semibold">👁️ Blind / Low Vision</div>
+                      <div className="text-[10px] text-charcoal-400 mt-0.5">Always-on voice & TTS</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAccessibilityProfile("deaf_hard_of_hearing")}
+                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                        accessibilityProfile === "deaf_hard_of_hearing"
+                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
+                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="font-semibold">🦻 Deaf / Hard of Hearing</div>
+                      <div className="text-[10px] text-charcoal-400 mt-0.5">Zero mic access & captions</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAccessibilityProfile("standard")}
+                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                        accessibilityProfile === "standard"
+                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
+                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="font-semibold">💻 Standard</div>
+                      <div className="text-[10px] text-charcoal-400 mt-0.5">Voice off by default</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* High Contrast Mode */}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="high-contrast-toggle" className="text-[11px] font-semibold text-charcoal-300">
+                    High Contrast
+                  </label>
+                  <button
+                    id="high-contrast-toggle"
+                    type="button"
+                    onClick={() => setSettings((s) => ({ ...s, highContrast: !s.highContrast }))}
+                    aria-pressed={settings.highContrast}
+                    className={`rounded-lg py-1.5 px-3 text-xs font-medium border text-left transition-colors cursor-pointer ${
+                      settings.highContrast
+                        ? "border-amber-400 bg-amber-500/20 text-amber-300"
+                        : "border-white/[0.08] bg-charcoal-800 text-charcoal-300"
+                    }`}
+                  >
+                    {settings.highContrast ? "✓ High Contrast (ON)" : "Standard Contrast"}
+                  </button>
+                </div>
+
+                {/* Text Zoom / Size */}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="font-size-select" className="text-[11px] font-semibold text-charcoal-300">
+                    Text Scale
+                  </label>
+                  <select
+                    id="font-size-select"
+                    value={settings.fontSizeMultiplier}
+                    onChange={(e) =>
+                      setSettings((s) => ({ ...s, fontSizeMultiplier: parseFloat(e.target.value) }))
+                    }
+                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                  >
+                    <option value={1.0}>100% (Default)</option>
+                    <option value={1.25}>125% (Large)</option>
+                    <option value={1.5}>150% (Extra Large)</option>
+                  </select>
+                </div>
+
+                {/* Speech Speed */}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="speech-rate-select" className="text-[11px] font-semibold text-charcoal-300">
+                    Speech Speed
+                  </label>
+                  <select
+                    id="speech-rate-select"
+                    value={settings.speechRate}
+                    onChange={(e) =>
+                      setSettings((s) => ({ ...s, speechRate: parseFloat(e.target.value) }))
+                    }
+                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                  >
+                    <option value={0.85}>0.85x (Slower)</option>
+                    <option value={1.0}>1.0x (Standard)</option>
+                    <option value={1.2}>1.2x (Fast)</option>
+                    <option value={1.4}>1.4x (Screen Reader Fast)</option>
+                  </select>
+                </div>
+
+                {/* Caption Size */}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="caption-size-select" className="text-[11px] font-semibold text-charcoal-300">
+                    Captions Display
+                  </label>
+                  <select
+                    id="caption-size-select"
+                    value={settings.captionSize}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        captionSize: e.target.value as AccessibilitySettings["captionSize"],
+                      }))
+                    }
+                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                  >
+                    <option value="normal">Normal Text</option>
+                    <option value="large">Large Text</option>
+                    <option value="xlarge">Extra Large Text</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
     </>
   );
 }

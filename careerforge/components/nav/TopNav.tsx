@@ -23,23 +23,33 @@ export function TopNav({
   const { user, signOut } = useApp();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-hairline bg-charcoal-950/90 backdrop-blur text-charcoal-200">
-      <div className="app-shell relative flex items-center justify-between py-4">
-        {/* Left: Brand Logo */}
+    <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-charcoal-950/85 backdrop-blur-xl text-charcoal-200 transition-colors">
+      <div className="app-shell relative flex items-center justify-between py-3">
+        {/* Left: Brand Logo with glowing gem icon */}
         <div className="flex items-center">
           <button
             type="button"
             onClick={onAssistant}
-            className="font-display text-xl italic text-charcoal-100 hover:text-accent-400 transition-colors"
+            className="group flex items-center gap-2.5 text-left cursor-pointer"
           >
-            CareerForge
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-charcoal-950 font-black text-xs tracking-tighter shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform">
+              CF
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-xl font-bold tracking-tight text-charcoal-100 group-hover:text-amber-400 transition-colors">
+                CareerForge
+              </span>
+              <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-amber-400">
+                AI
+              </span>
+            </div>
           </button>
         </div>
 
-        {/* Center: Navigation Links in the exact middle with accessible keyboard navigation */}
+        {/* Center: Sleek Segmented Pill Navigation Container */}
         <nav
           aria-label="Primary navigation"
-          className="absolute left-1/2 -translate-x-1/2 hidden items-center gap-7 md:flex"
+          className="absolute left-1/2 -translate-x-1/2 hidden items-center md:flex"
           onKeyDown={(e) => {
             const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
             const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -56,62 +66,75 @@ export function TopNav({
             }
           }}
         >
-          <button
-            type="button"
-            onClick={onAssistant}
-            aria-current={view === "assistant" ? "page" : undefined}
-            className={`text-sm font-medium transition-colors rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-              view === "assistant" ? "text-charcoal-100 font-semibold border-b-2 border-accent-500" : "text-charcoal-400 hover:text-charcoal-200"
-            }`}
-          >
-            Assistant
-          </button>
-          {links.map((l) => (
+          <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-charcoal-900/90 p-1 shadow-inner shadow-black/40 backdrop-blur-md">
             <button
-              key={l.id}
               type="button"
-              onClick={() => onFeature(l.id)}
-              aria-current={view === l.id ? "page" : undefined}
-              className={`text-sm font-medium transition-colors rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                view === l.id ? "text-charcoal-100 font-semibold border-b-2 border-accent-500" : "text-charcoal-400 hover:text-charcoal-200"
+              onClick={onAssistant}
+              aria-current={view === "assistant" ? "page" : undefined}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                view === "assistant"
+                  ? "bg-charcoal-800 text-charcoal-100 shadow-sm border border-white/[0.12] text-amber-400"
+                  : "text-charcoal-400 hover:text-charcoal-200 hover:bg-white/[0.04]"
               }`}
             >
-              {l.label}
+              Assistant
             </button>
-          ))}
+            {links.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => onFeature(l.id)}
+                aria-current={view === l.id ? "page" : undefined}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  view === l.id
+                    ? "bg-charcoal-800 text-charcoal-100 shadow-sm border border-white/[0.12] text-amber-400"
+                    : "text-charcoal-400 hover:text-charcoal-200 hover:bg-white/[0.04]"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
         </nav>
 
         {/* Right: Translate & Profile */}
         <div className="flex items-center gap-3">
           <GoogleTranslateWidget />
           {user?.picture ? (
-            <img
-              src={user.picture}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="hidden h-7 w-7 rounded-full sm:block border border-hairline"
-            />
-          ) : null}
-          <span className="hidden text-sm text-charcoal-300 sm:inline">
+            <div className="relative hidden sm:block">
+              <img
+                src={user.picture}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="h-8 w-8 rounded-full border border-white/10 ring-2 ring-amber-500/20 object-cover"
+              />
+              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-charcoal-950" />
+            </div>
+          ) : (
+            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-charcoal-800 text-xs font-bold text-charcoal-200 border border-white/10 sm:flex">
+              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+            </div>
+          )}
+          <span className="hidden text-xs font-medium text-charcoal-300 sm:inline">
             {user?.name}
           </span>
           <button
             type="button"
             onClick={signOut}
-            className="text-sm font-medium text-charcoal-400 underline decoration-hairline underline-offset-4 hover:text-charcoal-100"
+            className="rounded-lg border border-white/[0.08] bg-charcoal-900/60 px-2.5 py-1 text-xs font-medium text-charcoal-400 hover:border-red-500/30 hover:bg-red-950/20 hover:text-red-400 transition-colors"
           >
             Sign out
           </button>
         </div>
       </div>
 
-      <nav aria-label="Mobile navigation" className="flex items-center justify-center gap-6 overflow-x-auto border-t border-hairline px-6 py-2.5 md:hidden">
+      <nav aria-label="Mobile navigation" className="flex items-center justify-center gap-2 overflow-x-auto border-t border-white/[0.08] px-4 py-2 md:hidden bg-charcoal-950">
         <button
           type="button"
           onClick={onAssistant}
           aria-current={view === "assistant" ? "page" : undefined}
-          className={`whitespace-nowrap text-sm font-medium ${
-            view === "assistant" ? "text-charcoal-100 font-semibold" : "text-charcoal-400 hover:text-charcoal-200"
+          className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            view === "assistant" ? "bg-charcoal-800 text-amber-400 font-semibold border border-white/10" : "text-charcoal-400"
           }`}
         >
           Assistant
@@ -122,8 +145,8 @@ export function TopNav({
             type="button"
             onClick={() => onFeature(l.id)}
             aria-current={view === l.id ? "page" : undefined}
-            className={`whitespace-nowrap text-sm font-medium ${
-              view === l.id ? "text-charcoal-100 font-semibold" : "text-charcoal-400 hover:text-charcoal-200"
+            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              view === l.id ? "bg-charcoal-800 text-amber-400 font-semibold border border-white/10" : "text-charcoal-400"
             }`}
           >
             {l.label}
