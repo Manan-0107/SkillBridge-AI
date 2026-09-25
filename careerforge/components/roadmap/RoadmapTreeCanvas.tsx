@@ -29,7 +29,7 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
   userProgress,
   onSelectNode,
   onQuickToggleStatus,
-  accentColor = "#F59E0B",
+  accentColor = "var(--color-accent)",
   searchQuery = "",
   statusFilter = "all",
 }) => {
@@ -104,8 +104,8 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
 
   if (filteredTiers.length === 0) {
     return (
-      <div className="py-16 text-center rounded-xl border border-slate-800/80 bg-[#10131d] p-8 max-w-md mx-auto">
-        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-400 mb-3">
+      <div className="py-16 text-center rounded-xl border border-ink/15 bg-surface p-8 max-w-md mx-auto text-ink">
+        <div className="w-10 h-10 rounded-full bg-bg border border-ink/15 flex items-center justify-center mx-auto text-ink/60 mb-3">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -115,8 +115,8 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
             />
           </svg>
         </div>
-        <h3 className="text-sm font-semibold text-white">No nodes match your filter</h3>
-        <p className="mt-1 text-xs text-slate-400">
+        <h3 className="text-sm font-semibold text-ink">No nodes match your filter</h3>
+        <p className="mt-1 text-xs text-ink/70">
           Try clearing your search query or setting the status filter to &quot;All Nodes&quot;.
         </p>
       </div>
@@ -127,9 +127,9 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
     <div className="relative max-w-5xl mx-auto py-2">
       {/* Background Architectural Grid */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.035]"
+        className="absolute inset-0 pointer-events-none opacity-[0.04]"
         style={{
-          backgroundImage: `radial-gradient(#ffffff 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(rgba(20, 17, 15, 0.25) 1px, transparent 1px)`,
           backgroundSize: "24px 24px",
         }}
       />

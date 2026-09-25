@@ -43,17 +43,36 @@ export function GoogleTranslateWidget() {
         className="google-translate-container text-xs inline-block"
       />
       <style jsx global>{`
-        /* Clean standard Google Translate styling matching dark charcoal aesthetic */
+        /* Clean standard Google Translate styling matching cream & ink design tokens */
         .goog-te-gadget {
           font-family: inherit !important;
           color: transparent !important;
           font-size: 0px !important;
           display: inline-flex !important;
           align-items: center !important;
+          line-height: 0 !important;
+        }
+        .goog-te-gadget > span {
+          display: none !important;
+        }
+        .goog-te-combo {
+          font-family: inherit !important;
+          font-size: 12px !important;
+          color: var(--color-ink) !important;
+          background-color: var(--color-surface) !important;
+          border: 1px solid rgba(20, 17, 15, 0.15) !important;
+          border-radius: 9999px !important;
+          padding: 4px 10px !important;
+          outline: none !important;
+          cursor: pointer !important;
+        }
+        .goog-te-combo:hover {
+          border-color: rgba(20, 17, 15, 0.3) !important;
+          background-color: var(--color-bg) !important;
         }
         .goog-te-gadget-simple {
-          background-color: #141416 !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          background-color: var(--color-surface) !important;
+          border: 1px solid rgba(20, 17, 15, 0.15) !important;
           padding: 5px 12px !important;
           font-size: 12px !important;
           line-height: 1.2 !important;
@@ -61,17 +80,17 @@ export function GoogleTranslateWidget() {
           align-items: center !important;
           border-radius: 9999px !important;
           cursor: pointer !important;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+          box-shadow: 0 1px 2px rgba(20, 17, 15, 0.05) !important;
           transition: all 0.15s ease !important;
           white-space: nowrap !important;
           text-decoration: none !important;
         }
         .goog-te-gadget-simple:hover {
-          background-color: #1c1d22 !important;
-          border-color: rgba(255, 255, 255, 0.2) !important;
+          background-color: var(--color-bg) !important;
+          border-color: rgba(20, 17, 15, 0.3) !important;
         }
         .goog-te-gadget-simple .goog-te-menu-value {
-          color: #d2d5df !important;
+          color: var(--color-ink) !important;
           font-family: inherit !important;
           font-size: 12px !important;
           font-weight: 500 !important;
@@ -82,7 +101,7 @@ export function GoogleTranslateWidget() {
         }
         .goog-te-gadget-simple .goog-te-menu-value span {
           border-left: none !important;
-          color: #d2d5df !important;
+          color: var(--color-ink) !important;
           font-size: 12px !important;
           font-family: inherit !important;
           white-space: nowrap !important;
@@ -91,7 +110,7 @@ export function GoogleTranslateWidget() {
         .goog-te-gadget-simple .goog-te-menu-value span:last-child {
           font-size: 8px !important;
           margin-left: 5px !important;
-          color: #8f94a6 !important;
+          color: rgba(20, 17, 15, 0.6) !important;
         }
         /* Hide distorted low-resolution Google sprite icon */
         .goog-te-gadget-icon {

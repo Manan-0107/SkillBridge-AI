@@ -349,6 +349,8 @@ export function GlobalVoiceDictator() {
     voiceLanguage,
     setVoiceMode,
     setVoiceLanguage,
+    accessibilityProfile,
+    voiceConsentStatus,
     accessibilityPrefs,
     setAccessibilityPrefs,
     currentLocation,
@@ -357,6 +359,12 @@ export function GlobalVoiceDictator() {
     missingSkills,
     setTargetRole,
   } = useApp();
+
+  // ── Section 1 & 3: Deaf / Hard-of-Hearing Profile Gating ───────────────────
+  // Voice detection and mic listeners are completely eliminated and unmounted
+  if (accessibilityProfile === "deaf_hard_of_hearing") {
+    return null;
+  }
 
   const [active, setActive] = useState(false);
   const [listening, setListening] = useState(false);
@@ -370,6 +378,32 @@ export function GlobalVoiceDictator() {
   const [interactionState, setInteractionState] = useState<VoiceInteractionState>("IDLE");
   const interactionStateRef = useRef<VoiceInteractionState>("IDLE");
   interactionStateRef.current = interactionState;
+
+  // ─── Sync Visual State Indicator with FloatingControlBar ────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let mappedState: "idle" | "listening" | "processing" | "speaking" | "error" = "idle";
+    if (
+      interactionState === "LISTENING" ||
+      interactionState === "WAITING_FOR_ANSWER" ||
+      interactionState === "READY"
+    ) {
+      mappedState = "listening";
+    } else if (
+      interactionState === "PROCESSING" ||
+      interactionState === "INITIALIZING" ||
+      interactionState === "SAVING_ANSWER"
+    ) {
+      mappedState = "processing";
+    } else if (interactionState === "SPEAKING" || interactionState === "CONFIRMING") {
+      mappedState = "speaking";
+    } else if (interactionState === "ERROR") {
+      mappedState = "error";
+    }
+    window.dispatchEvent(
+      new CustomEvent("careerforge:voice-state", { detail: { state: mappedState } })
+    );
+  }, [interactionState]);
 
   // ─── Section 10 Conversational Account Creation State ──────────────────────
   const [waitingAccountConfirmation, setWaitingAccountConfirmation] = useState(false);
@@ -1511,25 +1545,74 @@ export function GlobalVoiceDictator() {
         return;
       }
 
-      // Navigation commands
+      // ── Section 5: Voice-Driven Site Navigation (Intent Routing Fast-Path) ───
+      // "roadmap" / "show my roadmap" → /roadmap
+      // "resume" / "edit my resume" → /resume
+      // "practice" / "mock interview" → /practice
+      // "local" / "jobs near me" → /local
+      // "assistant" / "open chat" → /assistant
       const isNavResume =
-        lower.includes("go to resume") || lower.includes("resume studio") || lower.includes("રેઝ્યૂમે") ||
-        lower.includes("ouvrir le cv") || lower.includes("abrir el currículum") || lower.includes("रिज्यूमे");
+        lower === "resume" ||
+        lower.includes("edit my resume") ||
+        lower.includes("show my resume") ||
+        lower.includes("go to resume") ||
+        lower.includes("resume studio") ||
+        lower.includes("રેઝ્યૂમે") ||
+        lower.includes("ouvrir le cv") ||
+        lower.includes("abrir el currículum") ||
+        lower.includes("रिज्यूमे");
+
       const isNavRoadmap =
-        lower.includes("go to roadmap") || lower.includes("career roadmap") || lower.includes("રોડમેપ") ||
-        lower.includes("feuille de route") || lower.includes("hoja de ruta") || lower.includes("रोडमैप");
+        lower === "roadmap" ||
+        lower.includes("show my roadmap") ||
+        lower.includes("open my roadmap") ||
+        lower.includes("go to roadmap") ||
+        lower.includes("career roadmap") ||
+        lower.includes("રોડમેપ") ||
+        lower.includes("feuille de route") ||
+        lower.includes("hoja de ruta") ||
+        lower.includes("रोडमैप");
+
       const isNavCourses =
-        lower.includes("go to courses") || lower.includes("course section") || lower.includes("કોર્સ") ||
-        lower.includes("aller aux cours") || lower.includes("ir a cursos") || lower.includes("पाठ्यक्रम");
+        lower === "courses" ||
+        lower.includes("go to courses") ||
+        lower.includes("course section") ||
+        lower.includes("કોર્સ") ||
+        lower.includes("aller aux cours") ||
+        lower.includes("ir a cursos") ||
+        lower.includes("पाठ्यक्रम");
+
       const isNavPractice =
-        lower.includes("go to practice") || lower.includes("practice hub") || lower.includes("પ્રેક્ટિસ") ||
-        lower.includes("aller à la pratique") || lower.includes("ir a practicar") || lower.includes("अभ्यास");
+        lower === "practice" ||
+        lower.includes("mock interview") ||
+        lower.includes("practice interview") ||
+        lower.includes("go to practice") ||
+        lower.includes("practice hub") ||
+        lower.includes("પ્રેક્ટિસ") ||
+        lower.includes("aller à la pratique") ||
+        lower.includes("ir a practicar") ||
+        lower.includes("अभ्यास");
+
       const isNavLocal =
-        lower.includes("go to jobs") || lower.includes("local opportunities") || lower.includes("નોકરી") ||
-        lower.includes("aller aux emplois") || lower.includes("ir a trabajos") || lower.includes("नौकरी");
+        lower === "local" ||
+        lower.includes("jobs near me") ||
+        lower.includes("local jobs") ||
+        lower.includes("go to jobs") ||
+        lower.includes("local opportunities") ||
+        lower.includes("નોકરી") ||
+        lower.includes("aller aux emplois") ||
+        lower.includes("ir a trabajos") ||
+        lower.includes("नौकरी");
+
       const isNavAssistant =
-        lower.includes("go to assistant") || lower.includes("career assistant") || lower.includes("સહાયક") ||
-        lower.includes("aller à l'assistant") || lower.includes("ir al asistente") || lower.includes("सहायक");
+        lower === "assistant" ||
+        lower.includes("open chat") ||
+        lower.includes("go to assistant") ||
+        lower.includes("career assistant") ||
+        lower.includes("સહાયક") ||
+        lower.includes("aller à l'assistant") ||
+        lower.includes("ir al asistente") ||
+        lower.includes("सहायक");
 
       if (isNavResume || isNavRoadmap || isNavCourses || isNavPractice || isNavLocal || isNavAssistant) {
         let dest: FeatureId | "assistant" = "assistant";
@@ -1540,18 +1623,20 @@ export function GlobalVoiceDictator() {
         else if (isNavPractice) { dest = "practice"; title = "Practice Hub"; }
         else if (isNavLocal) { dest = "local"; title = "Local Jobs"; }
 
-        setPendingNavigation({ feature: dest, title });
-        pendingNavigationRef.current = { feature: dest, title };
-        const confirmNav = detectedLang.startsWith("gu")
-          ? `શું તમે ${title} ખોલવા માંગો છો? હા અથવા ના બોલો.`
+        playAccessibleChime("navigate");
+        safeNavigate(dest);
+
+        const announcement = detectedLang.startsWith("gu")
+          ? `${title} ખોલી રહ્યું છે.`
           : detectedLang.startsWith("hi")
-          ? `क्या आप ${title} खोलना चाहते हैं? हाँ या नहीं बोलें।`
+          ? `${title} खोला जा रहा है।`
           : detectedLang.startsWith("fr")
-          ? `Voulez-vous ouvrir ${title} ? Dites oui ou non.`
-          : `Would you like to open ${title}? Please say yes or no.`;
-        setAiSpeechPrompt(confirmNav);
-        showStatus(`Waiting for confirmation: ${title}`, 4000);
-        speakAndListen(confirmNav, detectedLang);
+          ? `Ouverture de ${title}.`
+          : `Opening ${title}.`;
+
+        setAiSpeechPrompt(announcement);
+        showStatus(announcement, 3000);
+        speakText(announcement, { lang: detectedLang });
         return;
       }
 
@@ -1814,38 +1899,54 @@ export function GlobalVoiceDictator() {
     };
   }, [startVoiceDictation, stopVoiceDictation, toggleVoiceDictation]);
 
-  // Start automatically when the browser has already granted microphone
-  // permission. Otherwise announce the exact accessible action required by
-  // browser security: activate the named Voice Start control or press Alt+V.
+  // ─── Section 1 & 3: Permission & Consent Auto-Start Gating ─────────────────
+  // blind_low_vision: starts immediately if consent granted, or prompts once.
+  // standard: off by default; zero mic requests unless user explicitly turns it on.
+  // deaf_hard_of_hearing: unmounted at component top, never reaches here.
   useEffect(() => {
     if (!user || autoStartAttemptedRef.current || activeRef.current) return;
     autoStartAttemptedRef.current = true;
 
-    const announceVoiceEntry = () => {
-      const message =
-        "Voice assistant is ready. To start the microphone, activate the Start voice assistant button in the Voice Assistant controls, or press Alt plus V.";
-      setAiSpeechPrompt(message);
-      showStatus(message, 7000);
-      if (accessibilityPrefs.speechOutput && (accessibilityPrefs.voiceNavigation || accessibilityPrefs.screenReaderMode)) {
-        speakText(message, { lang: currentLangRef.current });
+    // Standard profile: voice is off by default, zero mic access unless toggle flipped
+    if (accessibilityProfile === "standard") {
+      const isVoiceExplicitlyEnabled =
+        typeof window !== "undefined" &&
+        (localStorage.getItem("careerforge_voice_enabled") === "true" ||
+         localStorage.getItem("careerforge_voice_consent") === "granted");
+      if (!isVoiceExplicitlyEnabled) {
+        // Do not request mic, do not mount ambient VAD
+        return;
       }
-    };
+    }
 
-    const tryStartWithPermission = async () => {
+    const checkAndInitVoice = async () => {
       try {
-        if (navigator.permissions && navigator.permissions.query) {
-          const permission = await navigator.permissions.query({ name: "microphone" as PermissionName });
-          if (permission.state === "granted") {
+        if (typeof navigator !== "undefined" && navigator.permissions?.query) {
+          const perm = await navigator.permissions.query({ name: "microphone" as PermissionName });
+          if (perm.state === "granted") {
+            // Already granted: start silently without app-level prompt
             startVoiceDictation();
+            return;
+          } else if (perm.state === "denied") {
+            // Denied: show single dismissible notice, never nag again
+            showStatus("Microphone access is blocked — enable it in browser settings to use voice", 6000);
             return;
           }
         }
       } catch {}
-      announceVoiceEntry();
+
+      // For blind_low_vision with prompt state: activate voice assistant
+      if (accessibilityProfile === "blind_low_vision") {
+        const welcome =
+          "CareerForge voice assistant active. Say 'help', or speak your answers to begin.";
+        setAiSpeechPrompt(welcome);
+        showStatus(welcome, 5000);
+        startVoiceDictation();
+      }
     };
 
-    void tryStartWithPermission();
-  }, [accessibilityPrefs.screenReaderMode, accessibilityPrefs.speechOutput, accessibilityPrefs.voiceNavigation, showStatus, startVoiceDictation, user]);
+    void checkAndInitVoice();
+  }, [accessibilityProfile, showStatus, startVoiceDictation, user]);
 
   // ─── Tab-Switch Auto-Pause with Guided Reconnect on Return ──────────────────
   useEffect(() => {

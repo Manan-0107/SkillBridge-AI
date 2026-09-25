@@ -11,72 +11,28 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        charcoal: {
-          950: "#0B0B0D", // Primary canvas background
-          900: "#101114", // Surface layer 1
-          850: "#141416", // Surface layer 2 / Card surface
-          800: "#18191E", // Elevated surface (drawer/modal)
-          700: "#22242B", // Hover states
-          600: "#32353E",
-          500: "#4D505B",
-          400: "#7E8291", // Muted secondary text
-          300: "#A8ACB9",
-          200: "#D2D5DF", // Body text
-          100: "#F0F2F7", // Highlight text
-        },
+        // ─── CareerForge Design Tokens (Single Source of Truth) ─────────────
+        bg: "#FAF6F1",       // page background — near-neutral cream, NOT saturated peach
+        surface: "#F1E9DF",  // card/panel background — one shade deeper
+        ink: "#14110F",      // primary text — warm near-black, not pure #000
         accent: {
-          50: "#FFFBEB",
-          100: "#FEF3C7",
-          200: "#FDE68A",
-          300: "#FCD34D",
-          400: "#FBBF24",
-          500: "#F59E0B", // Primary vivid accent
-          600: "#D97706",
-          700: "#B45309",
-          800: "#92400E",
-          900: "#78350F",
+          DEFAULT: "#B5541F", // rust/terracotta — used sparingly, never as a full-page button fill
+          soft: "#C1652E",
         },
-        status: {
-          completed: "#34D399",
-          "completed-bg": "#0D281E",
-          "completed-border": "#1B4332",
-          "in-progress": "#FBBF24",
-          "in-progress-bg": "#2A1B07",
-          "in-progress-border": "#4B320B",
-          planned: "#94A3B8",
-          "planned-bg": "#14171F",
-          "planned-border": "#212735",
-        },
-        // Legacy light-theme tokens kept for backward compatibility
-        paper: "#FAFAF8",
-        ink: "#17171A",
-        graphite: "#5B5B60",
-        mist: "#EAEAE7",
-        line: "#DEDEDA",
+        info: "#2F4858",
+        success: "#5C6B44",
+        danger: "#99341F",
       },
       borderColor: {
-        hairline: "rgba(255, 255, 255, 0.09)",
-        "hairline-subtle": "rgba(255, 255, 255, 0.05)",
-        "hairline-strong": "rgba(255, 255, 255, 0.16)",
+        hairline: "rgba(27, 24, 21, 0.12)",
+        "hairline-subtle": "rgba(27, 24, 21, 0.06)",
+        "hairline-strong": "rgba(27, 24, 21, 0.22)",
       },
       fontFamily: {
-        sans: [
-          "var(--font-sans)",
-          "Geist Sans",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "sans-serif",
-        ],
-        mono: [
-          "var(--font-mono)",
-          "JetBrains Mono",
-          "IBM Plex Mono",
-          "Geist Mono",
-          "monospace",
-        ],
-        display: ["var(--font-display)", "serif"],
-        body: ["var(--font-body)", "sans-serif"],
+        sans: ["Inter", "ui-sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace"],
+        display: ["Inter", "ui-sans-serif"],
+        body: ["Inter", "ui-sans-serif"],
       },
       fontSize: {
         xs: ["0.75rem", { lineHeight: "1rem" }],

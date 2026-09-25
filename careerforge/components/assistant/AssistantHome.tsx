@@ -47,60 +47,7 @@ export interface Conversation {
   archived?: boolean;
 }
 
-function ThinkingProcess({ steps }: { steps: string[] }) {
-  const [open, setOpen] = useState(false);
 
-  if (!steps || steps.length === 0) return null;
-
-  return (
-    <div className="mb-2 w-full">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="group inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-charcoal-850 px-3 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-all cursor-pointer shadow-2xs"
-        aria-expanded={open}
-        aria-label="Toggle thinking process"
-      >
-        <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-        <span className="flex items-center gap-1">
-          <span className="text-amber-400 font-semibold">Thought</span>
-          <span className="text-charcoal-500">·</span>
-          <span>{steps.length} reasoning steps</span>
-        </span>
-        <svg
-          className={`w-3.5 h-3.5 text-charcoal-400 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="mt-2 space-y-1.5 rounded-xl border border-white/[0.08] bg-charcoal-900/90 p-3 text-xs text-charcoal-300 shadow-2xs animate-in fade-in slide-in-from-top-1 duration-150 backdrop-blur-md">
-          <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.06] text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider">
-            <span>Deliberative Reasoning Process</span>
-            <span className="text-amber-400/90 font-normal normal-case">Cascading Intelligence</span>
-          </div>
-          <div className="space-y-1.5 pt-1">
-            {steps.map((step, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-2 rounded-lg bg-charcoal-800/60 px-2.5 py-1.5 border border-white/[0.04] text-charcoal-200 text-[11px] leading-relaxed"
-              >
-                <span className="text-amber-400 font-bold select-none shrink-0">•</span>
-                <span>{step}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const STORAGE_KEY = "careerforge.conversations";
 
@@ -1117,11 +1064,11 @@ export function AssistantHome({
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-charcoal-950 text-charcoal-200">
+    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-bg text-ink">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-charcoal-800 border border-hairline px-4 py-2.5 text-xs font-semibold text-charcoal-100 shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-surface border border-ink/15 px-4 py-2.5 text-xs font-semibold text-ink shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
           {toastMessage}
         </div>
       )}
@@ -1142,25 +1089,20 @@ export function AssistantHome({
 
       {/* ─── LEFT AI SIDEBAR (Vertical List of Chats) ───────────────────────── */}
       <aside
-        className={`flex flex-col border-r border-hairline bg-charcoal-900 transition-all duration-200 z-20 ${
+        className={`flex flex-col border-r border-ink/10 bg-surface/90 text-ink transition-all duration-200 z-20 ${
           sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
       >
         {/* Top Action: New Chat */}
-        <div className="p-3.5 border-b border-hairline space-y-3">
+        <div className="p-3.5 border-b border-ink/10 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/25 text-xs font-bold shadow-xs">
-                ✦
-              </div>
-              <span className="font-semibold text-sm tracking-tight text-charcoal-100">
-                Career Copilot
-              </span>
-            </div>
+            <span className="font-semibold text-sm tracking-tight text-ink">
+              Conversations
+            </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1 text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-100 transition-colors sm:hidden"
+              className="rounded-lg p-1 text-ink/60 hover:bg-bg hover:text-ink transition-colors sm:hidden"
               title="Close sidebar"
             >
               ✕
@@ -1170,27 +1112,27 @@ export function AssistantHome({
           <button
             type="button"
             onClick={createNewConversation}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 py-2.5 px-3 text-xs font-bold text-charcoal-950 shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-bg border border-ink/20 hover:border-accent hover:text-accent py-2 px-3 text-xs font-semibold text-ink shadow-xs transition-colors cursor-pointer"
           >
             <span className="text-sm font-bold leading-none">+</span>
-            <span>New Career Chat</span>
+            <span>New Chat</span>
           </button>
         </div>
 
         {/* Vertical Navigation Sections */}
-        <div className="p-2 space-y-1 border-b border-hairline">
+        <div className="p-2 space-y-1 border-b border-ink/10">
           <button
             type="button"
             onClick={() => setSidebarTab("all")}
             className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "all"
-                ? "bg-charcoal-800 text-charcoal-100 font-semibold border border-white/[0.08] shadow-2xs"
-                : "text-charcoal-400 hover:bg-charcoal-850 hover:text-charcoal-200"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <ChatBubbleIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="flex-1 text-left">All Recent Chats</span>
-            <span className="rounded-full bg-charcoal-950/80 border border-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-charcoal-400">
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="flex-1 text-left">All Chats</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => !c.archived).length}
             </span>
           </button>
@@ -1200,13 +1142,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("pinned")}
             className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "pinned"
-                ? "bg-charcoal-800 text-charcoal-100 font-semibold border border-white/[0.08] shadow-2xs"
-                : "text-charcoal-400 hover:bg-charcoal-850 hover:text-charcoal-200"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <PinIcon filled className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="flex-1 text-left">Pinned &amp; Starred</span>
-            <span className="rounded-full bg-charcoal-950/80 border border-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-charcoal-400">
+            <PinIcon filled className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="flex-1 text-left">Pinned</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => c.pinned && !c.archived).length}
             </span>
           </button>
@@ -1216,13 +1158,13 @@ export function AssistantHome({
             onClick={() => setSidebarTab("archived")}
             className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "archived"
-                ? "bg-charcoal-800 text-charcoal-100 font-semibold border border-white/[0.08] shadow-2xs"
-                : "text-charcoal-400 hover:bg-charcoal-850 hover:text-charcoal-200"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <ArchiveIcon className="w-3.5 h-3.5 text-charcoal-400 shrink-0" />
-            <span className="flex-1 text-left">Archived Chats</span>
-            <span className="rounded-full bg-charcoal-950/80 border border-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-charcoal-400">
+            <ArchiveIcon className="w-3.5 h-3.5 text-ink/60 shrink-0" />
+            <span className="flex-1 text-left">Archived</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => c.archived).length}
             </span>
           </button>
@@ -1230,14 +1172,14 @@ export function AssistantHome({
 
         {/* Vertical Conversation List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-charcoal-400">
+          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-ink/60">
             {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "History"}
           </p>
 
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-xs text-charcoal-400">
+            <div className="p-4 text-center text-xs text-ink/60">
               {sidebarTab === "pinned"
-                ? "No pinned chats. Click the pin icon to keep important chats at top."
+                ? "No pinned chats."
                 : sidebarTab === "archived"
                 ? "No archived conversations."
                 : "No previous chats."}
@@ -1260,24 +1202,24 @@ export function AssistantHome({
                   tabIndex={0}
                   aria-pressed={isActive}
                   aria-label={`Open conversation ${conv.title}`}
-                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
+                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
                     isActive
-                      ? "bg-charcoal-800 font-semibold text-charcoal-100 border border-hairline"
-                      : "text-charcoal-300 hover:bg-charcoal-850 hover:text-charcoal-100"
+                      ? "bg-bg font-semibold text-ink border border-ink/15 shadow-xs"
+                      : "text-ink/75 hover:bg-bg/60 hover:text-ink"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-accent-400 shrink-0" />}
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-accent shrink-0" />}
                     <span className="truncate">{conv.title}</span>
                   </div>
 
-                  {/* Actions (Always visible with clear icons) */}
+                  {/* Actions */}
                   <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-accent-400 transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-accent transition-colors"
                     >
                       <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
                     </button>
@@ -1286,7 +1228,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-ink transition-colors"
                     >
                       <ArchiveIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1295,7 +1237,7 @@ export function AssistantHome({
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-charcoal-400 hover:bg-charcoal-700 hover:text-red-400 transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-danger transition-colors"
                     >
                       <TrashIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1307,12 +1249,12 @@ export function AssistantHome({
         </div>
 
         {/* Sidebar Footer: Delete All Chats */}
-        <div className="p-3 border-t border-hairline bg-charcoal-950">
+        <div className="p-3 border-t border-ink/10 bg-surface">
           <button
             type="button"
             onClick={clearAllConversations}
             disabled={conversations.length === 0 || (conversations.length === 1 && conversations[0].messages.length === 0)}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-hairline bg-charcoal-900 px-3 py-2 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:border-red-900/50 hover:bg-red-950/30 transition-colors cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-danger hover:border-danger/30 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             title="Delete all chat history and start fresh"
           >
             <TrashIcon className="w-3.5 h-3.5" />
@@ -1322,15 +1264,15 @@ export function AssistantHome({
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-charcoal-950">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink">
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-white/[0.06] bg-charcoal-950/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-charcoal-900/80 px-3 py-1.5 text-xs font-semibold text-charcoal-300 hover:bg-charcoal-800 hover:text-white shadow-xs transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl border border-ink/15 bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-bg shadow-xs transition-colors cursor-pointer"
               title="Toggle Sidebar"
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
@@ -1338,50 +1280,50 @@ export function AssistantHome({
               <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
-            <span className="text-xs font-medium text-charcoal-200 truncate max-w-[160px] sm:max-w-xs">
-              {activeConversation?.title || "Career Copilot"}
+            <span className="text-xs font-medium text-ink truncate max-w-[160px] sm:max-w-xs">
+              {activeConversation?.title || "Career Assistant"}
             </span>
 
-            {/* Dynamic Real-Time Voice State Status Badge (7-State Machine) */}
+            {/* Dynamic Voice State Status Badge */}
             {voiceStatus === "speaking" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span className="flex items-center gap-1.5 rounded-full border border-success/30 bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 Speaking
               </span>
             )}
             {voiceStatus === "listening" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-accent">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 Listening
               </span>
             )}
             {voiceStatus === "initializing" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-ink/40 animate-pulse" />
                 Initializing
               </span>
             )}
             {voiceStatus === "processing" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-charcoal-900 px-2.5 py-0.5 text-[11px] font-medium text-charcoal-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-charcoal-500 animate-pulse" />
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 Processing
               </span>
             )}
             {voiceStatus === "error" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[11px] font-medium text-red-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="flex items-center gap-1.5 rounded-full border border-danger/30 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-danger">
+                <span className="h-1.5 w-1.5 rounded-full bg-danger" />
                 Mic error
               </span>
             )}
             {voiceStatus === "recovering" && (
-              <span className="flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+              <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-accent">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-ping" />
                 Recovering
               </span>
             )}
             {voiceStatus === "idle" && textFallbackActive && (
-              <span className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-charcoal-900 px-2.5 py-0.5 text-[11px] font-medium text-charcoal-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-charcoal-600" />
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/60">
+                <span className="h-1.5 w-1.5 rounded-full bg-ink/40" />
                 Text mode
               </span>
             )}
@@ -1395,12 +1337,12 @@ export function AssistantHome({
               onChange={(e) => setVoiceLanguage(e.target.value)}
               title="Select speech and assistant language"
               aria-label="Speech Language Selector"
-              className="rounded-full border border-white/[0.08] bg-charcoal-900/90 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-850 hover:text-charcoal-100 focus:outline-none focus:ring-1 focus:ring-amber-500/40 cursor-pointer transition-colors"
+              className="rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface focus:outline-none focus:border-accent cursor-pointer transition-colors"
             >
-              <option value="auto" className="bg-charcoal-900 text-charcoal-200">🌐 Auto Detect</option>
+              <option value="auto" className="bg-bg text-ink">Auto Detect</option>
               {LANGUAGE_LIST.map((l) => (
-                <option key={l.code} value={l.code} className="bg-charcoal-900 text-charcoal-200">
-                  {l.flag} {l.nativeName} ({l.name})
+                <option key={l.code} value={l.code} className="bg-bg text-ink">
+                  {l.nativeName} ({l.name})
                 </option>
               ))}
             </select>
@@ -1411,9 +1353,9 @@ export function AssistantHome({
               onClick={repeatLastResponse}
               title="Repeat last spoken response"
               aria-label="Repeat last spoken response"
-              className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-charcoal-900/90 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
             >
-              <SpeakerIcon className="w-3.5 h-3.5" />
+              <SpeakerIcon className="w-3.5 h-3.5 text-ink/70" />
               <span className="hidden sm:inline">Repeat</span>
             </button>
 
@@ -1424,7 +1366,7 @@ export function AssistantHome({
                 onClick={stopAllVoice}
                 title="Stop audio and listening immediately"
                 aria-label="Stop audio and listening"
-                className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer shadow-xs"
+                className="flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-colors cursor-pointer shadow-xs"
               >
                 <StopIcon className="w-3 h-3 text-white" />
                 <span>Stop</span>
@@ -1439,29 +1381,29 @@ export function AssistantHome({
               aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
               className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                 accessibilityPrefs.speechOutput
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                  : "border-white/[0.08] bg-charcoal-900/90 text-charcoal-400 hover:bg-charcoal-850"
+                  ? "border-accent/30 bg-surface text-accent hover:border-accent"
+                  : "border-ink/15 bg-bg text-ink/60 hover:bg-surface hover:text-ink"
               }`}
             >
-              <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "" : "opacity-40"}`} />
+              <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "text-accent" : "opacity-40"}`} />
               <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice on" : "Muted"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-charcoal-900/90 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
               title="Share conversation link or transcript"
               aria-label="Share Conversation"
             >
-              <ShareHeaderIcon className="w-3.5 h-3.5 text-charcoal-400" />
+              <ShareHeaderIcon className="w-3.5 h-3.5 text-ink/70" />
               <span className="hidden sm:inline">Share</span>
             </button>
 
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-charcoal-900/90 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-800 hover:text-charcoal-100 transition-all cursor-pointer"
+              className="flex items-center gap-1 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
               title="Start new chat"
               aria-label="Start New Chat"
             >
@@ -1472,7 +1414,7 @@ export function AssistantHome({
               <button
                 type="button"
                 onClick={(e) => deleteConversation(activeConversation.id, e)}
-                className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-charcoal-900/90 px-3 py-1.5 text-xs font-medium text-charcoal-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                className="flex items-center gap-1 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-danger hover:border-danger/30 transition-colors cursor-pointer"
                 title="Delete this chat"
                 aria-label="Delete Current Chat"
               >
@@ -1487,25 +1429,18 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-10 max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1 text-xs font-medium text-amber-400 backdrop-blur-md shadow-sm">
-                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>Autonomous Career Intelligence &amp; Voice Copilot</span>
+              <div className="mb-10 max-w-2xl space-y-5 animate-in fade-in duration-200">
+                <div className="space-y-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">
+                    {userDisplayName ? `Welcome, ${userDisplayName}` : "CareerForge Assistant"}
+                  </h1>
+                  <p className="text-sm leading-relaxed text-ink/70">
+                    Voice-enabled companion for ATS resume optimization, step-by-step career roadmaps, and technical interview practice.
+                  </p>
                 </div>
 
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-[1.15]">
-                  {userDisplayName ? `Welcome back, ${userDisplayName}.` : "Welcome to CareerForge."}
-                  <span className="block mt-2 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 bg-clip-text text-transparent">
-                    Where should we take your career next?
-                  </span>
-                </h1>
-
-                <p className="max-w-xl text-sm sm:text-base leading-relaxed text-charcoal-300">
-                  Your voice-enabled career companion for ATS resume optimization, step-by-step learning roadmaps, daily code drills, and local opportunities. Speak naturally or type anytime.
-                </p>
-
-                {/* Primary Voice vs Text Entry Options */}
-                <div className="flex flex-wrap items-center gap-3 pt-1">
+                {/* Primary Action Buttons (2 buttons, matching reference look) */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -1544,9 +1479,9 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-2.5 text-sm font-bold text-charcoal-950 transition-all hover:from-amber-400 hover:to-amber-500 hover:scale-105 cursor-pointer shadow-lg shadow-amber-500/20"
+                    className="inline-flex items-center gap-2 rounded-xl bg-surface border border-ink/20 px-4 py-2 text-xs font-semibold text-ink hover:border-accent hover:text-accent shadow-xs transition-colors cursor-pointer"
                   >
-                    <MicIcon className="w-4 h-4 text-charcoal-950" />
+                    <MicIcon className="w-3.5 h-3.5 text-accent" />
                     <span>Start talking</span>
                   </button>
 
@@ -1555,40 +1490,37 @@ export function AssistantHome({
                     onClick={() => {
                       textareaRef.current?.focus();
                     }}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-charcoal-900/80 px-6 py-2.5 text-sm font-medium text-charcoal-300 transition-all hover:bg-charcoal-800 hover:text-charcoal-100 cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-xl border border-ink/15 bg-bg px-4 py-2 text-xs font-medium text-ink hover:bg-surface transition-colors cursor-pointer"
                   >
-                    <span>Type instead</span>
+                    <span>Type message</span>
                   </button>
                 </div>
 
-                {/* 3 Interactive Quick Suggestion Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 w-full">
+                {/* At most 3 suggested action cards shown only when chat is empty (Section 5) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 w-full">
                   <button
                     type="button"
                     onClick={() => runPrompt("Help me audit my resume for ATS compliance")}
-                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-sm hover:-translate-y-0.5"
+                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
                   >
-                    <div className="text-xl mb-2">📄</div>
-                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">ATS Resume Audit</div>
-                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Score and fix keywords for your target role</div>
+                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">ATS Resume Audit</div>
+                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Score and fix keywords for your target role</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => runPrompt("Show me my complete career roadmap")}
-                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-sm hover:-translate-y-0.5"
+                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
                   >
-                    <div className="text-xl mb-2">🗺️</div>
-                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">Career Roadmap</div>
-                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Visual skill graph from basics to mastery</div>
+                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">Career Roadmap</div>
+                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Visual skill graph from basics to mastery</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => runPrompt("I want to practice interview questions")}
-                    className="p-4 rounded-2xl border border-white/[0.08] bg-charcoal-900/60 hover:bg-charcoal-850 hover:border-amber-500/40 text-left transition-all group cursor-pointer shadow-sm hover:-translate-y-0.5"
+                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
                   >
-                    <div className="text-xl mb-2">🎙️</div>
-                    <div className="text-xs font-bold text-charcoal-100 group-hover:text-amber-400 transition-colors">Mock Interview</div>
-                    <div className="text-[11px] text-charcoal-400 mt-1 leading-normal">Real-time interview simulation with instant feedback</div>
+                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">Mock Interview</div>
+                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Interactive practice with instant feedback</div>
                   </button>
                 </div>
               </div>
@@ -1609,10 +1541,10 @@ export function AssistantHome({
                     key={m.id}
                     className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-charcoal-400 px-1">
-                      <span>{isUser ? userDisplayName : "CareerForge AI"}</span>
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-ink/60 px-1">
+                      <span>{isUser ? userDisplayName : "CareerForge Assistant"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] text-charcoal-500">
+                        <span className="text-[10px] text-ink/40">
                           {m.engine}
                         </span>
                       )}
@@ -1622,51 +1554,46 @@ export function AssistantHome({
                           onClick={() => toggleSpeech(m.id, m.text)}
                           className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
                             speakingMsgId === m.id
-                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
-                              : "text-charcoal-400 hover:bg-charcoal-800 hover:text-charcoal-200"
+                              ? "bg-surface text-accent border border-accent/30"
+                              : "text-ink/60 hover:bg-surface hover:text-ink"
                           }`}
                           title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
                         >
                           {speakingMsgId === m.id ? (
                             <>
-                              <StopIcon className="w-2.5 h-2.5 text-amber-400" />
+                              <StopIcon className="w-2.5 h-2.5 text-accent" />
                               <span>Stop</span>
                             </>
                           ) : (
                             <>
-                              <SpeakerIcon className="w-2.5 h-2.5" />
+                              <SpeakerIcon className="w-2.5 h-2.5 text-ink/60" />
                               <span>Listen</span>
                             </>
                           )}
                         </button>
                       )}
-                      {m.time && <span className="text-charcoal-500">{m.time}</span>}
+                      {m.time && <span className="text-ink/40">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
                       {m.attachedDocName && (
-                        <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-charcoal-900 px-2.5 py-1 text-xs text-charcoal-300 w-fit">
-                          <PaperclipIcon className="w-3.5 h-3.5 text-amber-400" />
+                        <div className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-surface px-2.5 py-1 text-xs text-ink w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
                           <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
                         </div>
-                      )}
-
-                      {/* Expandable Thought Deliberation like Claude / ChatGPT */}
-                      {!isUser && m.thinking && m.thinking.length > 0 && (
-                        <ThinkingProcess steps={m.thinking} />
                       )}
 
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 font-semibold rounded-tr-xs shadow-md shadow-amber-500/15"
-                            : "bg-charcoal-900/95 text-charcoal-100 rounded-tl-xs border border-white/[0.08] shadow-lg shadow-black/20 backdrop-blur-sm"
+                            ? "bg-surface border border-ink/15 text-ink font-medium rounded-tr-xs shadow-xs"
+                            : "bg-surface text-ink rounded-tl-xs border border-ink/15 shadow-xs"
                         }`}
                       >
                         {isUser ? (
                           <p className="whitespace-pre-line">{m.text}</p>
                         ) : (
-                          <div className="prose prose-invert prose-sm max-w-none text-charcoal-200 space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-charcoal-100 [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-charcoal-100 [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-charcoal-950 [&>pre]:text-charcoal-100 [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-white/[0.06] [&>code]:bg-charcoal-800 [&>code]:text-charcoal-100 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-amber-400 [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-amber-500 [&>blockquote]:pl-3 [&>blockquote]:italic">
+                          <div className="prose prose-sm max-w-none text-ink space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-ink [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-ink [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-bg [&>pre]:text-ink [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-ink/15 [&>code]:bg-bg [&>code]:text-ink [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
                             <ReactMarkdown>{m.text}</ReactMarkdown>
                           </div>
                         )}
@@ -1674,27 +1601,27 @@ export function AssistantHome({
 
                       {/* Interactive Workspace Action */}
                       {m.intent?.feature && (
-                        <div className="rounded-xl border border-white/[0.08] bg-charcoal-900 p-4 shadow-sm space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
+                        <div className="rounded-xl border border-ink/15 bg-surface p-4 shadow-xs space-y-2.5 animate-in fade-in duration-150">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="flex h-2 w-2 rounded-full bg-amber-500" />
-                              <span className="text-xs font-semibold text-charcoal-100">
+                              <span className="flex h-2 w-2 rounded-full bg-accent" />
+                              <span className="text-xs font-semibold text-ink">
                                 {m.intent.featureTitle || "Workspace Tool"}
                               </span>
                             </div>
                             {m.redirecting && redirectCountdown !== null && (
-                              <span className="text-[11px] font-medium text-amber-400">
+                              <span className="text-[11px] font-medium text-accent">
                                 Opening in 3s
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/[0.06]">
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-ink/10">
                             {m.redirecting && (
                               <button
                                 type="button"
                                 onClick={cancelRedirect}
-                                className="rounded-lg border border-white/[0.08] bg-charcoal-800 px-3 py-1.5 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors cursor-pointer"
+                                className="rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-colors cursor-pointer"
                               >
                                 Stay in Chat
                               </button>
@@ -1702,7 +1629,7 @@ export function AssistantHome({
                             <button
                               type="button"
                               onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-xs font-bold text-charcoal-950 hover:from-amber-400 hover:to-amber-500 transition-all shadow-sm cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/20 bg-bg px-4 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent transition-colors shadow-xs cursor-pointer"
                             >
                               <span>Open {m.intent.featureTitle || "Tool"}</span>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1719,14 +1646,14 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-charcoal-400 px-1">
-                    CareerForge AI is thinking…
+                  <div className="mb-1 text-[11px] font-medium text-ink/60 px-1">
+                    CareerForge Assistant is thinking…
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-white/[0.08] bg-charcoal-900 px-4 py-3 shadow-xs">
+                  <div className="rounded-2xl rounded-tl-xs border border-ink/15 bg-surface px-4 py-3 shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-amber-400/80 animate-bounce" />
+                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce" />
                     </div>
                   </div>
                 </div>
@@ -1735,43 +1662,9 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS ─────────── */}
-        <div className="border-t border-white/[0.08] bg-charcoal-950/90 px-4 pb-20 pt-3 backdrop-blur-xl">
-          <div className="mx-auto max-w-3xl space-y-3">
-            
-            {/* Live Spoken Text & Captions Visualizer for Accessibility */}
-            {accessibilityPrefs.captions && (liveSpokenText || listening || speakingMsgId) && (
-              <div
-                role="region"
-                aria-label="Live Voice Captions"
-                aria-live="polite"
-                className="flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-300 shadow-sm animate-in fade-in slide-in-from-bottom-2 backdrop-blur-md"
-              >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 animate-ping" />
-                  <div className="truncate">
-                    <span className="font-semibold text-amber-400">
-                      {listening ? "Listening" : "Speaking"}
-                      <span className="mx-1.5 text-amber-500/40">/</span>
-                    </span>
-                    <span className="font-normal text-amber-200">
-                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening") : liveSpokenText}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={stopAllVoice}
-                    className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-
+        {/* ─── RESTRAINED NOTION-LIKE BOTTOM PROMPT COMPOSER ─────────── */}
+        <div className="border-t border-ink/10 bg-bg/95 px-4 pb-20 pt-3 backdrop-blur-md">
+          <div className="mx-auto max-w-3xl">
             {/* Hidden Document File Input */}
             <input
               ref={fileInputRef}
@@ -1785,20 +1678,20 @@ export function AssistantHome({
             {/* AI Rounded Card Box */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-3xl border border-white/[0.1] bg-charcoal-900/90 p-3.5 shadow-xl shadow-black/40 focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/20 transition-all backdrop-blur-md"
+              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/30 transition-all"
             >
               {/* Attached Document Preview Badge */}
               {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-white/[0.08] bg-charcoal-800 px-3 py-1.5 text-xs text-charcoal-100 animate-in fade-in shadow-2xs">
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink shadow-2xs">
                   <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
                     <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-charcoal-400">Ready to review</span>
+                    <span className="text-[10px] text-ink/60">Ready to review</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-charcoal-400 hover:text-red-400 cursor-pointer"
+                    className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer"
                     title="Remove attachment"
                   >
                     ✕
@@ -1808,7 +1701,7 @@ export function AssistantHome({
 
               {/* Textarea Input with Instant Enter Submission */}
               <label htmlFor="assistant-composer" className="sr-only">
-                Message CareerForge AI
+                Message CareerForge Assistant
               </label>
               <textarea
                 id="assistant-composer"
@@ -1835,64 +1728,88 @@ export function AssistantHome({
                     ? `Ask anything about ${attachedFile.name}...`
                     : "Ask about resumes, roadmaps, technical practice, or voice interview prep..."
                 }
-                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-1 text-sm text-charcoal-100 placeholder:text-charcoal-500 focus:outline-none"
+                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-1 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
               />
 
               {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-1">
-                {/* Left Controls: Clean Attach & Unlimited Voice */}
+              <div className="flex items-center justify-between pt-2 border-t border-ink/10 mt-1">
+                {/* Left Controls: Clean Attach & Collapsed Voice Indicator */}
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parsingDoc}
                     title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-charcoal-800/80 px-3 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1 text-xs font-medium text-ink hover:bg-surface transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                     ) : (
-                      <PaperclipIcon className="w-3.5 h-3.5 text-charcoal-400" />
+                      <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
                     )}
                     <span className="hidden sm:inline">Attach</span>
                   </button>
 
-                  {/* Voice Dictation (Auto-detects language, auto-sends on 3-4s pause) */}
+                  {/* Collapsed Voice Indicator & Toggle Button (§4 & §5) */}
                   <button
                     type="button"
                     onClick={toggleListening}
                     aria-pressed={listening}
-                    aria-label={listening ? "Stop voice dictation" : "Start voice dictation"}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
+                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                       listening
-                        ? "bg-red-600 text-white animate-pulse shadow-md shadow-red-600/30"
-                        : "border border-white/[0.06] bg-charcoal-800/80 text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100"
+                        ? "bg-accent text-white shadow-xs font-bold"
+                        : busy
+                        ? "bg-surface text-ink border border-ink/30 font-bold"
+                        : "border border-ink/15 bg-bg text-ink hover:bg-surface"
                     }`}
-                    title={
-                      listening
-                        ? "Listening... will auto-send after 3-4s of silence"
-                        : "Voice Dictation in any language (Auto-sends on pause)"
-                    }
+                    title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
                   >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-white" : "text-amber-400"}`} />
-                    <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
+                    {/* Decorative thinking-orbs for processing */}
+                    {busy && (
+                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
+                        <span className="absolute h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+                        <span className="relative h-1 w-1 rounded-full bg-accent" />
+                      </span>
+                    )}
+
+                    {/* Decorative Voice glow for listening */}
+                    {listening && (
+                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
+                        <span className="absolute rounded-full bg-white animate-pulse" style={{ width: "8px", height: "8px" }} />
+                        <span className="relative h-1 w-1 rounded-full bg-white" />
+                      </span>
+                    )}
+
+                    {!busy && !listening && (
+                      <MicIcon className="w-3 h-3 text-accent" />
+                    )}
+
+                    <span>
+                      {listening
+                        ? (silenceCountdown ? `Listening (${silenceCountdown}s)` : "Listening…")
+                        : busy
+                        ? "Processing…"
+                        : "Voice"}
+                    </span>
                   </button>
 
                   {micError && (
-                    <span className="text-[10px] text-red-400 truncate max-w-[140px]">
+                    <span className="text-[10px] text-danger truncate max-w-[140px]">
                       {micError}
                     </span>
                   )}
                 </div>
 
-                {/* Right: Circular Send Button (↑) */}
+                {/* Right: Clean Send Button */}
                 <button
                   type="submit"
                   disabled={busy || (!input.trim() && !attachedFile)}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-md ${
+                  aria-label="Send prompt"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
                     input.trim() || attachedFile
-                      ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 font-bold hover:from-amber-400 hover:to-amber-500 scale-100 cursor-pointer shadow-amber-500/20 active:scale-95"
-                      : "bg-charcoal-800 text-charcoal-600 cursor-not-allowed opacity-50"
+                      ? "bg-accent text-white font-bold hover:opacity-90 scale-100 cursor-pointer active:scale-95"
+                      : "bg-ink/10 text-ink/30 cursor-not-allowed opacity-50"
                   }`}
                   title="Send prompt (or press Enter)"
                 >
@@ -1900,59 +1817,6 @@ export function AssistantHome({
                 </button>
               </div>
             </form>
-
-            {/* ─── HORIZONTAL SCROLLABLE PROMPT CAROUSEL ───────── */}
-            <div className="relative flex items-center group/carousel pt-1">
-              {/* Left Scroll Button */}
-              <button
-                type="button"
-                onClick={() => scrollPrompts("left")}
-                disabled={!canScrollLeft}
-                aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-charcoal-900 shadow-lg backdrop-blur-md transition-colors ${
-                  canScrollLeft
-                    ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
-                    : "opacity-0 pointer-events-none text-charcoal-600"
-                }`}
-              >
-                <ChevronLeftIcon className="w-4 h-4" />
-              </button>
-
-              {/* Scroll Container */}
-              <div
-                ref={promptScrollRef}
-                onScroll={checkPromptScroll}
-                className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1 w-full"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {quickPills.map((pill) => (
-                  <button
-                    key={pill.label}
-                    type="button"
-                    onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-white/[0.08] bg-charcoal-900/80 px-4 py-1.5 text-xs font-medium text-charcoal-300 hover:border-amber-500/40 hover:text-white hover:bg-charcoal-850 hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap shadow-xs backdrop-blur-xs"
-                  >
-                    {pill.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Right Scroll Button */}
-              <button
-                type="button"
-                onClick={() => scrollPrompts("right")}
-                disabled={!canScrollRight}
-                aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-charcoal-900 shadow-lg backdrop-blur-md transition-colors ${
-                  canScrollRight
-                    ? "opacity-100 hover:bg-charcoal-800 cursor-pointer text-charcoal-100"
-                    : "opacity-0 pointer-events-none text-charcoal-600"
-                }`}
-              >
-                <ChevronRightIcon className="w-4 h-4" />
-              </button>
-            </div>
-
           </div>
         </div>
       </div>

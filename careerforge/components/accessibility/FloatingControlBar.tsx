@@ -226,19 +226,19 @@ export function FloatingControlBar() {
             type="button"
             onClick={() => setMinimized(false)}
             aria-label="Expand Voice and Accessibility Controls. Shortcut: Alt plus V"
-            className="flex items-center gap-2.5 rounded-full border border-white/[0.15] bg-charcoal-900/95 px-4 py-2 text-xs font-semibold text-charcoal-100 shadow-2xl shadow-black/80 backdrop-blur-xl hover:bg-charcoal-800 hover:border-amber-500/40 transition-all cursor-pointer group"
+            className="flex items-center gap-2.5 rounded-full border-2 border-accent/20 bg-surface px-4 py-2 text-xs font-semibold text-ink shadow-2xl backdrop-blur-xl hover:bg-surface/90 hover:border-accent transition-all cursor-pointer group"
           >
             <span
               className={`h-2.5 w-2.5 rounded-full ${
                 voiceState === "listening"
-                  ? "bg-amber-400 animate-ping"
+                  ? "bg-accent animate-ping"
                   : voiceState === "speaking"
-                  ? "bg-emerald-400 animate-pulse"
-                  : "bg-amber-500"
+                  ? "bg-success animate-pulse"
+                  : "bg-accent-soft"
               }`}
             />
-            <span className="group-hover:text-amber-400 transition-colors">Voice Assistant</span>
-            <span className="text-[10px] text-charcoal-400 bg-charcoal-800 px-1.5 py-0.5 rounded border border-white/5">
+            <span className="group-hover:text-accent transition-colors font-bold">Voice Assistant</span>
+            <span className="text-[10px] text-ink/70 bg-bg px-1.5 py-0.5 rounded border border-ink/10 font-mono">
               Alt+V
             </span>
           </button>
@@ -255,22 +255,23 @@ export function FloatingControlBar() {
           {permissionBlockedNotice && (
             <div
               role="alert"
-              className="mb-2 flex items-center justify-between rounded-xl border border-amber-500/50 bg-charcoal-900 px-4 py-2 text-xs text-amber-300 shadow-lg backdrop-blur-md"
+              className="mb-2 flex items-center justify-between rounded-xl border-2 border-danger/40 bg-surface px-4 py-2 text-xs text-danger font-medium shadow-lg backdrop-blur-md"
             >
               <span>
-                Microphone access is blocked in your browser settings. Enable microphone permission to speak.
+                Microphone access is blocked in your browser settings. Enable microphone permission in browser settings to speak.
               </span>
               <button
                 type="button"
                 onClick={() => setPermissionBlockedNotice(false)}
-                className="ml-3 rounded font-bold hover:text-white"
+                className="ml-3 rounded font-bold hover:text-ink cursor-pointer"
+                aria-label="Dismiss microphone blocked alert"
               >
                 ✕
               </button>
             </div>
           )}
 
-          <div className="rounded-2xl sm:rounded-full border border-white/[0.12] bg-charcoal-900/95 p-2 sm:px-3 sm:py-2 text-white shadow-2xl shadow-black/70 backdrop-blur-2xl">
+          <div className="rounded-2xl sm:rounded-full border-2 border-ink/15 bg-surface/95 p-2 sm:px-3 sm:py-2 text-ink shadow-2xl shadow-ink/20 backdrop-blur-2xl">
             {/* Top Row: State Pill, Visual Amplitude Meter, Live Captions, Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
               {/* Left: State Pill & Audio Amplitude Meter (Completely unmounted for deaf profile) */}
@@ -283,25 +284,51 @@ export function FloatingControlBar() {
                     onClick={toggleAssistant}
                     aria-pressed={voiceState === "listening"}
                     aria-label={`Voice Assistant: currently ${voiceState}. Press Alt+V to toggle`}
-                    className={`relative flex items-center justify-center rounded-full px-3.5 py-1.5 font-semibold text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 cursor-pointer ${
+                    className={`relative flex items-center justify-center rounded-full px-3.5 py-1.5 font-semibold text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer ${
                       voiceState === "listening"
-                        ? "bg-gradient-to-r from-amber-500 to-amber-600 text-charcoal-950 shadow-lg shadow-amber-500/40 animate-pulse font-bold"
+                        ? "bg-accent text-white shadow-md font-bold"
+                        : voiceState === "processing"
+                        ? "bg-accent-soft text-white shadow-md font-bold"
                         : voiceState === "speaking"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-charcoal-950 shadow-lg shadow-emerald-500/40 font-bold"
-                        : "bg-charcoal-800 text-charcoal-200 hover:bg-charcoal-700 hover:text-white border border-white/[0.08]"
+                        ? "bg-success text-white shadow-md font-bold"
+                        : "bg-bg/80 text-ink hover:bg-bg border border-ink/15"
                     }`}
                   >
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${
-                          voiceState === "listening"
-                            ? "bg-charcoal-950 animate-ping"
-                            : voiceState === "speaking"
-                            ? "bg-charcoal-950"
-                            : "bg-amber-400"
-                        }`}
-                        aria-hidden="true"
-                      />
+                    <span className="flex items-center gap-2">
+                      {/* Section 2: Thinking Orbs for processing state */}
+                      {voiceState === "processing" && (
+                        <span className="relative flex h-3.5 w-3.5 items-center justify-center motion-reduce:hidden" aria-hidden="true">
+                          <span className="absolute h-full w-full animate-ping rounded-full bg-white opacity-70" />
+                          <span className="relative h-2 w-2 rounded-full bg-white animate-pulse" />
+                        </span>
+                      )}
+
+                      {/* Section 2: Voice Glow Ring that expands with input volume for listening state */}
+                      {voiceState === "listening" && (
+                        <span className="relative flex h-3.5 w-3.5 items-center justify-center motion-reduce:hidden" aria-hidden="true">
+                          <span
+                            className="absolute rounded-full bg-white transition-transform duration-75"
+                            style={{
+                              transform: `scale(${1 + amplitude * 1.5})`,
+                              opacity: 0.5 + amplitude * 0.5,
+                              width: "12px",
+                              height: "12px",
+                            }}
+                          />
+                          <span className="relative h-2 w-2 rounded-full bg-white" />
+                        </span>
+                      )}
+
+                      {/* Default idle dot */}
+                      {voiceState !== "processing" && voiceState !== "listening" && (
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${
+                            voiceState === "speaking" ? "bg-white animate-pulse" : "bg-accent"
+                          }`}
+                          aria-hidden="true"
+                        />
+                      )}
+
                       <span>
                         {voiceState === "listening"
                           ? "Listening"
@@ -309,14 +336,14 @@ export function FloatingControlBar() {
                           ? "Thinking…"
                           : voiceState === "speaking"
                           ? "Speaking"
-                          : "Voice Assistant"}
+                          : "Enable Voice"}
                       </span>
                     </span>
                   </button>
 
                   {/* Real-time Audio Amplitude Meter */}
                   <div
-                    className="flex items-end gap-1 h-5 w-12 px-1 py-0.5 rounded-full bg-charcoal-950/80 border border-white/[0.08]"
+                    className="flex items-end gap-1 h-5 w-12 px-1 py-0.5 rounded-full bg-bg/90 border border-ink/15"
                     aria-hidden="true"
                     title={`Microphone input level: ${Math.round(amplitude * 100)}%`}
                   >
@@ -328,9 +355,9 @@ export function FloatingControlBar() {
                           className={`w-1.5 rounded-t transition-all duration-75 ${
                             isActive
                               ? idx >= 3
-                                ? "bg-amber-400"
-                                : "bg-emerald-400"
-                              : "bg-charcoal-800"
+                                ? "bg-accent"
+                                : "bg-success"
+                              : "bg-ink/15"
                           }`}
                           style={{
                             height: isActive ? `${Math.max(25, amplitude * 100)}%` : "20%",
@@ -341,28 +368,28 @@ export function FloatingControlBar() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-800 border border-white/[0.08] text-xs font-semibold text-charcoal-300">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-bg/90 border border-ink/15 text-xs font-semibold text-ink">
                   <span aria-hidden="true">🦻</span>
-                  <span>Captions Mode</span>
+                  <span>Captions Mode (Text Only)</span>
                 </div>
               )}
 
               {/* Middle: Live Synchronized Captions */}
               <div
-                className="flex-1 min-w-[140px] overflow-hidden rounded-full bg-charcoal-950/80 px-3 py-1 border border-white/[0.06]"
+                className="flex-1 min-w-[140px] overflow-hidden rounded-full bg-bg/90 px-3 py-1 border border-ink/15"
                 role="status"
                 aria-live="polite"
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-accent shrink-0">
                     {speakerLabel}:
                   </span>
-                  <p className={`truncate font-medium text-charcoal-200 text-xs ${captionSizeClass}`}>
+                  <p className={`truncate font-medium text-ink text-xs ${captionSizeClass}`}>
                     {liveCaption || (
-                      <span className="italic text-charcoal-400">
+                      <span className="italic text-ink/60">
                         {isDeafProfile
-                          ? "Live captions will appear here."
-                          : "Press Alt+V to speak..."}
+                          ? "Synchronized live captions ready."
+                          : "Press Alt+V or speak your command..."}
                       </span>
                     )}
                   </p>
@@ -377,7 +404,7 @@ export function FloatingControlBar() {
                   aria-expanded={settingsOpen}
                   aria-controls="accessibility-settings-panel"
                   aria-label="Open Accessibility and Display Settings"
-                  className="rounded-full border border-white/[0.08] bg-charcoal-800 px-2.5 py-1 text-xs font-medium text-charcoal-300 hover:bg-charcoal-700 hover:text-white transition-colors cursor-pointer"
+                  className="rounded-full border border-ink/15 bg-bg/80 px-2.5 py-1 text-xs font-medium text-ink hover:bg-bg transition-colors cursor-pointer"
                   title="Accessibility settings"
                 >
                   ⚙
@@ -387,7 +414,7 @@ export function FloatingControlBar() {
                   type="button"
                   onClick={() => setMinimized(true)}
                   aria-label="Minimize Voice Assistant Bar"
-                  className="rounded-full border border-white/[0.08] bg-charcoal-800 px-2 py-1 text-xs font-medium text-charcoal-400 hover:bg-charcoal-700 hover:text-white transition-colors cursor-pointer"
+                  className="rounded-full border border-ink/15 bg-bg/80 px-2 py-1 text-xs font-medium text-ink/70 hover:bg-bg hover:text-ink transition-colors cursor-pointer"
                   title="Minimize bar"
                 >
                   ✕
@@ -402,58 +429,58 @@ export function FloatingControlBar() {
                 ref={settingsPanelRef}
                 role="dialog"
                 aria-label="Accessibility Settings"
-                className="mt-3 border-t border-white/[0.08] pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs"
+                className="mt-3 border-t border-ink/15 pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs"
               >
                 {/* Accessibility Profile Switcher */}
-                <div className="flex flex-col gap-1 sm:col-span-2 md:col-span-4 border-b border-white/[0.06] pb-3">
-                  <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                <div className="flex flex-col gap-1 sm:col-span-2 md:col-span-4 border-b border-ink/15 pb-3">
+                  <label className="text-[10px] font-bold text-accent uppercase tracking-wider">
                     Active Accessibility Profile
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                     <button
                       type="button"
                       onClick={() => setAccessibilityProfile("blind_low_vision")}
-                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                      className={`p-2.5 rounded-xl border-2 text-left text-xs transition-colors cursor-pointer ${
                         accessibilityProfile === "blind_low_vision"
-                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                          ? "border-accent bg-bg font-bold shadow-sm"
+                          : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold">👁️ Blind / Low Vision</div>
-                      <div className="text-[10px] text-charcoal-400 mt-0.5">Always-on voice & TTS</div>
+                      <div className="font-semibold text-ink">👁️ Blind / Low Vision</div>
+                      <div className="text-[10px] text-ink/70 mt-0.5">Ambient voice &amp; full TTS</div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setAccessibilityProfile("deaf_hard_of_hearing")}
-                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                      className={`p-2.5 rounded-xl border-2 text-left text-xs transition-colors cursor-pointer ${
                         accessibilityProfile === "deaf_hard_of_hearing"
-                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                          ? "border-accent bg-bg font-bold shadow-sm"
+                          : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold">🦻 Deaf / Hard of Hearing</div>
-                      <div className="text-[10px] text-charcoal-400 mt-0.5">Zero mic access & captions</div>
+                      <div className="font-semibold text-ink">🦻 Deaf / Hard of Hearing</div>
+                      <div className="text-[10px] text-ink/70 mt-0.5">Zero mic access &amp; text captions</div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setAccessibilityProfile("standard")}
-                      className={`p-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
+                      className={`p-2.5 rounded-xl border-2 text-left text-xs transition-colors cursor-pointer ${
                         accessibilityProfile === "standard"
-                          ? "border-amber-400 bg-amber-500/20 text-white font-bold"
-                          : "border-white/[0.08] bg-charcoal-800 text-charcoal-300 hover:border-white/20"
+                          ? "border-accent bg-bg font-bold shadow-sm"
+                          : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold">💻 Standard</div>
-                      <div className="text-[10px] text-charcoal-400 mt-0.5">Voice off by default</div>
+                      <div className="font-semibold text-ink">💻 Standard</div>
+                      <div className="text-[10px] text-ink/70 mt-0.5">Voice off by default</div>
                     </button>
                   </div>
                 </div>
 
                 {/* High Contrast Mode */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="high-contrast-toggle" className="text-[11px] font-semibold text-charcoal-300">
+                  <label htmlFor="high-contrast-toggle" className="text-[11px] font-semibold text-ink">
                     High Contrast
                   </label>
                   <button
@@ -463,8 +490,8 @@ export function FloatingControlBar() {
                     aria-pressed={settings.highContrast}
                     className={`rounded-lg py-1.5 px-3 text-xs font-medium border text-left transition-colors cursor-pointer ${
                       settings.highContrast
-                        ? "border-amber-400 bg-amber-500/20 text-amber-300"
-                        : "border-white/[0.08] bg-charcoal-800 text-charcoal-300"
+                        ? "border-accent bg-accent text-white font-bold"
+                        : "border-ink/15 bg-bg/80 text-ink"
                     }`}
                   >
                     {settings.highContrast ? "✓ High Contrast (ON)" : "Standard Contrast"}
@@ -473,7 +500,7 @@ export function FloatingControlBar() {
 
                 {/* Text Zoom / Size */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="font-size-select" className="text-[11px] font-semibold text-charcoal-300">
+                  <label htmlFor="font-size-select" className="text-[11px] font-semibold text-ink">
                     Text Scale
                   </label>
                   <select
@@ -482,7 +509,7 @@ export function FloatingControlBar() {
                     onChange={(e) =>
                       setSettings((s) => ({ ...s, fontSizeMultiplier: parseFloat(e.target.value) }))
                     }
-                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    className="rounded-lg border border-ink/15 bg-bg/90 py-1.5 px-2 text-xs text-ink focus-visible:ring-1 focus-visible:ring-accent"
                   >
                     <option value={1.0}>100% (Default)</option>
                     <option value={1.25}>125% (Large)</option>
@@ -492,7 +519,7 @@ export function FloatingControlBar() {
 
                 {/* Speech Speed */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="speech-rate-select" className="text-[11px] font-semibold text-charcoal-300">
+                  <label htmlFor="speech-rate-select" className="text-[11px] font-semibold text-ink">
                     Speech Speed
                   </label>
                   <select
@@ -501,7 +528,7 @@ export function FloatingControlBar() {
                     onChange={(e) =>
                       setSettings((s) => ({ ...s, speechRate: parseFloat(e.target.value) }))
                     }
-                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    className="rounded-lg border border-ink/15 bg-bg/90 py-1.5 px-2 text-xs text-ink focus-visible:ring-1 focus-visible:ring-accent"
                   >
                     <option value={0.85}>0.85x (Slower)</option>
                     <option value={1.0}>1.0x (Standard)</option>
@@ -512,7 +539,7 @@ export function FloatingControlBar() {
 
                 {/* Caption Size */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="caption-size-select" className="text-[11px] font-semibold text-charcoal-300">
+                  <label htmlFor="caption-size-select" className="text-[11px] font-semibold text-ink">
                     Captions Display
                   </label>
                   <select
@@ -524,7 +551,7 @@ export function FloatingControlBar() {
                         captionSize: e.target.value as AccessibilitySettings["captionSize"],
                       }))
                     }
-                    className="rounded-lg border border-white/[0.08] bg-charcoal-800 py-1.5 px-2 text-xs text-charcoal-200 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    className="rounded-lg border border-ink/15 bg-bg/90 py-1.5 px-2 text-xs text-ink focus-visible:ring-1 focus-visible:ring-accent"
                   >
                     <option value="normal">Normal Text</option>
                     <option value="large">Large Text</option>

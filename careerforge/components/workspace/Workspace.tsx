@@ -33,27 +33,27 @@ export function Workspace({
   const heading = copy[feature];
 
   return (
-    <div className="min-h-[calc(100vh-4.25rem)] bg-charcoal-950 text-charcoal-200">
-      <div className="border-b border-white/[0.08] py-8 sm:py-10 bg-gradient-to-b from-charcoal-900/60 to-charcoal-950/90 backdrop-blur-md">
+    <div className="min-h-[calc(100vh-4.25rem)] bg-bg text-ink">
+      <div className="border-b border-ink/10 py-8 sm:py-10 bg-surface/60 backdrop-blur-md">
         <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-accent">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               <span>{heading.eyebrow}</span>
             </div>
-            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
+            <h1 className="font-sans text-3xl sm:text-4xl font-bold tracking-tight text-ink">
               {heading.title}
             </h1>
           </div>
-          <label className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-charcoal-900/90 px-3.5 py-2 text-xs font-medium text-charcoal-300 shadow-sm backdrop-blur-md">
-            <span className="text-charcoal-400">Target Track:</span>
+          <label className="flex items-center gap-2.5 rounded-2xl border border-ink/15 bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-sm">
+            <span className="text-ink/70">Target Track:</span>
             <select
               value={role}
               onChange={(e) => setTargetRole(e.target.value as RoleId)}
-              className="rounded-lg border border-white/10 bg-charcoal-800 px-2.5 py-1 text-xs font-semibold text-amber-400 focus:border-amber-500 focus:outline-none cursor-pointer"
+              className="rounded-lg border border-ink/15 bg-bg px-2.5 py-1 text-xs font-semibold text-accent focus:border-accent focus:outline-none cursor-pointer"
             >
               {roleOptions.map((r) => (
-                <option key={r.id} value={r.id} className="bg-charcoal-900 text-charcoal-100">
+                <option key={r.id} value={r.id} className="bg-surface text-ink">
                   {r.label}
                 </option>
               ))}

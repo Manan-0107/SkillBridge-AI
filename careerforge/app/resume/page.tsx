@@ -2,10 +2,10 @@
 
 import { Workspace } from "@/components/workspace/Workspace";
 
-export default function RoadmapPage() {
+export default function ResumePage() {
   return (
     <main id="main-content" tabIndex={-1} className="bg-bg text-ink">
-      <Workspace feature="roadmap" />
+      <Workspace feature="resume" />
     </main>
   );
 }

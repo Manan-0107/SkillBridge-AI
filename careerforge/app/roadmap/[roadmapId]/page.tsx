@@ -188,9 +188,9 @@ export default function RoadmapDetailPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-charcoal-950 text-charcoal-200 p-6 flex flex-col items-center justify-center gap-6">
+      <main className="min-h-screen bg-bg text-ink p-6 flex flex-col items-center justify-center gap-6">
         <div className="flex flex-col items-center gap-3">
-          <Skeleton variant="circle" className="w-12 h-12 border border-hairline" />
+          <Skeleton variant="circle" className="w-12 h-12 border border-ink/15" />
           <Skeleton variant="badge" className="w-32 h-4" />
         </div>
         <div className="flex flex-col gap-4 items-center">
@@ -203,16 +203,16 @@ export default function RoadmapDetailPage() {
 
   if (error || !documentData) {
     return (
-      <main className="min-h-screen bg-charcoal-950 text-charcoal-200 p-8 flex flex-col items-center justify-center text-center">
-        <div className="max-w-md p-8 rounded-2xl bg-charcoal-900 border border-hairline space-y-4">
+      <main className="min-h-screen bg-bg text-ink p-8 flex flex-col items-center justify-center text-center">
+        <div className="max-w-md p-8 rounded-2xl bg-surface border border-ink/15 space-y-4 shadow-sm">
           <div className="text-3xl">⚠️</div>
-          <h1 className="text-xl font-bold text-white">Roadmap Unavailable</h1>
-          <p className="text-sm text-charcoal-400">
+          <h1 className="text-xl font-bold text-ink">Roadmap Unavailable</h1>
+          <p className="text-sm text-ink/70">
             {error || "Could not retrieve the requested roadmap document."}
           </p>
           <Link
             href="/roadmap/frontend"
-            className="inline-block px-4 py-2 rounded-xl text-xs font-semibold bg-accent-500 hover:bg-accent-600 text-charcoal-950 transition-colors"
+            className="inline-block px-4 py-2 rounded-xl text-xs font-semibold bg-accent hover:bg-accent-soft text-white transition-colors"
           >
             Go to Frontend Track
           </Link>
@@ -222,20 +222,20 @@ export default function RoadmapDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-charcoal-950 text-charcoal-200 selection:bg-accent-500 selection:text-charcoal-950 flex flex-col pb-24">
+    <main className="min-h-screen bg-bg text-ink selection:bg-accent/20 selection:text-ink flex flex-col pb-24">
       {/* Top Header Navigation */}
-      <header className="sticky top-0 z-40 border-b border-hairline bg-charcoal-900/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-ink/10 bg-surface/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Link
               href="/"
-              className="flex items-center gap-2 text-xs font-semibold text-charcoal-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-xs font-semibold text-ink/70 hover:text-accent transition-colors"
             >
               <span>←</span>
               <span className="hidden sm:inline">Workspace</span>
             </Link>
-            <div className="h-4 w-[1px] bg-charcoal-700 hidden sm:block" />
-            <h1 className="text-sm sm:text-base font-bold text-white tracking-tight capitalize">
+            <div className="h-4 w-[1px] bg-ink/10 hidden sm:block" />
+            <h1 className="text-sm sm:text-base font-bold text-ink tracking-tight capitalize">
               {roadmapId} Engineering Roadmap
             </h1>
           </div>
@@ -243,15 +243,15 @@ export default function RoadmapDetailPage() {
           {/* Quick Progress Indicator, View Switcher & Daily Drill shortcut */}
           <div className="flex items-center gap-3">
             {/* Accessible List View vs Graph View Toggle */}
-            <div className="flex items-center rounded-xl bg-neutral-800 p-1 border border-neutral-700">
+            <div className="flex items-center rounded-xl bg-surface p-1 border border-ink/15 shadow-sm">
               <button
                 type="button"
                 onClick={() => setViewMode("graph")}
                 aria-pressed={viewMode === "graph"}
                 className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                   viewMode === "graph"
-                    ? "bg-amber-500 text-black shadow"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-accent text-white shadow"
+                    : "text-ink/70 hover:text-ink"
                 }`}
               >
                 Graph View
@@ -262,20 +262,20 @@ export default function RoadmapDetailPage() {
                 aria-pressed={viewMode === "list"}
                 className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                   viewMode === "list"
-                    ? "bg-amber-500 text-black shadow"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-accent text-white shadow"
+                    : "text-ink/70 hover:text-ink"
                 }`}
               >
                 Accessible List
               </button>
             </div>
 
-            <div className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-charcoal-850 border border-hairline text-xs font-mono">
-              <span className="text-charcoal-400">Track Progress:</span>
-              <span className="font-bold text-accent-400">{progressStats.percentage}%</span>
-              <div className="w-16 h-1.5 rounded-full bg-charcoal-700 overflow-hidden ml-1">
+            <div className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-surface border border-ink/15 text-xs font-mono shadow-sm">
+              <span className="text-ink/70">Track Progress:</span>
+              <span className="font-bold text-accent">{progressStats.percentage}%</span>
+              <div className="w-16 h-1.5 rounded-full bg-bg border border-ink/10 overflow-hidden ml-1">
                 <div
-                  className="h-full bg-accent-500 rounded-full transition-all duration-300"
+                  className="h-full bg-accent rounded-full transition-all duration-300"
                   style={{ width: `${progressStats.percentage}%` }}
                 />
               </div>
@@ -283,7 +283,7 @@ export default function RoadmapDetailPage() {
 
             <Link
               href={`/practice/${roadmapId}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-accent-500 hover:bg-accent-600 text-charcoal-950 shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-accent hover:bg-accent-soft text-white shadow-sm transition-colors"
             >
               <span>Daily Practice Drills</span>
               <span>→</span>
@@ -294,7 +294,7 @@ export default function RoadmapDetailPage() {
 
       {/* Control Toolbar: Search & Filters (only for Graph View) */}
       {viewMode === "graph" && (
-        <section className="border-b border-hairline bg-charcoal-900/50 py-4 px-4 sm:px-6">
+        <section className="border-b border-ink/10 bg-surface/50 py-4 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <SearchBar
               value={searchQuery}

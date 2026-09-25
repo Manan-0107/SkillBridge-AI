@@ -36,12 +36,12 @@ export default function Home() {
 
   if (!ready) {
     return (
-      <main className="min-h-screen bg-charcoal-950 text-charcoal-200 flex items-center justify-center p-6">
+      <main className="min-h-screen bg-bg text-ink flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-charcoal-800 text-charcoal-100 flex items-center justify-center font-bold text-xl shadow-md animate-pulse border border-hairline">
+          <div className="w-12 h-12 rounded-2xl bg-surface text-ink flex items-center justify-center font-bold text-xl shadow-md animate-pulse border border-ink/15">
             CF
           </div>
-          <p className="text-sm font-medium text-charcoal-400">Loading CareerForge workspace...</p>
+          <p className="text-sm font-medium text-ink/70">Loading CareerForge workspace...</p>
         </div>
       </main>
     );
@@ -49,16 +49,8 @@ export default function Home() {
 
   if (!user) return <AuthGate />;
 
-  const current = view.kind === "assistant" ? "assistant" : view.feature;
-
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-charcoal-950 text-charcoal-200">
-      <TopNav
-        view={current}
-        onAssistant={() => setView({ kind: "assistant" })}
-        onFeature={(feature) => setView({ kind: "feature", feature })}
-      />
-
+    <main id="main-content" tabIndex={-1} className="bg-bg text-ink">
       {view.kind === "assistant" ? (
         <AssistantHome
           onRedirect={(feature, resumeTab) =>

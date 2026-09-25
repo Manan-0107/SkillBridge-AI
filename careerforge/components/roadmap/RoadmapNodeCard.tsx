@@ -24,27 +24,27 @@ const statusBadgeConfig: Record<
 > = {
   completed: {
     label: "Completed",
-    badgeClass: "bg-emerald-950/50 border-emerald-700/60 text-emerald-300",
-    dotClass: "bg-emerald-400",
+    badgeClass: "bg-success/15 border-success/30 text-success",
+    dotClass: "bg-success",
     icon: "✓",
   },
   "in-progress": {
     label: "In Progress",
-    badgeClass: "bg-amber-950/50 border-amber-700/60 text-amber-300",
-    dotClass: "bg-amber-400 animate-pulse",
-    icon: "⚡",
+    badgeClass: "bg-accent/15 border-accent/30 text-accent",
+    dotClass: "bg-accent animate-pulse",
+    icon: "•",
   },
   planned: {
     label: "Planned",
-    badgeClass: "bg-slate-900/80 border-slate-800 text-slate-400",
-    dotClass: "bg-slate-600",
+    badgeClass: "bg-surface border-ink/15 text-ink/70",
+    dotClass: "bg-ink/40",
     icon: "○",
   },
   locked: {
     label: "Locked",
-    badgeClass: "bg-slate-900/60 border-slate-800/80 text-slate-500",
-    dotClass: "bg-slate-700",
-    icon: "🔒",
+    badgeClass: "bg-ink/5 border-ink/10 text-ink/40",
+    dotClass: "bg-ink/20",
+    icon: "—",
   },
 };
 
@@ -59,7 +59,7 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
   isChild = false,
   onSelect,
   onQuickToggleStatus,
-  accentColor = "#F59E0B",
+  accentColor = "var(--color-accent)",
   isCompact = false,
 }) {
   const effectiveStatus: NodeStatus = isLocked ? "locked" : status;
@@ -73,22 +73,22 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
     totalChecklist > 0 ? Math.round((completedCount / totalChecklist) * 100) : 0;
 
   // Visual container styling based on state & relations
-  let cardClass = "border-slate-800/90 hover:border-slate-700 bg-[#121520]";
+  let cardClass = "border-ink/15 hover:border-ink/30 bg-surface text-ink shadow-xs";
   let transformEffect = "hover:-translate-y-0.5 transition-all duration-150";
 
   if (effectiveStatus === "locked") {
-    cardClass = "border-slate-800/60 bg-[#0d1017]/80 opacity-75 hover:opacity-100";
+    cardClass = "border-ink/10 bg-surface/50 opacity-70 hover:opacity-100 text-ink/60";
   } else if (isSelected) {
-    cardClass = "border-amber-400 bg-[#161a28] ring-1 ring-amber-400/40 shadow-lg";
+    cardClass = "border-accent bg-surface ring-2 ring-accent/30 shadow-md text-ink";
     transformEffect = "-translate-y-0.5";
   } else if (isAncestor) {
-    cardClass = "border-amber-500/60 bg-[#131622] ring-1 ring-amber-500/20";
+    cardClass = "border-accent/40 bg-surface ring-1 ring-accent/20 text-ink";
   } else if (isChild) {
-    cardClass = "border-indigo-500/60 bg-[#131622] ring-1 ring-indigo-500/20";
+    cardClass = "border-info/40 bg-surface ring-1 ring-info/20 text-ink";
   } else if (effectiveStatus === "in-progress") {
-    cardClass = "border-amber-600/70 bg-[#141724] ring-1 ring-amber-500/20";
+    cardClass = "border-accent/40 bg-surface text-ink ring-1 ring-accent/20";
   } else if (effectiveStatus === "completed") {
-    cardClass = "border-emerald-800/60 bg-[#0f141f]";
+    cardClass = "border-success/40 bg-surface text-ink";
   }
 
   return (
@@ -112,28 +112,23 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
         <div className="flex items-center gap-1.5 flex-wrap">
           {node.badge && (
             <span
-              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border font-mono"
-              style={{
-                borderColor: `${accentColor}50`,
-                backgroundColor: `${accentColor}10`,
-                color: accentColor,
-              }}
+              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border font-mono border-accent/25 bg-accent/10 text-accent"
             >
               {node.badge}
             </span>
           )}
           {node.importance === "essential" && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-950/40 text-rose-300 border border-rose-800/50">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-danger/10 text-danger border border-danger/25">
               Core
             </span>
           )}
           {isAncestor && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-950/60 text-amber-300 border border-amber-800/60">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-accent/10 text-accent border border-accent/25">
               ↑ Prereq
             </span>
           )}
           {isChild && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-info/10 text-info border border-info/25">
               ↓ Next Step
             </span>
           )}
@@ -155,7 +150,7 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
               : `Status: ${currentBadge.label}. Click to advance.`
           }
           className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-all ${currentBadge.badgeClass} ${
-            !isLocked ? "hover:brightness-125" : "cursor-not-allowed"
+            !isLocked ? "hover:brightness-95 cursor-pointer" : "cursor-not-allowed"
           }`}
         >
           <span className="text-[10px]">{currentBadge.icon}</span>
@@ -164,17 +159,17 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
       </div>
 
       {/* Title & Summary */}
-      <h3 className="font-semibold text-slate-100 text-sm sm:text-base leading-snug">
+      <h3 className="font-semibold text-ink text-sm sm:text-base leading-snug">
         {node.title}
       </h3>
-      <p className="mt-1 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+      <p className="mt-1 text-xs text-ink/70 line-clamp-2 leading-relaxed">
         {node.summary || node.description}
       </p>
 
       {/* Missing Prerequisites Notice if locked */}
       {isLocked && missingPrereqs.length > 0 && (
-        <div className="mt-2 text-[10px] font-mono text-amber-400/90 bg-amber-950/20 border border-amber-800/30 rounded px-2 py-1">
-          🔒 Prerequisite required to unlock
+        <div className="mt-2 text-[10px] font-mono text-accent bg-accent/10 border border-accent/25 rounded px-2 py-1">
+          Prerequisite required to unlock
         </div>
       )}
 
@@ -184,13 +179,13 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
           {node.keyConcepts.slice(0, 3).map((concept) => (
             <span
               key={concept}
-              className="inline-flex items-center rounded bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-mono text-slate-300 border border-slate-700/40"
+              className="inline-flex items-center rounded bg-bg px-1.5 py-0.5 text-[10px] font-mono text-ink/80 border border-ink/15"
             >
               {concept}
             </span>
           ))}
           {node.keyConcepts.length > 3 && (
-            <span className="text-[10px] text-slate-500 font-mono px-1">
+            <span className="text-[10px] text-ink/50 font-mono px-1">
               +{node.keyConcepts.length - 3}
             </span>
           )}
@@ -198,20 +193,20 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
       )}
 
       {/* Footer Progress & Estimated Hours */}
-      <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+      <div className="mt-3.5 pt-2.5 border-t border-ink/10 flex items-center justify-between text-[11px] text-ink/65 font-mono">
         {totalChecklist > 0 ? (
           <div className="flex items-center gap-2">
-            <div className="w-12 h-1 rounded-full bg-slate-800 overflow-hidden">
+            <div className="w-12 h-1.5 rounded-full bg-ink/10 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-200"
                 style={{
                   width: `${percentChecklist}%`,
                   backgroundColor:
                     percentChecklist === 100
-                      ? "#10B981"
+                      ? "var(--color-success)"
                       : percentChecklist > 0
-                      ? "#F59E0B"
-                      : "#475569",
+                      ? "var(--color-accent)"
+                      : "rgba(20, 17, 15, 0.25)",
                 }}
               />
             </div>
@@ -220,12 +215,12 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
             </span>
           </div>
         ) : (
-          <span className="text-slate-500 text-[10px] capitalize">
+          <span className="text-ink/60 text-[10px] capitalize">
             {node.level} topic
           </span>
         )}
 
-        <div className="flex items-center gap-1 text-slate-400 text-[11px]">
+        <div className="flex items-center gap-1 text-ink/60 text-[11px]">
           <span>~{node.estimatedHours}h</span>
         </div>
       </div>

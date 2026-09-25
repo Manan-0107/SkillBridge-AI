@@ -9,17 +9,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../..");
 
-test("V3 Root Theme: globals.css sets body background to charcoal-950 (#0B0B0D)", () => {
+test("V3 Root Theme: globals.css sets body background to Cream (#FAF6F1) and text to Ink (#14110F)", () => {
   const cssPath = path.join(projectRoot, "app/globals.css");
   const css = fs.readFileSync(cssPath, "utf-8");
 
   assert(
-    css.includes("background-color: #0B0B0D;"),
-    "globals.css body must have background-color #0B0B0D"
+    css.includes("background-color: #FAF6F1;"),
+    "globals.css body must have background-color #FAF6F1"
   );
   assert(
-    css.includes("color: #D2D5DF;"),
-    "globals.css body must have color #D2D5DF"
+    css.includes("color: #14110F;"),
+    "globals.css body must have color #14110F"
   );
 });
 

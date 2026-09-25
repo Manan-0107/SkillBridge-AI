@@ -22,23 +22,23 @@ const statusBadgeConfig: Record<
 > = {
   completed: {
     label: "Done",
-    badgeClass: "bg-emerald-950/40 text-emerald-300 border-emerald-700/60",
+    badgeClass: "bg-success/15 text-success border-success/30",
     icon: "✓",
   },
   "in-progress": {
     label: "Active",
-    badgeClass: "bg-amber-950/40 text-amber-300 border-amber-700/60",
-    icon: "⚡",
+    badgeClass: "bg-accent/15 text-accent border-accent/30",
+    icon: "•",
   },
   planned: {
     label: "Planned",
-    badgeClass: "bg-slate-900/60 text-slate-400 border-slate-800",
+    badgeClass: "bg-surface text-ink/70 border-ink/15",
     icon: "○",
   },
   locked: {
     label: "Locked",
-    badgeClass: "bg-slate-950 text-slate-500 border-slate-900",
-    icon: "🔒",
+    badgeClass: "bg-ink/5 text-ink/40 border-ink/10",
+    icon: "—",
   },
 };
 
@@ -48,7 +48,7 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
   userProgress,
   onSelectNode,
   onQuickToggleStatus,
-  accentColor = "#F59E0B",
+  accentColor = "var(--color-accent)",
   searchQuery = "",
   statusFilter = "all",
 }) => {
@@ -91,8 +91,8 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
 
   if (filteredTiers.length === 0) {
     return (
-      <div className="py-16 text-center rounded-xl border border-slate-800 bg-[#10131d] p-8 max-w-md mx-auto">
-        <p className="text-xs text-slate-400">No nodes match your filter in list view.</p>
+      <div className="py-16 text-center rounded-xl border border-ink/15 bg-surface p-8 max-w-md mx-auto text-ink">
+        <p className="text-xs text-ink/70">No nodes match your filter in list view.</p>
       </div>
     );
   }
@@ -102,24 +102,24 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
       {filteredTiers.map((tier) => (
         <div
           key={tier.id}
-          className="rounded-xl border border-slate-800/80 bg-[#0f121d] p-4 sm:p-5 shadow-sm"
+          className="rounded-xl border border-ink/15 bg-surface p-4 sm:p-5 shadow-xs text-ink"
         >
           {/* Stage Header */}
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-ink/10">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#161a28] font-mono text-[11px] font-bold text-amber-400 border border-slate-800">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-bg font-mono text-[11px] font-bold text-accent border border-ink/15">
                 0{tier.stageNumber}
               </span>
               <div>
-                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                <h3 className="text-sm font-semibold text-ink uppercase tracking-wider">
                   {tier.title}
                 </h3>
                 {tier.subtitle && (
-                  <p className="text-[11px] text-slate-400">{tier.subtitle}</p>
+                  <p className="text-[11px] text-ink/65">{tier.subtitle}</p>
                 )}
               </div>
             </div>
-            <span className="text-[11px] font-mono text-slate-500">
+            <span className="text-[11px] font-mono text-ink/50">
               {tier.nodes.length} topic{tier.nodes.length > 1 ? "s" : ""}
             </span>
           </div>
@@ -128,7 +128,7 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
           <div className="space-y-2">
             {tier.nodes.map((node) => {
               const effectiveStatus = userProgress[node.id]?.status || node.status;
-              const { isLocked, missingPrereqs } = checkNodeLocked(node, userProgress);
+              const { isLocked } = checkNodeLocked(node, userProgress);
               const computedStatus: NodeStatus = isLocked ? "locked" : effectiveStatus;
               const badge = statusBadgeConfig[computedStatus] || statusBadgeConfig.planned;
 
@@ -147,10 +147,10 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
                   onClick={() => onSelectNode(node)}
                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
                     isSelected
-                      ? "border-amber-400 bg-[#161a28] shadow-sm"
+                      ? "border-accent bg-bg shadow-sm ring-1 ring-accent/30 text-ink"
                       : isLocked
-                      ? "border-slate-800/60 bg-[#0c0e16]/60 opacity-75"
-                      : "border-slate-800/80 bg-[#121522] hover:border-slate-700 hover:bg-[#151928]"
+                      ? "border-ink/10 bg-surface/50 opacity-60 text-ink/60"
+                      : "border-ink/15 bg-bg hover:border-ink/30 hover:bg-surface text-ink"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -165,41 +165,41 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
                       }}
                       className={`h-6 w-6 rounded-md flex items-center justify-center shrink-0 font-mono text-xs font-bold border transition-all ${
                         badge.badgeClass
-                      } ${!isLocked ? "hover:brightness-125" : "cursor-not-allowed"}`}
+                      } ${!isLocked ? "hover:brightness-95 cursor-pointer" : "cursor-not-allowed"}`}
                     >
                       {badge.icon}
                     </button>
 
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="text-xs sm:text-sm font-semibold text-slate-100">
+                        <h4 className="text-xs sm:text-sm font-semibold text-ink">
                           {node.title}
                         </h4>
                         {node.badge && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider bg-amber-950/40 text-amber-400 border border-amber-800/50">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider bg-accent/10 text-accent border border-accent/25">
                             {node.badge}
                           </span>
                         )}
                         {node.importance === "essential" && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-rose-950/40 text-rose-300 border border-rose-800/50">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-danger/10 text-danger border border-danger/25">
                             Core
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                      <p className="text-[11px] text-ink/70 line-clamp-1 mt-0.5">
                         {node.summary || node.description}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 self-end sm:self-center font-mono text-[11px] text-slate-400 shrink-0">
+                  <div className="flex items-center gap-4 self-end sm:self-center font-mono text-[11px] text-ink/60 shrink-0">
                     {totalChecklist > 0 && (
                       <span>
                         {completedCount}/{totalChecklist} done ({percent}%)
                       </span>
                     )}
                     <span>~{node.estimatedHours}h</span>
-                    <span className="text-slate-500 hover:text-white">Inspect →</span>
+                    <span className="text-accent hover:underline">Inspect →</span>
                   </div>
                 </div>
               );
