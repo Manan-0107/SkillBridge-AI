@@ -20,6 +20,9 @@ interface RoadmapTreeCanvasProps {
   accentColor?: string;
   searchQuery?: string;
   statusFilter?: NodeStatus | "all";
+  roadmapMode?: "full" | "my-path" | "recommended";
+  levelFilter?: "all" | "Beginner" | "Intermediate" | "Advanced";
+  zoomScale?: number;
 }
 
 export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
@@ -32,6 +35,9 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
   accentColor = "var(--color-accent)",
   searchQuery = "",
   statusFilter = "all",
+  roadmapMode = "full",
+  levelFilter = "all",
+  zoomScale = 1.0,
 }) => {
   // Index all nodes for fast lookups
   const nodesMap = useMemo(() => {
@@ -55,7 +61,7 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
     return { ancestorIds: ancestors, childrenIds: children };
   }, [selectedNodeId, nodesMap]);
 
-  // Filter tiers according to search query and status filter
+  // Filter tiers according to search query, status filter, mode, and level filter
   const filteredTiers = useMemo<RoadmapTier[]>(() => {
     const query = searchQuery.toLowerCase().trim();
     const result: RoadmapTier[] = [];
@@ -69,6 +75,31 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
         // Status filter check
         if (statusFilter !== "all" && computedStatus !== statusFilter) {
           return false;
+        }
+
+        // Level filter check
+        if (levelFilter !== "all") {
+          const norm = levelFilter.toLowerCase();
+          const nodeLvl = (node.level || "").toLowerCase();
+          const matches =
+            (norm === "beginner" && (nodeLvl === "fundamental" || nodeLvl === "beginner")) ||
+            (norm === "intermediate" && nodeLvl === "intermediate") ||
+            (norm === "advanced" && nodeLvl === "advanced");
+          if (!matches) return false;
+        }
+
+        // Roadmap mode check
+        if (roadmapMode === "my-path") {
+          // Show user's active path: completed, in-progress, or reachable planned node
+          const isPathItem =
+            computedStatus === "completed" ||
+            computedStatus === "in-progress" ||
+            (!isLocked && computedStatus === "planned");
+          if (!isPathItem) return false;
+        } else if (roadmapMode === "recommended") {
+          // Focus on essential or recommended steps not yet finished
+          const isTarget = node.importance === "essential" || node.importance === "recommended";
+          if (!isTarget || computedStatus === "completed") return false;
         }
 
         // Search query check
@@ -100,7 +131,7 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
     }
 
     return result;
-  }, [tiers, searchQuery, statusFilter, userProgress]);
+  }, [tiers, searchQuery, statusFilter, roadmapMode, levelFilter, userProgress]);
 
   if (filteredTiers.length === 0) {
     return (
@@ -117,24 +148,28 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
         </div>
         <h3 className="text-sm font-semibold text-ink">No nodes match your filter</h3>
         <p className="mt-1 text-xs text-ink/70">
-          Try clearing your search query or setting the status filter to &quot;All Nodes&quot;.
+          Try clearing your search query or setting the mode or level filter to &quot;All&quot;.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="relative max-w-5xl mx-auto py-2">
-      {/* Background Architectural Grid */}
+    <div className="w-full overflow-x-auto pb-6">
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.04]"
-        style={{
-          backgroundImage: `radial-gradient(rgba(20, 17, 15, 0.25) 1px, transparent 1px)`,
-          backgroundSize: "24px 24px",
-        }}
-      />
+        className="relative max-w-5xl mx-auto py-2 transition-transform duration-200 ease-out origin-top"
+        style={{ transform: `scale(${zoomScale})` }}
+      >
+        {/* Background Architectural Grid */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.04]"
+          style={{
+            backgroundImage: `radial-gradient(rgba(20, 17, 15, 0.25) 1px, transparent 1px)`,
+            backgroundSize: "24px 24px",
+          }}
+        />
 
-      <div className="relative space-y-8">
+        <div className="relative space-y-8">
         {filteredTiers.map((tier, tierIdx) => {
           const allBranches = tier.branches || [];
           const leftBranches = allBranches.filter((b) => b.branchType === "left-branch");
@@ -320,5 +355,6 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
         })}
       </div>
     </div>
-  );
+  </div>
+);
 };

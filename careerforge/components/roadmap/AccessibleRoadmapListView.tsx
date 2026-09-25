@@ -23,7 +23,7 @@ export function AccessibleRoadmapListView({
   const tiers = React.useMemo(() => {
     const groups: { [key: number]: RoadmapNode[] } = {};
     for (const node of nodes) {
-      const tier = node.tier ?? 1;
+      const tier = node.depth ?? 1;
       if (!groups[tier]) groups[tier] = [];
       groups[tier].push(node);
     }
@@ -91,9 +91,9 @@ export function AccessibleRoadmapListView({
                           {node.title}
                         </h4>
                         <Badge status={status} />
-                        {node.estHours && (
+                        {(node as any).estHours && (
                           <span className="text-xs text-neutral-400 font-mono">
-                            ~{node.estHours} hrs
+                            ~{(node as any).estHours} hrs
                           </span>
                         )}
                       </div>
@@ -103,7 +103,7 @@ export function AccessibleRoadmapListView({
                       {node.concepts && node.concepts.length > 0 && (
                         <p className="text-xs text-neutral-400">
                           {node.concepts.length} key sub-concepts:{" "}
-                          {node.concepts.map((c) => c.title).slice(0, 3).join(", ")}
+                          {node.concepts.map((c) => c.label).slice(0, 3).join(", ")}
                           {node.concepts.length > 3 ? "..." : ""}
                         </p>
                       )}

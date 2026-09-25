@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { RoadmapStep, RoleId } from "@/lib/types";
 import {
   speakText,
@@ -44,6 +45,12 @@ export function RoadmapAudiobook({
   const [expanded, setExpanded] = useState<boolean>(true);
   const [statusMessage, setStatusMessage] = useState<string>("");
 
+  // Doubt Resolution State (Feature 9)
+  const [doubtModalOpen, setDoubtModalOpen] = useState(false);
+  const [doubtInput, setDoubtInput] = useState("");
+  const [doubtAnswer, setDoubtAnswer] = useState<string | null>(null);
+  const [doubtLoading, setDoubtLoading] = useState(false);
+
   const playingRef = useRef(false);
   const currentStepRef = useRef(selectedStepIndex);
 
@@ -62,6 +69,67 @@ export function RoadmapAudiobook({
       stopSpeaking();
     };
   }, []);
+
+  const handleOpenDoubtModal = () => {
+    if (playing && !paused) {
+      pauseSpeaking();
+      setPaused(true);
+    }
+    setDoubtModalOpen(true);
+  };
+
+  const handleAskDoubt = async (questionText: string) => {
+    const q = questionText.trim();
+    if (!q || doubtLoading) return;
+    setDoubtLoading(true);
+    setDoubtAnswer(null);
+
+    const step = steps[currentNarratingIndex];
+    try {
+      const res = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              text: `Regarding the roadmap milestone "${step?.title || "Milestone"}" (${step?.detail || ""}): ${q}`,
+            },
+          ],
+          targetRole: roleLabel.toLowerCase(),
+          currentPage: "roadmap",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || "Could not generate clarification.";
+        setDoubtAnswer(reply);
+        speakText(reply, {
+          rate: playbackSpeed,
+          lang: selectedLang,
+        });
+      } else {
+        setDoubtAnswer("Sorry, I could not fetch an answer right now. Please try again.");
+      }
+    } catch {
+      setDoubtAnswer("Sorry, network connection failed. Please try again.");
+    } finally {
+      setDoubtLoading(false);
+    }
+  };
+
+  const handleResumeNarrationFromDoubt = () => {
+    stopSpeaking();
+    setDoubtModalOpen(false);
+    setDoubtAnswer(null);
+    setDoubtInput("");
+    if (paused) {
+      narrateStage(currentNarratingIndex);
+    } else {
+      handlePlayToggle();
+    }
+  };
 
   // ─── Build Rich Audiobook Script for a Stage ─────────────────────────────────
   const generateStageNarration = useCallback(
@@ -326,6 +394,94 @@ export function RoadmapAudiobook({
             </div>
           </div>
 
+          {/* Doubt Resolution Inline Workspace (Feature 9) */}
+          {doubtModalOpen && (
+            <div className="rounded-xl border border-accent/30 bg-bg p-4 shadow-sm space-y-3 animate-in fade-in duration-200 text-ink">
+              <div className="flex items-center justify-between border-b border-ink/10 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-accent" />
+                  <span className="text-xs font-bold text-ink uppercase tracking-wide">
+                    Doubt Resolution: {steps[currentNarratingIndex]?.title}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDoubtModalOpen(false)}
+                  className="rounded p-1 text-ink/60 hover:text-ink cursor-pointer"
+                  title="Close doubt resolution"
+                  aria-label="Close doubt resolution"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Quick Prompt Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "Explain that in simple words",
+                  "Give me a practical production example",
+                  "Why is this milestone important for my career?",
+                  "What are common interview questions for this?",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      setDoubtInput(chip);
+                      handleAskDoubt(chip);
+                    }}
+                    className="rounded-full border border-ink/15 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink hover:border-accent hover:text-accent transition-colors cursor-pointer"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Question Input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={doubtInput}
+                  onChange={(e) => setDoubtInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && doubtInput.trim()) {
+                      handleAskDoubt(doubtInput);
+                    }
+                  }}
+                  placeholder="Ask any question about this milestone..."
+                  className="flex-1 rounded-lg border border-ink/15 bg-surface px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAskDoubt(doubtInput)}
+                  disabled={doubtLoading || !doubtInput.trim()}
+                  className="rounded-lg bg-ink px-3.5 py-1.5 text-xs font-semibold text-bg hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
+                >
+                  {doubtLoading ? "Explaining..." : "Ask"}
+                </button>
+              </div>
+
+              {/* Answer Stream */}
+              {doubtAnswer && (
+                <div className="rounded-lg border border-ink/10 bg-surface p-3.5 space-y-2 text-xs leading-relaxed">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-accent">
+                    <span>AI Clarification</span>
+                    <button
+                      type="button"
+                      onClick={handleResumeNarrationFromDoubt}
+                      className="rounded-md border border-accent/30 bg-bg px-2.5 py-0.5 text-accent font-bold hover:bg-accent hover:text-white transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Resume Audiobook &rarr;
+                    </button>
+                  </div>
+                  <div className="prose prose-sm max-w-none text-ink space-y-1">
+                    <ReactMarkdown>{doubtAnswer}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Master Player Controls */}
           <div className="flex flex-wrap items-center justify-between gap-4">
             {/* Playback Action Buttons */}
@@ -393,6 +549,20 @@ export function RoadmapAudiobook({
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
+              </button>
+
+              {/* Doubt Resolution Button (Feature 9) */}
+              <button
+                type="button"
+                onClick={handleOpenDoubtModal}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-ink/20 bg-bg px-3.5 py-2 text-xs font-semibold text-ink hover:border-accent hover:text-accent shadow-xs transition-colors cursor-pointer"
+                title="Ask AI a question or clarify this milestone"
+                aria-label="Ask a question about this milestone"
+              >
+                <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Ask Doubt</span>
               </button>
             </div>
 

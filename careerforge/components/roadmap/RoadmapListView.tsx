@@ -14,6 +14,8 @@ interface RoadmapListViewProps {
   accentColor?: string;
   searchQuery?: string;
   statusFilter?: NodeStatus | "all";
+  roadmapMode?: "full" | "my-path" | "recommended";
+  levelFilter?: "all" | "Beginner" | "Intermediate" | "Advanced";
 }
 
 const statusBadgeConfig: Record<
@@ -51,10 +53,12 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
   accentColor = "var(--color-accent)",
   searchQuery = "",
   statusFilter = "all",
+  roadmapMode = "full",
+  levelFilter = "all",
 }) => {
   const query = searchQuery.toLowerCase().trim();
 
-  // Filter nodes according to search and status
+  // Filter nodes according to search, status, mode, and level
   const filteredTiers = useMemo(() => {
     return tiers
       .map((tier) => {
@@ -65,6 +69,27 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
 
           if (statusFilter !== "all" && computedStatus !== statusFilter) {
             return false;
+          }
+
+          if (levelFilter !== "all") {
+            const norm = levelFilter.toLowerCase();
+            const nodeLvl = (node.level || "").toLowerCase();
+            const matches =
+              (norm === "beginner" && (nodeLvl === "fundamental" || nodeLvl === "beginner")) ||
+              (norm === "intermediate" && nodeLvl === "intermediate") ||
+              (norm === "advanced" && nodeLvl === "advanced");
+            if (!matches) return false;
+          }
+
+          if (roadmapMode === "my-path") {
+            const isPathItem =
+              computedStatus === "completed" ||
+              computedStatus === "in-progress" ||
+              (!isLocked && computedStatus === "planned");
+            if (!isPathItem) return false;
+          } else if (roadmapMode === "recommended") {
+            const isTarget = node.importance === "essential" || node.importance === "recommended";
+            if (!isTarget || computedStatus === "completed") return false;
           }
 
           if (query) {
@@ -87,7 +112,7 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
         };
       })
       .filter((tier) => tier.nodes.length > 0);
-  }, [tiers, query, statusFilter, userProgress]);
+  }, [tiers, query, statusFilter, roadmapMode, levelFilter, userProgress]);
 
   if (filteredTiers.length === 0) {
     return (

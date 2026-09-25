@@ -1289,11 +1289,35 @@ export function speakLetter(char: string, lang?: string) {
 }
 
 /**
- * Spells out a word character-by-character for auditory confirmation for visually impaired users.
+ * Spells out personal identifiers (names, emails) according to blind-first accessibility requirements:
+ * Name: "M-A-N-A-N"
+ * Email: "M-A-N-A-N at G-M-A-I-L dot C-O-M"
  */
-export function spellOutWord(word: string): string {
-  if (!word) return "";
-  return word.trim().split("").map((c) => (c === " " ? "space" : c.toUpperCase())).join(" - ");
+export function spellForVerification(type: "name" | "email", value: string): string {
+  if (!value) return "";
+  if (type === "name") {
+    return value
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.toUpperCase().split("").join("-"))
+      .join(" ");
+  }
+
+  // Email formatting: "M-A-N-A-N at G-M-A-I-L dot C-O-M"
+  const clean = value.trim().toLowerCase();
+  const parts = clean.split("@");
+  if (parts.length < 2) {
+    return clean.toUpperCase().split("").join("-");
+  }
+
+  const [username, domain] = parts;
+  const userSpelled = username.toUpperCase().split("").join("-");
+  const domainSegments = domain.split(".");
+  const domainSpelled = domainSegments
+    .map((seg) => seg.toUpperCase().split("").join("-"))
+    .join(" dot ");
+
+  return `${userSpelled} at ${domainSpelled}`;
 }
 
 

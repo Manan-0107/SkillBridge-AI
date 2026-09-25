@@ -16,6 +16,7 @@ const fontSans = Inter({
 import { TopNav } from "@/components/layout/TopNav";
 import { FloatingControlBar } from "@/components/layout/FloatingControlBar";
 import { AccessibilityProfileModal } from "@/components/accessibility/AccessibilityProfileModal";
+import { VoiceModeDetector } from "@/components/accessibility/VoiceModeDetector";
 
 export const metadata: Metadata = {
   title: "CareerForge — Build the path, not just the resume",
@@ -47,11 +48,12 @@ export default function RootLayout({
                 Skip to voice assistant controls
               </a>
               <TopNav />
-              <div className="pb-28">
+              <div className="pb-6">
                 {children}
               </div>
               <FloatingControlBar />
               <AccessibilityProfileModal />
+              <VoiceModeDetector />
               <GlobalVoiceDictator />
             </VoiceProvider>
           </GlobalVoiceProvider>

@@ -42,7 +42,22 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
   const [category, setCategory] = useState<TechCategory>(initialCategory);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<NodeStatus | "all">("all");
+  const [roadmapMode, setRoadmapMode] = useState<"full" | "my-path" | "recommended">("full");
+  const [levelFilter, setLevelFilter] = useState<"all" | "Beginner" | "Intermediate" | "Advanced">("all");
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomScale((z) => Math.min(1.5, +(z + 0.15).toFixed(2)));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomScale((z) => Math.max(0.6, +(z - 0.15).toFixed(2)));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomScale(1.0);
+  }, []);
 
   const [treeData, setTreeData] = useState<RoadmapTreeData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -298,6 +313,14 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
             onSearchChange={(q) => setSearchQuery(q)}
             statusFilter={statusFilter}
             onStatusFilterChange={(st) => setStatusFilter(st)}
+            roadmapMode={roadmapMode}
+            onRoadmapModeChange={setRoadmapMode}
+            levelFilter={levelFilter}
+            onLevelFilterChange={setLevelFilter}
+            zoomScale={zoomScale}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetZoom={handleResetZoom}
             viewMode={viewMode}
             onViewModeChange={(mode) => setViewMode(mode)}
             allNodes={treeData.allNodes}
@@ -344,6 +367,9 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
                 accentColor={currentAccent}
                 searchQuery={searchQuery}
                 statusFilter={statusFilter}
+                roadmapMode={roadmapMode}
+                levelFilter={levelFilter}
+                zoomScale={zoomScale}
               />
             ) : (
               <RoadmapListView
@@ -356,6 +382,8 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
                 accentColor={currentAccent}
                 searchQuery={searchQuery}
                 statusFilter={statusFilter}
+                roadmapMode={roadmapMode}
+                levelFilter={levelFilter}
               />
             )}
           </div>

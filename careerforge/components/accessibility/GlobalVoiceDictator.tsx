@@ -24,6 +24,7 @@ import {
   normalizeSpokenPassword,
   getFieldPromptMessage,
   VoiceInteractionToken,
+  spellForVerification,
 } from "@/lib/voice";
 import { validateYesNo } from "@/lib/speech/questionFlow";
 
@@ -59,19 +60,19 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
     label: "Full Name",
     stepNumber: 1,
     prompts: {
-      en: "Welcome to CareerForge! Step 1: What is your full name?",
+      en: "Let's create your CareerForge account. First, tell me your full name.",
       gu: "કરિયરફોર્જમાં આપનું સ્વાગત છે! સ્ટેપ ૧: તમારું પૂરું નામ શું છે?",
       hi: "करियरफोर्ज में आपका स्वागत है! स्टेप १: आपका पूरा नाम क्या है?",
     },
     retryPrompts: {
-      en: "No problem, let's try again. What is your full name?",
+      en: "Okay. Please say your name again.",
       gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારું પૂરું નામ શું છે?",
       hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपका पूरा नाम क्या है?",
     },
     confirmPrompts: {
-      en: (ans) => `Got it, you said: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
-      gu: (ans) => `મેં સાંભળ્યું: ${ans}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
-      hi: (ans) => `मैंने सुना: ${ans}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+      en: (ans) => `I heard ${spellForVerification("name", ans)}. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: (ans) => `મેં સાંભળ્યું: ${spellForVerification("name", ans)}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: (ans) => `मैंने सुना: ${spellForVerification("name", ans)}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
     },
     selector: '#auth-name-input, input[name*="name" i], input[id*="name" i]',
   },
@@ -85,14 +86,14 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
       hi: "स्टेप २: आपका ईमेल पता क्या है?",
     },
     retryPrompts: {
-      en: "No problem, let's try again. What is your contact email address?",
+      en: "Okay. Please say your email address again.",
       gu: "કોઈ વાંધો નહીં, ફરીથી પ્રયત્ન કરીએ. તમારું ઇમેઇલ સરનામું શું છે?",
       hi: "कोई बात नहीं, दोबारा कोशिश करते हैं। आपका ईमेल पता क्या है?",
     },
     confirmPrompts: {
-      en: (ans) => `Got it, your email is: ${ans}. Is that correct? Say Yes to continue, or No to re-speak.`,
-      gu: (ans) => `તમારું ઇમેઇલ: ${ans}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
-      hi: (ans) => `आपका ईमेल: ${ans}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+      en: (ans) => `I heard ${spellForVerification("email", ans)}. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: (ans) => `મેં સાંભળ્યું: ${spellForVerification("email", ans)}. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: (ans) => `मैंने सुना: ${spellForVerification("email", ans)}। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
     },
     selector: '#auth-email-input, input[type="email"], input[name*="email" i], input[id*="email" i]',
   },
@@ -101,9 +102,9 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
     label: "Password",
     stepNumber: 3,
     prompts: {
-      en: "Step 3: Please speak your password or PIN for your account. It must be at least 6 characters.",
-      gu: "સ્ટેપ ૩: કૃપા કરીને તમારા એકાઉન્ટ માટે પાસવર્ડ અથવા પિન બોલો. તે ઓછામાં ઓછા ૬ અક્ષરનો હોવો જોઈએ.",
-      hi: "स्टेप ३: कृपया अपने खाते के लिए पासवर्ड या पिन बोलें। यह कम से कम ६ अक्षरों का होना चाहिए।",
+      en: "Step 3: Please enter or provide your password. I won't repeat it aloud.",
+      gu: "સ્ટેપ ૩: કૃપા કરીને તમારો પાસવર્ડ અથવા પિન બોલો. હું તેને મોટેથી વાંચીશ નહીં.",
+      hi: "स्टेप ३: कृपया अपना पासवर्ड या पिन बोलें। मैं इसे जोर से नहीं बोलूँगा।",
     },
     retryPrompts: {
       en: "Password must have at least 6 characters. Please speak your password or PIN.",
@@ -111,9 +112,9 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
       hi: "पासवर्ड कम से कम ६ अक्षरों का होना चाहिए। कृपया अपना पासवर्ड या पिन बोलें।",
     },
     confirmPrompts: {
-      en: (ans) => `Got it, password recorded with ${ans.length} characters. Is that correct? Say Yes to continue, or No to re-speak.`,
-      gu: (ans) => `પાસવર્ડ નોંધાઈ ગયો (${ans.length} અક્ષરો). શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
-      hi: (ans) => `पासवर्ड दर्ज हुआ (${ans.length} अक्षर)। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
+      en: () => `Your password has been entered. For security, I won't read it aloud. Is that correct? Say Yes to continue, or No to re-speak.`,
+      gu: () => `તમારો પાસવર્ડ દાખલ થઈ ગયો છે. સુરક્ષા માટે હું તેને મોટેથી વાંચીશ નહીં. શું આ સાચું છે? આગળ વધવા 'હા' બોલો, અથવા ફરીથી બોલવા 'ના' બોલો.`,
+      hi: () => `आपका पासवर्ड दर्ज कर लिया गया है। सुरक्षा के लिए मैं इसे जोर से नहीं बोलूँगा। क्या यह सही है? आगे बढ़ने के लिए 'हाँ' कहें, या दोबारा बोलने के लिए 'नहीं' कहें।`,
     },
     selector: '#auth-password-input, input[type="password"], input[name*="pass" i], input[id*="pass" i]',
   },
@@ -250,6 +251,7 @@ export type VoiceInteractionState =
   | "LISTENING"
   | "PROCESSING"
   | "SPEAKING"
+  | "CONFIRMING"
   | "WAITING_FOR_ANSWER"
   | "SAVING_ANSWER"
   | "NAVIGATING"
@@ -343,6 +345,18 @@ export function restoreAiSession(): PersistedAiSession | null {
 }
 
 export function GlobalVoiceDictator() {
+  const { accessibilityProfile } = useApp();
+
+  // ── Section 1 & 3: Deaf / Hard-of-Hearing Profile Gating ───────────────────
+  // Voice detection and mic listeners are completely eliminated and unmounted
+  if (accessibilityProfile === "deaf_hard_of_hearing") {
+    return null;
+  }
+
+  return <GlobalVoiceDictatorInner />;
+}
+
+function GlobalVoiceDictatorInner() {
   const {
     user,
     voiceMode,
@@ -359,12 +373,6 @@ export function GlobalVoiceDictator() {
     missingSkills,
     setTargetRole,
   } = useApp();
-
-  // ── Section 1 & 3: Deaf / Hard-of-Hearing Profile Gating ───────────────────
-  // Voice detection and mic listeners are completely eliminated and unmounted
-  if (accessibilityProfile === "deaf_hard_of_hearing") {
-    return null;
-  }
 
   const [active, setActive] = useState(false);
   const [listening, setListening] = useState(false);

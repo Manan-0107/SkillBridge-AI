@@ -24,6 +24,7 @@ import {
 import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
+import { CareerContextPanel } from "./CareerContextPanel";
 
 export type Msg = {
   id: string;
@@ -100,6 +101,7 @@ export function AssistantHome({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [contextPanelOpen, setContextPanelOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<"all" | "pinned" | "archived">("all");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1328,101 +1330,6 @@ export function AssistantHome({
               </span>
             )}
           </div>
-
-          {/* Voice Toolbar: Provider, Language, Repeat, Stop, Mute */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {/* Language Selector Dropdown */}
-            <select
-              value={voiceLanguage}
-              onChange={(e) => setVoiceLanguage(e.target.value)}
-              title="Select speech and assistant language"
-              aria-label="Speech Language Selector"
-              className="rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface focus:outline-none focus:border-accent cursor-pointer transition-colors"
-            >
-              <option value="auto" className="bg-bg text-ink">Auto Detect</option>
-              {LANGUAGE_LIST.map((l) => (
-                <option key={l.code} value={l.code} className="bg-bg text-ink">
-                  {l.nativeName} ({l.name})
-                </option>
-              ))}
-            </select>
-
-            {/* Repeat Button */}
-            <button
-              type="button"
-              onClick={repeatLastResponse}
-              title="Repeat last spoken response"
-              aria-label="Repeat last spoken response"
-              className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
-            >
-              <SpeakerIcon className="w-3.5 h-3.5 text-ink/70" />
-              <span className="hidden sm:inline">Repeat</span>
-            </button>
-
-            {/* Stop Speaking / Listening Button */}
-            {(speakingMsgId || listening) && (
-              <button
-                type="button"
-                onClick={stopAllVoice}
-                title="Stop audio and listening immediately"
-                aria-label="Stop audio and listening"
-                className="flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-colors cursor-pointer shadow-xs"
-              >
-                <StopIcon className="w-3 h-3 text-white" />
-                <span>Stop</span>
-              </button>
-            )}
-
-            {/* Mute / Unmute Toggle */}
-            <button
-              type="button"
-              onClick={toggleMute}
-              title={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                accessibilityPrefs.speechOutput
-                  ? "border-accent/30 bg-surface text-accent hover:border-accent"
-                  : "border-ink/15 bg-bg text-ink/60 hover:bg-surface hover:text-ink"
-              }`}
-            >
-              <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "text-accent" : "opacity-40"}`} />
-              <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice on" : "Muted"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
-              title="Share conversation link or transcript"
-              aria-label="Share Conversation"
-            >
-              <ShareHeaderIcon className="w-3.5 h-3.5 text-ink/70" />
-              <span className="hidden sm:inline">Share</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-all cursor-pointer"
-              title="Start new chat"
-              aria-label="Start New Chat"
-            >
-              <span>+ New</span>
-            </button>
-
-            {activeConversation && (
-              <button
-                type="button"
-                onClick={(e) => deleteConversation(activeConversation.id, e)}
-                className="flex items-center gap-1 rounded-full border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-danger hover:border-danger/30 transition-colors cursor-pointer"
-                title="Delete this chat"
-                aria-label="Delete Current Chat"
-              >
-                <TrashIcon className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Scrollable Conversation Stream */}
@@ -1549,28 +1456,50 @@ export function AssistantHome({
                         </span>
                       )}
                       {!isUser && (
-                        <button
-                          type="button"
-                          onClick={() => toggleSpeech(m.id, m.text)}
-                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
-                            speakingMsgId === m.id
-                              ? "bg-surface text-accent border border-accent/30"
-                              : "text-ink/60 hover:bg-surface hover:text-ink"
-                          }`}
-                          title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
-                        >
-                          {speakingMsgId === m.id ? (
-                            <>
-                              <StopIcon className="w-2.5 h-2.5 text-accent" />
-                              <span>Stop</span>
-                            </>
-                          ) : (
-                            <>
-                              <SpeakerIcon className="w-2.5 h-2.5 text-ink/60" />
-                              <span>Listen</span>
-                            </>
-                          )}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleSpeech(m.id, m.text)}
+                            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
+                              speakingMsgId === m.id
+                                ? "bg-surface text-accent border border-accent/30"
+                                : "text-ink/60 hover:bg-surface hover:text-ink"
+                            }`}
+                            title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
+                          >
+                            {speakingMsgId === m.id ? (
+                              <>
+                                <StopIcon className="w-2.5 h-2.5 text-accent" />
+                                <span>Stop</span>
+                              </>
+                            ) : (
+                              <>
+                                <SpeakerIcon className="w-2.5 h-2.5 text-ink/60" />
+                                <span>Listen</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                navigator.clipboard.writeText(m.text);
+                                setToastMessage("Copied response to clipboard");
+                                setTimeout(() => setToastMessage(null), 2500);
+                              }
+                            }}
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-ink/60 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
+                            title="Copy response to clipboard"
+                            aria-label="Copy response to clipboard"
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            <span>Copy</span>
+                          </button>
+                        </>
                       )}
                       {m.time && <span className="text-ink/40">{m.time}</span>}
                     </div>
@@ -1820,6 +1749,14 @@ export function AssistantHome({
           </div>
         </div>
       </div>
+
+      {/* ─── RIGHT AI SIDEBAR (Career Context Co-Pilot) ────────────────────── */}
+      <CareerContextPanel
+        isOpen={contextPanelOpen}
+        onClose={() => setContextPanelOpen(false)}
+        onSendPrompt={(p) => runPrompt(p)}
+        onNavigate={(feat, tab) => onRedirect(feat as FeatureId, tab as ResumeTab)}
+      />
     </div>
   );
 }

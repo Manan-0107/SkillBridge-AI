@@ -16,8 +16,16 @@ interface RoadmapControlsProps {
   onSearchChange: (q: string) => void;
   statusFilter: NodeStatus | "all";
   onStatusFilterChange: (status: NodeStatus | "all") => void;
+  roadmapMode?: "full" | "my-path" | "recommended";
+  onRoadmapModeChange?: (mode: "full" | "my-path" | "recommended") => void;
+  levelFilter?: "all" | "Beginner" | "Intermediate" | "Advanced";
+  onLevelFilterChange?: (level: "all" | "Beginner" | "Intermediate" | "Advanced") => void;
   viewMode: "tree" | "list";
   onViewModeChange: (mode: "tree" | "list") => void;
+  zoomScale?: number;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
   allNodes?: RoadmapNode[];
   onSelectNode?: (node: RoadmapNode) => void;
   onResetProgress?: () => void;
@@ -31,8 +39,16 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
   onSearchChange,
   statusFilter,
   onStatusFilterChange,
+  roadmapMode = "full",
+  onRoadmapModeChange,
+  levelFilter = "all",
+  onLevelFilterChange,
   viewMode,
   onViewModeChange,
+  zoomScale = 1.0,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
   allNodes = [],
   onSelectNode,
   onResetProgress,
@@ -85,6 +101,52 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
 
   return (
     <div className="space-y-4 mb-6">
+      {/* Roadmap Mode Switcher: Full Roadmap | My Path | AI Recommended */}
+      {onRoadmapModeChange && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 pb-3">
+          <div className="flex items-center gap-1.5 rounded-xl border border-ink/15 bg-bg p-1">
+            {(
+              [
+                { id: "full", label: "Full Roadmap" },
+                { id: "my-path", label: "My Path" },
+                { id: "recommended", label: "AI Recommended" },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onRoadmapModeChange(m.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  roadmapMode === m.id
+                    ? "bg-surface border border-accent/40 text-accent shadow-xs"
+                    : "text-ink/70 hover:text-ink"
+                }`}
+              >
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Level Filter Dropdown */}
+          {onLevelFilterChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-ink/60">Level:</span>
+              <select
+                value={levelFilter}
+                onChange={(e) => onLevelFilterChange(e.target.value as any)}
+                aria-label="Filter roadmap nodes by level"
+                className="rounded-lg border border-ink/15 bg-bg px-2.5 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none cursor-pointer"
+              >
+                <option value="all">All Levels</option>
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Category Track Pills Switcher */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         {categories.map((cat) => {
@@ -96,12 +158,12 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
               onClick={() => onCategoryChange(cat.id)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap border ${
                 isSelected
-                  ? "bg-accent text-white border-accent shadow-xs font-semibold"
+                  ? "bg-surface text-accent border-accent/40 shadow-xs font-bold"
                   : "bg-surface text-ink/75 border-ink/15 hover:bg-bg hover:text-ink"
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${isSelected ? "bg-bg" : "bg-accent"}`}
+                className={`w-2 h-2 rounded-full ${isSelected ? "bg-accent" : "bg-ink/30"}`}
               />
               <span className="font-semibold">{cat.label}</span>
             </button>
@@ -189,7 +251,7 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
                 onClick={() => onStatusFilterChange(st.id)}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                   statusFilter === st.id
-                    ? "bg-accent text-white shadow-xs font-semibold"
+                    ? "bg-surface text-accent font-bold shadow-2xs border border-ink/10"
                     : "text-ink/70 hover:text-ink"
                 }`}
               >
@@ -198,6 +260,39 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
             ))}
           </div>
 
+          {/* Zoom Controls */}
+          {onZoomIn && onZoomOut && onResetZoom && (
+            <div className="inline-flex rounded-lg bg-bg p-1 border border-ink/15 shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={onZoomOut}
+                aria-label="Zoom out roadmap"
+                title="Zoom Out (-)"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold text-ink/70 hover:bg-surface hover:text-ink cursor-pointer"
+              >
+                -
+              </button>
+              <button
+                type="button"
+                onClick={onResetZoom}
+                aria-label="Fit view 100%"
+                title="Reset zoom to 100%"
+                className="px-2 py-1 text-[11px] font-mono text-ink/70 hover:bg-surface hover:text-ink rounded-md cursor-pointer"
+              >
+                {Math.round(zoomScale * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={onZoomIn}
+                aria-label="Zoom in roadmap"
+                title="Zoom In (+)"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold text-ink/70 hover:bg-surface hover:text-ink cursor-pointer"
+              >
+                +
+              </button>
+            </div>
+          )}
+
           {/* View Mode Toggle: Tree Graph vs Structured List */}
           <div className="inline-flex rounded-lg bg-bg p-1 border border-ink/15 shrink-0">
             <button
@@ -205,7 +300,7 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
               onClick={() => onViewModeChange("tree")}
               className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 viewMode === "tree"
-                  ? "bg-accent text-white shadow-xs font-semibold"
+                  ? "bg-surface text-accent font-bold shadow-2xs border border-ink/10"
                   : "text-ink/70 hover:text-ink"
               }`}
             >
@@ -216,7 +311,7 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
               onClick={() => onViewModeChange("list")}
               className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 viewMode === "list"
-                  ? "bg-accent text-white shadow-xs font-semibold"
+                  ? "bg-surface text-accent font-bold shadow-2xs border border-ink/10"
                   : "text-ink/70 hover:text-ink"
               }`}
             >
