@@ -1066,7 +1066,7 @@ export function AssistantHome({
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-bg text-ink">
+    <div className="flex h-[calc(100vh-3rem)] overflow-hidden bg-bg text-ink">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
@@ -1336,18 +1336,25 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-10 max-w-2xl space-y-5 animate-in fade-in duration-200">
-                <div className="space-y-2">
-                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">
-                    {userDisplayName ? `Welcome, ${userDisplayName}` : "CareerForge Assistant"}
+              <div className="mb-12 max-w-xl animate-slideUp">
+                {/* Welcome mark */}
+                <div className="mb-6">
+                  <div
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white text-sm font-bold shadow-sm mb-4"
+                    aria-hidden="true"
+                  >
+                    CF
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "CareerForge Assistant"}
                   </h1>
-                  <p className="text-sm leading-relaxed text-ink/70">
-                    Voice-enabled companion for ATS resume optimization, step-by-step career roadmaps, and technical interview practice.
+                  <p className="mt-1.5 text-sm text-ink/55 leading-relaxed max-w-md">
+                    General AI assistant with career superpowers — ask anything.
                   </p>
                 </div>
 
-                {/* Primary Action Buttons (2 buttons, matching reference look) */}
-                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                {/* Two primary action buttons */}
+                <div className="flex flex-wrap items-center gap-2 mb-6">
                   <button
                     type="button"
                     onClick={() => {
@@ -1386,9 +1393,9 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-surface border border-ink/20 px-4 py-2 text-xs font-semibold text-ink hover:border-accent hover:text-accent shadow-xs transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-accent/10 border border-accent/25 px-4 py-2 text-xs font-semibold text-accent hover:bg-accent/15 transition-colors cursor-pointer"
                   >
-                    <MicIcon className="w-3.5 h-3.5 text-accent" />
+                    <MicIcon className="w-3.5 h-3.5" />
                     <span>Start talking</span>
                   </button>
 
@@ -1397,37 +1404,40 @@ export function AssistantHome({
                     onClick={() => {
                       textareaRef.current?.focus();
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-ink/15 bg-bg px-4 py-2 text-xs font-medium text-ink hover:bg-surface transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-xl border border-ink/12 bg-surface/60 px-4 py-2 text-xs font-medium text-ink/70 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
                   >
-                    <span>Type message</span>
+                    <span>Type a message</span>
                   </button>
                 </div>
 
-                {/* At most 3 suggested action cards shown only when chat is empty (Section 5) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 w-full">
+                {/* 3 suggestion cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => runPrompt("Help me audit my resume for ATS compliance")}
-                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
+                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">ATS Resume Audit</div>
-                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Score and fix keywords for your target role</div>
+                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Resume</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">ATS Resume Audit</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Score and fix keywords for your role</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => runPrompt("Show me my complete career roadmap")}
-                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
+                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">Career Roadmap</div>
-                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Visual skill graph from basics to mastery</div>
+                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Roadmap</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Career Path</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Visual skill milestones to mastery</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => runPrompt("I want to practice interview questions")}
-                    className="p-3.5 rounded-xl border border-ink/15 bg-surface hover:border-accent/40 text-left transition-all group cursor-pointer shadow-xs"
+                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-xs font-bold text-ink group-hover:text-accent transition-colors">Mock Interview</div>
-                    <div className="text-[11px] text-ink/70 mt-1 leading-normal">Interactive practice with instant feedback</div>
+                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Practice</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Mock Interview</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Drills with instant feedback</div>
                   </button>
                 </div>
               </div>
@@ -1446,7 +1456,7 @@ export function AssistantHome({
                 return (
                   <div
                     key={m.id}
-                    className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
+                    className={`flex flex-col animate-messageIn ${isUser ? "items-end" : "items-start"}`}
                   >
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-ink/60 px-1">
                       <span>{isUser ? userDisplayName : "CareerForge Assistant"}</span>
@@ -1513,16 +1523,16 @@ export function AssistantHome({
                       )}
 
                       <div
-                        className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
+                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-surface border border-ink/15 text-ink font-medium rounded-tr-xs shadow-xs"
-                            : "bg-surface text-ink rounded-tl-xs border border-ink/15 shadow-xs"
+                            ? "bg-ink/[0.06] border border-ink/10 text-ink font-medium"
+                            : "bg-surface text-ink border border-ink/10"
                         }`}
                       >
                         {isUser ? (
                           <p className="whitespace-pre-line">{m.text}</p>
                         ) : (
-                          <div className="prose prose-sm max-w-none text-ink space-y-2 leading-relaxed [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-ink [&>h3]:mt-2.5 [&>h3]:mb-1.5 [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:text-ink [&>h4]:mt-2 [&>p]:my-1.5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-1.5 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-1.5 [&>pre]:bg-bg [&>pre]:text-ink [&>pre]:p-3.5 [&>pre]:rounded-xl [&>pre]:my-2.5 [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-ink/15 [&>code]:bg-bg [&>code]:text-ink [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>a]:text-accent [&>a]:underline [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
+                          <div className="prose-cf">
                             <ReactMarkdown>{m.text}</ReactMarkdown>
                           </div>
                         )}
@@ -1574,15 +1584,15 @@ export function AssistantHome({
               })}
 
               {busy && redirectCountdown === null && (
-                <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-ink/60 px-1">
-                    CareerForge Assistant is thinking…
+                <div className="flex flex-col items-start animate-messageIn">
+                  <div className="mb-1 text-[11px] font-medium text-ink/50 px-1">
+                    CareerForge is thinking
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-ink/15 bg-surface px-4 py-3 shadow-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-accent animate-bounce" />
+                  <div className="rounded-2xl border border-ink/10 bg-surface px-4 py-3">
+                    <div className="flex items-center gap-1" aria-label="Assistant is thinking" role="status">
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce [animation-delay:-0.3s]" aria-hidden="true" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce [animation-delay:-0.15s]" aria-hidden="true" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce" aria-hidden="true" />
                     </div>
                   </div>
                 </div>
@@ -1591,8 +1601,8 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── RESTRAINED NOTION-LIKE BOTTOM PROMPT COMPOSER ─────────── */}
-        <div className="border-t border-ink/10 bg-bg/95 px-4 pb-20 pt-3 backdrop-blur-md">
+        {/* ─── COMPOSER ─────────────────────────────────────────── */}
+        <div className="border-t border-ink/8 bg-bg/98 px-4 pb-6 pt-3 backdrop-blur-md">
           <div className="mx-auto max-w-3xl">
             {/* Hidden Document File Input */}
             <input

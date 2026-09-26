@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
 import { AuthGate } from "@/components/auth/AuthGate";
-import { TopNav } from "@/components/nav/TopNav";
+
 import { AssistantHome } from "@/components/assistant/AssistantHome";
 import { Workspace } from "@/components/workspace/Workspace";
 import { FeatureId, ResumeTab } from "@/lib/intent";

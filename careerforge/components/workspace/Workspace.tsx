@@ -9,13 +9,38 @@ import { PracticeHub } from "@/components/practice/PracticeHub";
 import { LocalOpportunities } from "@/components/local/LocalOpportunities";
 import { roleOptions } from "@/lib/data";
 import { useApp } from "@/lib/store";
+import { Bot, Map, Code2, FileText, FolderOpen, BookOpen, ChevronDown } from "lucide-react";
 
-const copy: Record<FeatureId, { eyebrow: string; title: string }> = {
-  resume: { eyebrow: "Resume", title: "Resume suite" },
-  roadmap: { eyebrow: "Path", title: "Career roadmap" },
-  courses: { eyebrow: "Learn", title: "Curated courses" },
-  practice: { eyebrow: "Drill", title: "Practice hub" },
-  local: { eyebrow: "Nearby", title: "Local opportunities" },
+const featureMeta: Record<FeatureId, {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+}> = {
+  resume: {
+    icon: <FileText size={16} strokeWidth={2} />,
+    label: "Resume",
+    description: "Build, analyze, and tailor your resume for any role",
+  },
+  roadmap: {
+    icon: <Map size={16} strokeWidth={2} />,
+    label: "Roadmap",
+    description: "Phased skill milestones from beginner to role-ready",
+  },
+  courses: {
+    icon: <BookOpen size={16} strokeWidth={2} />,
+    label: "Learning",
+    description: "Curated courses and certifications for your track",
+  },
+  practice: {
+    icon: <Code2 size={16} strokeWidth={2} />,
+    label: "Practice",
+    description: "Interactive coding drills and mock interview prep",
+  },
+  local: {
+    icon: <FolderOpen size={16} strokeWidth={2} />,
+    label: "Local Opportunities",
+    description: "Jobs, internships, and meetups near you",
+  },
 };
 
 export function Workspace({
@@ -30,38 +55,60 @@ export function Workspace({
     user?.targetRole && roleOptions.some((r) => r.id === user.targetRole)
       ? (user.targetRole as RoleId)
       : "frontend";
-  const heading = copy[feature];
+
+  const meta = featureMeta[feature];
 
   return (
-    <div className="min-h-[calc(100vh-4.25rem)] bg-bg text-ink">
-      <div className="border-b border-ink/10 py-8 sm:py-10 bg-surface/60 backdrop-blur-md">
-        <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-accent">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              <span>{heading.eyebrow}</span>
-            </div>
-            <h1 className="font-sans text-3xl sm:text-4xl font-bold tracking-tight text-ink">
-              {heading.title}
-            </h1>
-          </div>
-          <label className="flex items-center gap-2.5 rounded-2xl border border-ink/15 bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-sm">
-            <span className="text-ink/70">Target Track:</span>
-            <select
-              value={role}
-              onChange={(e) => setTargetRole(e.target.value as RoleId)}
-              className="rounded-lg border border-ink/15 bg-bg px-2.5 py-1 text-xs font-semibold text-accent focus:border-accent focus:outline-none cursor-pointer"
+    <div className="min-h-[calc(100vh-3rem)] bg-bg text-ink">
+      {/* Slim workspace header */}
+      <div className="border-b border-ink/8 bg-bg/98">
+        <div className="app-shell flex items-center justify-between h-14 gap-4">
+          {/* Left: feature identity */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface border border-ink/10 text-ink/60"
+              aria-hidden="true"
             >
-              {roleOptions.map((r) => (
-                <option key={r.id} value={r.id} className="bg-surface text-ink">
-                  {r.label}
-                </option>
-              ))}
-            </select>
+              {meta.icon}
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-ink tracking-tight truncate">
+                {meta.label}
+              </h1>
+              <p className="text-[11px] text-ink/50 truncate hidden sm:block">
+                {meta.description}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: role selector */}
+          <label className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] font-medium text-ink/50 hidden sm:inline">Track:</span>
+            <div className="relative flex items-center">
+              <select
+                value={role}
+                onChange={(e) => setTargetRole(e.target.value as RoleId)}
+                className="appearance-none rounded-full border border-ink/12 bg-surface/80 pl-3 pr-7 py-1.5 text-xs font-semibold text-ink focus:border-accent focus:outline-none cursor-pointer transition-colors hover:border-ink/25"
+                aria-label="Target career track"
+              >
+                {roleOptions.map((r) => (
+                  <option key={r.id} value={r.id} className="bg-bg text-ink">
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={11}
+                strokeWidth={2.5}
+                className="pointer-events-none absolute right-2.5 text-ink/40"
+                aria-hidden="true"
+              />
+            </div>
           </label>
         </div>
       </div>
 
+      {/* Feature content */}
       {feature === "resume" && (
         <ResumeSuite role={role} initialTab={resumeTab ?? "analyzer"} />
       )}

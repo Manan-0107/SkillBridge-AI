@@ -16,7 +16,7 @@
 }
 
 html {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 * {
@@ -125,12 +125,23 @@ body {
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 .animate-dash {
@@ -142,7 +153,77 @@ body {
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.2s ease-out forwards;
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-messageIn {
+  animation: messageIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================================
+   PROSE-CF: CareerForge assistant message typography
+   ========================================================= */
+.prose-cf {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #14110F;
+}
+.prose-cf h1, .prose-cf h2, .prose-cf h3, .prose-cf h4 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: #14110F;
+}
+.prose-cf h1 { font-size: 1.15rem; }
+.prose-cf h2 { font-size: 1.05rem; }
+.prose-cf h3 { font-size: 0.95rem; }
+.prose-cf p { margin: 0.6em 0; }
+.prose-cf ul { list-style: disc; padding-left: 1.25rem; margin: 0.6em 0; }
+.prose-cf ol { list-style: decimal; padding-left: 1.25rem; margin: 0.6em 0; }
+.prose-cf li { margin: 0.3em 0; }
+.prose-cf code {
+  background: rgba(20,17,15,0.07);
+  color: #14110F;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.82em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.prose-cf pre {
+  background: rgba(20,17,15,0.05);
+  border: 1px solid rgba(20,17,15,0.12);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  font-size: 0.82em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.prose-cf pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.prose-cf a { color: #B5541F; text-decoration: underline; }
+.prose-cf blockquote {
+  border-left: 3px solid #B5541F;
+  padding-left: 0.9rem;
+  margin-left: 0;
+  font-style: italic;
+  opacity: 0.8;
+}
+.prose-cf strong { font-weight: 700; }
+.prose-cf em { font-style: italic; }
+.prose-cf hr {
+  border: none;
+  border-top: 1px solid rgba(20,17,15,0.1);
+  margin: 1em 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
