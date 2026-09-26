@@ -224,7 +224,7 @@ html.dark .prose-cf blockquote,
   border-left-color: #7DE1EA;
 }
 
-/* ─── Center-Weighted Ambient Light (Section 6) ─────────────────────────── */
+/* ─── Center-Weighted Ambient Light (Sections 3 & 4) ─────────────────────── */
 .ubix-ambient-canvas {
   position: fixed;
   inset: 0;
@@ -232,22 +232,22 @@ html.dark .prose-cf blockquote,
   z-index: 0;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(139, 144, 150, 0.09), transparent 60%),
-    radial-gradient(ellipse 70% 40% at 50% 110%, rgba(18, 21, 24, 0.8), transparent 70%),
-    linear-gradient(180deg, #080A0D 0%, #0D0F12 50%, #080A0D 100%);
+    radial-gradient(ellipse 75% 60% at 50% 48%, rgba(199, 204, 209, 0.045) 0%, rgba(139, 144, 150, 0.028) 35%, rgba(18, 21, 24, 0.45) 70%, transparent 100%),
+    radial-gradient(ellipse 95% 85% at 50% 50%, #0D0F12 0%, #0A0C0F 55%, #080A0D 100%);
 }
 
-/* ─── Cursor-Reactive Glow (Section 6) ─────────────────────────────────── */
+/* ─── Cursor-Reactive Light on Dark Brushed Metal (Section 8) ────────────── */
 .ubix-cursor-glow-layer {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 1;
   background: radial-gradient(
-    circle 260px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
-    rgba(125, 225, 234, 0.04),
-    rgba(199, 204, 209, 0.018) 45%,
-    transparent 80%
+    circle 280px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
+    rgba(199, 204, 209, 0.032) 0%,
+    rgba(139, 144, 150, 0.018) 40%,
+    rgba(125, 225, 234, 0.012) 65%,
+    transparent 100%
   );
   transform: translateZ(0);
 }
@@ -265,25 +265,79 @@ html.dark .prose-cf blockquote,
   box-shadow: 0 0 16px -2px rgba(125, 225, 234, 0.08), inset 0 1px 0 0 rgba(245, 247, 248, 0.04);
 }
 
-/* ─── Thinking Orb Keyframes (Section 9) ─────────────────────────────────── */
-@keyframes ubix-orb-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.85;
+/* ─── Border Beam: Signature Metallic Effect (Section 7) ───────────────── */
+.ubix-border-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.ubix-border-beam-ray {
+  position: absolute;
+  aspect-ratio: 1;
+  width: 160%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 290deg,
+    rgba(139, 144, 150, 0.25) 325deg,
+    rgba(125, 225, 234, 0.45) 350deg,
+    rgba(245, 247, 248, 0.75) 360deg
+  );
+  animation: ubix-beam-rotate 8s linear infinite;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  padding: 1px;
+}
+
+@keyframes ubix-beam-rotate {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
   }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 
-@keyframes ubix-orb-spin {
+/* ─── Constellation Thinking Orb (Section 9) ────────────────────────────── */
+@keyframes ubix-constellation-spin {
   0% {
     transform: rotate(0deg);
   }
   100% {
     transform: rotate(360deg);
   }
+}
+
+.ubix-constellation-spin {
+  animation: ubix-constellation-spin 3.5s linear infinite;
+}
+
+.ubix-constellation-slow {
+  animation: ubix-constellation-spin 7.5s linear infinite;
+}
+
+@keyframes ubix-constellation-breathe {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.ubix-orb-listening {
+  animation: ubix-constellation-breathe 2s ease-in-out infinite;
 }
 
 @keyframes ubix-orb-flash {
@@ -301,30 +355,37 @@ html.dark .prose-cf blockquote,
   }
 }
 
-.ubix-orb-listening {
-  animation: ubix-orb-pulse 1.8s ease-in-out infinite;
-}
-
-.ubix-orb-thinking {
-  animation: ubix-orb-spin 2.4s linear infinite;
-}
-
-.ubix-orb-processing {
-  animation: ubix-orb-spin 4.5s linear infinite;
-}
-
 .ubix-orb-success {
   animation: ubix-orb-flash 0.6s ease-out forwards;
 }
 
+/* ─── Unified Dark Graphite System (Section 12: Zero Beige) ─────────────── */
+html.dark aside,
+[data-theme="dark"] aside {
+  background-color: #0D0F12 !important;
+  border-color: rgba(139, 144, 150, 0.14) !important;
+}
+
+html.dark aside .bg-bg,
+[data-theme="dark"] aside .bg-bg {
+  background-color: #080A0D !important;
+}
+
+html.dark aside .bg-surface,
+[data-theme="dark"] aside .bg-surface {
+  background-color: #121518 !important;
+}
+
 /* ─── Accessibility & Reduced Motion Handling (Section 11) ──────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .ubix-cursor-glow-layer {
+  .ubix-cursor-glow-layer,
+  .ubix-border-beam-ray {
     display: none !important;
+    animation: none !important;
   }
+  .ubix-constellation-spin,
+  .ubix-constellation-slow,
   .ubix-orb-listening,
-  .ubix-orb-thinking,
-  .ubix-orb-processing,
   .ubix-orb-success {
     animation: none !important;
     transform: none !important;
@@ -334,12 +395,14 @@ html.dark .prose-cf blockquote,
   }
 }
 
-html.reduced-motion .ubix-cursor-glow-layer {
+html.reduced-motion .ubix-cursor-glow-layer,
+html.reduced-motion .ubix-border-beam-ray {
   display: none !important;
+  animation: none !important;
 }
+html.reduced-motion .ubix-constellation-spin,
+html.reduced-motion .ubix-constellation-slow,
 html.reduced-motion .ubix-orb-listening,
-html.reduced-motion .ubix-orb-thinking,
-html.reduced-motion .ubix-orb-processing,
 html.reduced-motion .ubix-orb-success {
   animation: none !important;
   transform: none !important;

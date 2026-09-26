@@ -56,15 +56,15 @@ export function CareerContextPanel({
   return (
     <aside
       aria-label="Career Context and Skill Gap Co-Pilot"
-      className={`flex flex-col border-l border-ink/10 bg-surface/95 backdrop-blur-md text-ink transition-all duration-200 z-20 ${
+      className={`flex flex-col border-l border-ink/10 bg-surface/98 backdrop-blur-xl text-ink transition-all duration-200 z-20 ${
         isOpen ? "w-80 sm:w-88 shrink-0" : "w-0 translate-x-full overflow-hidden border-none"
       }`}
     >
       {/* Panel Header */}
-      <div className="flex items-center justify-between border-b border-ink/10 p-3.5 sm:px-4">
+      <div className="flex items-center justify-between border-b border-ink/8 px-4 py-3.5">
         <div className="flex items-center gap-2">
-          <span className="flex h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-          <h2 className="text-xs font-bold uppercase tracking-wider text-ink">
+          <span className="flex h-1.5 w-1.5 rounded-full bg-accent animate-pulse" aria-hidden="true" />
+          <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-ink">
             Career Context
           </h2>
         </div>
@@ -72,23 +72,23 @@ export function CareerContextPanel({
           type="button"
           onClick={onClose}
           aria-label="Close career context panel"
-          className="rounded-lg p-1 text-ink/60 hover:bg-bg hover:text-ink transition-colors cursor-pointer"
+          className="rounded-full p-1 text-ink/40 hover:text-ink transition-colors cursor-pointer"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* 1. Target Role & Switcher */}
-        <div className="rounded-xl border border-ink/15 bg-bg p-3.5 shadow-2xs space-y-2.5">
+      {/* Scrollable Content (Section 2 & 16: Open space, minimal containers) */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        {/* 1. Target Track Selector */}
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-ink/60 uppercase tracking-wide">
+            <span className="text-[10px] font-medium text-ink/50 uppercase tracking-wider">
               Target Track
             </span>
-            <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold text-accent border border-ink/10">
+            <span className="text-[10px] font-medium text-accent">
               Active Focus
             </span>
           </div>
@@ -100,7 +100,7 @@ export function CareerContextPanel({
             id="context-role-select"
             value={currentRole}
             onChange={(e) => setTargetRole(e.target.value as RoleId)}
-            className="w-full rounded-lg border border-ink/15 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink focus:border-accent focus:outline-none cursor-pointer"
+            className="w-full rounded-xl border border-ink/12 bg-surface px-3 py-2 text-xs font-medium text-ink focus:border-accent/40 focus:outline-none transition-colors cursor-pointer"
           >
             {roleOptions.map((r) => (
               <option key={r.id} value={r.id}>
@@ -110,13 +110,13 @@ export function CareerContextPanel({
           </select>
         </div>
 
-        {/* 2. Career Readiness Meter */}
-        <div className="rounded-xl border border-ink/15 bg-bg p-3.5 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-ink/70">
-              Readiness Score
+        {/* 2. Readiness Stats (Typography & hairline meter) */}
+        <div className="space-y-2 pt-1 border-t border-ink/8">
+          <div className="flex items-baseline justify-between pt-2">
+            <span className="text-[10px] font-medium text-ink/50 uppercase tracking-wider">
+              Readiness Benchmark
             </span>
-            <span className="font-mono text-xs font-bold text-ink">
+            <span className="font-display text-xl font-semibold text-ink">
               {readinessStats.percent}%
             </span>
           </div>
@@ -127,61 +127,61 @@ export function CareerContextPanel({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`Career readiness score: ${readinessStats.percent}%`}
-            className="h-2 w-full overflow-hidden rounded-full bg-surface border border-ink/10"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-ink/10"
           >
             <div
-              className="h-full bg-success transition-all duration-500 rounded-full"
+              className="h-full bg-accent transition-all duration-500 rounded-full"
               style={{ width: `${readinessStats.percent}%` }}
             />
           </div>
 
-          <div className="flex items-center justify-between text-[10px] text-ink/60 pt-0.5">
-            <span>{readinessStats.verifiedCount} Skills Verified</span>
-            <span>{readinessStats.gapCount} Skill Gaps</span>
+          <div className="flex items-center justify-between text-[10px] text-ink/45 pt-0.5 font-sans">
+            <span>{readinessStats.verifiedCount} Verified</span>
+            <span>{readinessStats.gapCount} Identified Gaps</span>
           </div>
         </div>
 
-        {/* 3. Skill Gap Analysis (High Priority) */}
-        <div className="space-y-2">
+        {/* 3. Skill Gap Analysis (Clean Typographic List, No Heavy Boxes) */}
+        <div className="space-y-3 pt-2 border-t border-ink/8">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-ink uppercase tracking-wide">
+            <h3 className="text-[10px] font-medium text-ink/50 uppercase tracking-wider">
               Identified Skill Gaps
             </h3>
             <button
               type="button"
               onClick={() => onNavigate("roadmap")}
-              className="text-[11px] font-semibold text-accent hover:underline cursor-pointer"
+              className="text-[10px] font-medium text-accent hover:underline cursor-pointer"
             >
-              View on Roadmap &rarr;
+              Roadmap &rarr;
             </button>
           </div>
 
-          <div className="space-y-2">
+          <div className="divide-y divide-ink/8">
             {displayGaps.map((gap, index) => (
               <div
                 key={index}
-                className="rounded-lg border border-ink/15 bg-bg p-2.5 shadow-2xs space-y-1.5 transition-all hover:border-accent/40"
+                className="py-2.5 first:pt-0 last:pb-0 space-y-1.5"
               >
-                <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-xs font-bold text-ink truncate">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-ink truncate">
                     {gap}
                   </span>
-                  <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase">
-                    Priority
+                  <span className="text-[9px] font-semibold text-accent/80 shrink-0">
+                    High Impact
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 pt-1 border-t border-ink/10">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => onSendPrompt(`Explain ${gap} step-by-step with practical production examples for my role.`)}
-                    className="flex-1 rounded border border-ink/15 bg-surface py-1 text-[10px] font-medium text-ink hover:text-accent hover:border-accent/40 transition-colors cursor-pointer text-center"
+                    className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
                   >
                     Teach Me
                   </button>
                   <button
                     type="button"
                     onClick={() => onNavigate("practice")}
-                    className="flex-1 rounded border border-ink/15 bg-surface py-1 text-[10px] font-medium text-ink hover:text-accent hover:border-accent/40 transition-colors cursor-pointer text-center"
+                    className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
                   >
                     Drill Concept
                   </button>
@@ -192,91 +192,53 @@ export function CareerContextPanel({
         </div>
 
         {/* 4. Connected Ecosystem Quick Actions */}
-        <div className="space-y-2 pt-2 border-t border-ink/10">
-          <h3 className="text-xs font-bold text-ink uppercase tracking-wide">
-            Career Ecosystem
+        <div className="space-y-2 pt-3 border-t border-ink/8">
+          <h3 className="text-[10px] font-medium text-ink/50 uppercase tracking-wider">
+            Workspace Ecosystem
           </h3>
           <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onNavigate("roadmap")}
-              className="rounded-lg border border-ink/15 bg-bg p-2.5 text-left hover:border-accent/40 hover:bg-surface transition-all cursor-pointer shadow-2xs group"
-            >
-              <div className="text-[11px] font-bold text-ink group-hover:text-accent">
-                Roadmap
-              </div>
-              <div className="text-[10px] text-ink/60 mt-0.5">
-                Visual career graph
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigate("practice")}
-              className="rounded-lg border border-ink/15 bg-bg p-2.5 text-left hover:border-accent/40 hover:bg-surface transition-all cursor-pointer shadow-2xs group"
-            >
-              <div className="text-[11px] font-bold text-ink group-hover:text-accent">
-                Practice
-              </div>
-              <div className="text-[10px] text-ink/60 mt-0.5">
-                Interview simulator
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigate("resume", "analyzer")}
-              className="rounded-lg border border-ink/15 bg-bg p-2.5 text-left hover:border-accent/40 hover:bg-surface transition-all cursor-pointer shadow-2xs group"
-            >
-              <div className="text-[11px] font-bold text-ink group-hover:text-accent">
-                Resume ATS
-              </div>
-              <div className="text-[10px] text-ink/60 mt-0.5">
-                Keyword audit
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigate("local")}
-              className="rounded-lg border border-ink/15 bg-bg p-2.5 text-left hover:border-accent/40 hover:bg-surface transition-all cursor-pointer shadow-2xs group"
-            >
-              <div className="text-[11px] font-bold text-ink group-hover:text-accent">
-                Jobs
-              </div>
-              <div className="text-[10px] text-ink/60 mt-0.5">
-                Matched opportunities
-              </div>
-            </button>
+            {[
+              { id: "roadmap", label: "Roadmap", desc: "Skill graph" },
+              { id: "practice", label: "Practice", desc: "Interview drills" },
+              { id: "resume", label: "Resume ATS", desc: "Targeted audit" },
+              { id: "local", label: "Opportunities", desc: "Live matches" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onNavigate(item.id as any)}
+                className="rounded-xl border border-ink/10 bg-surface/50 p-2.5 text-left hover:border-accent/30 hover:bg-surface transition-all cursor-pointer group"
+              >
+                <div className="text-[11px] font-semibold text-ink group-hover:text-accent transition-colors">
+                  {item.label}
+                </div>
+                <div className="text-[10px] text-ink/45 mt-0.5">
+                  {item.desc}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
         {/* 5. Recommended Conversational Prompts */}
-        <div className="space-y-1.5 pt-2 border-t border-ink/10">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-ink/60">
-            Suggested Prompts
+        <div className="space-y-1.5 pt-3 border-t border-ink/8">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-ink/50">
+            Suggested Queries
           </span>
-          <button
-            type="button"
-            onClick={() => onSendPrompt("What should I learn next based on my current career roadmap?")}
-            className="w-full text-left rounded-lg border border-ink/15 bg-bg px-2.5 py-1.5 text-xs text-ink/80 hover:text-accent hover:border-accent/30 hover:bg-surface transition-all cursor-pointer"
-          >
-            &bull; What should I learn next?
-          </button>
-          <button
-            type="button"
-            onClick={() => onSendPrompt("Break down my top skill gaps and how to address each one.")}
-            className="w-full text-left rounded-lg border border-ink/15 bg-bg px-2.5 py-1.5 text-xs text-ink/80 hover:text-accent hover:border-accent/30 hover:bg-surface transition-all cursor-pointer"
-          >
-            &bull; Break down my skill gaps
-          </button>
-          <button
-            type="button"
-            onClick={() => onSendPrompt("How do I frame my technical experience using the STAR method for interviews?")}
-            className="w-full text-left rounded-lg border border-ink/15 bg-bg px-2.5 py-1.5 text-xs text-ink/80 hover:text-accent hover:border-accent/30 hover:bg-surface transition-all cursor-pointer"
-          >
-            &bull; Frame experience with STAR
-          </button>
+          {[
+            { label: "What should I learn next?", query: "What should I learn next based on my current career roadmap?" },
+            { label: "Break down my skill gaps", query: "Break down my top skill gaps and how to address each one." },
+            { label: "Frame experience with STAR", query: "How do I frame my technical experience using the STAR method for interviews?" },
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => onSendPrompt(item.query)}
+              className="w-full text-left rounded-lg px-2 py-1.5 text-xs text-ink/65 hover:text-ink hover:bg-surface/40 transition-colors cursor-pointer"
+            >
+              &bull; {item.label}
+            </button>
+          ))}
         </div>
       </div>
     </aside>

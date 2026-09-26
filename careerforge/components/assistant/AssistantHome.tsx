@@ -26,6 +26,7 @@ import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
 import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
+import { UbixBorderBeam } from "@/components/ubix/UbixBorderBeam";
 
 export type Msg = {
   id: string;
@@ -1641,11 +1642,12 @@ export function AssistantHome({
               id="ai-doc-upload"
             />
 
-            {/* AI Rounded Card Box */}
+            {/* AI Composer Slab (Section 14: Dark graphite, thin metallic border, subtle internal depth) */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/30 transition-all"
+              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent/40 transition-all overflow-hidden"
             >
+              <UbixBorderBeam active={listening || busy} duration={6} />
               {/* Attached Document Preview Badge */}
               {attachedFile && (
                 <div className="mb-2 flex items-center justify-between rounded-xl border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink shadow-2xs">
@@ -1716,40 +1718,25 @@ export function AssistantHome({
                     <span className="hidden sm:inline">Attach</span>
                   </button>
 
-                  {/* Collapsed Voice Indicator & Toggle Button (§4 & §5) */}
+                  {/* Integrated Physical Voice Control Hub (§14) */}
                   <button
                     type="button"
                     onClick={toggleListening}
                     aria-pressed={listening}
-                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle`}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-accent text-white shadow-xs font-bold"
+                        ? "bg-accent/15 text-accent border border-accent/40 font-semibold"
                         : busy
-                        ? "bg-surface text-ink border border-ink/30 font-bold"
-                        : "border border-ink/15 bg-bg text-ink hover:bg-surface"
+                        ? "bg-surface text-ink/80 border border-ink/20 font-semibold"
+                        : "border border-ink/12 bg-bg/80 text-ink/70 hover:bg-surface hover:text-ink"
                     }`}
                     title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
                   >
-                    {/* Decorative thinking-orbs for processing */}
-                    {busy && (
-                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
-                        <span className="absolute h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-                        <span className="relative h-1 w-1 rounded-full bg-accent" />
-                      </span>
-                    )}
-
-                    {/* Decorative Voice glow for listening */}
-                    {listening && (
-                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
-                        <span className="absolute rounded-full bg-white animate-pulse" style={{ width: "8px", height: "8px" }} />
-                        <span className="relative h-1 w-1 rounded-full bg-white" />
-                      </span>
-                    )}
-
-                    {!busy && !listening && (
-                      <MicIcon className="w-3 h-3 text-accent" />
-                    )}
+                    <UbixThinkingOrb
+                      state={listening ? "listening" : busy ? "processing" : "idle"}
+                      size="sm"
+                    />
 
                     <span>
                       {listening
