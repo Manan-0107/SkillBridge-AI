@@ -292,6 +292,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       antialias: true,
       powerPreference: "high-performance",
     });
+    renderer.setClearColor(0x080a0d, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
@@ -862,7 +863,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[620px] sm:h-[720px] lg:h-[820px] select-none overflow-hidden bg-[#080A0D]"
+      className="relative w-full h-[620px] sm:h-[720px] lg:h-[820px] select-none overflow-hidden"
       role="region"
       aria-label="Interactive 3D Career System Graph"
     >

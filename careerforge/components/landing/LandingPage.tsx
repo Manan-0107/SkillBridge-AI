@@ -170,7 +170,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
   };
 
   return (
-    <div className="w-full text-ink selection:bg-surface selection:text-ink min-h-screen bg-[#080A0D]">
+    <div className="w-full text-ink selection:bg-surface selection:text-ink min-h-screen">
 
       {/* ── HEADER / NAV ────────────────────────────────────────────────────── */}
       <header
