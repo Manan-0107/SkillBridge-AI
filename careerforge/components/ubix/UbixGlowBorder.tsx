@@ -1,21 +1,31 @@
 "use client";
 
-import React from "react";
+import React, { ReactNode } from "react";
 
 interface UbixGlowBorderProps {
-  children: React.ReactNode;
-  className?: string;
+  children: ReactNode;
   active?: boolean;
+  className?: string;
+  rounded?: string;
 }
 
+/**
+ * UbixGlowBorder
+ * 
+ * Reusable wrapper that provides a subtle soft silver & tiny icy cyan reflection border
+ * for focused inputs, active navigation, or hero cards.
+ */
 export function UbixGlowBorder({
   children,
-  className = "",
   active = false,
+  className = "",
+  rounded = "rounded-2xl",
 }: UbixGlowBorderProps) {
   return (
     <div
-      className={`ubix-glow-border rounded-2xl ${active ? "ring-1 ring-accent/30" : ""} ${className}`}
+      className={`relative ${rounded} transition-all duration-300 ${
+        active ? "ubix-glow-border-active" : "ubix-glow-border-idle"
+      } ${className}`}
     >
       {children}
     </div>

@@ -3,10 +3,16 @@
    Preserves existing light theme while providing the dark graphite metallic system.
    ========================================================================== */
 
-/* ─── Typography Binding ────────────────────────────────────────────────── */
+/* ─── Typography & Dark Scheme Binding ───────────────────────────────────── */
 :root {
+  color-scheme: dark;
   --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
   --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  color-scheme: dark;
 }
 
 body {
@@ -48,73 +54,383 @@ html.dark,
   --color-ink: #F5F7F8;
   --color-accent: #7DE1EA;
   --color-accent-soft: #9CE7EE;
+
+  /* ─── Semantic Text Hierarchy Variables ─────────────────────────────────── */
+  --foreground-primary: #F5F7F8;
+  --foreground-important: #E6E9EC;
+  --foreground-body: #C7CCD1;
+  --foreground-secondary: #A5ABB2;
+  --muted-foreground: #8B9096;
+  --disabled-foreground: #62676D;
+  --accent: #7DE1EA;
+  --background: #080A0D;
+  --surface: #121518;
+  --border: #292D32;
+  --color-danger: #F87171;
+  --color-success: #34D399;
 }
 
 html.dark body,
-[data-theme="dark"] body {
+[data-theme="dark"] body,
+body {
   background-color: #080A0D !important;
-  color: #F5F7F8 !important;
+  color: #C7CCD1 !important; /* Body text is Soft Silver #C7CCD1 */
 }
 
-/* Dark mode surface re-mapping for uniform zero-seam graphite aesthetic */
+/* Dark mode root & primary surface re-mapping — Transparent to reveal metallic ambient layer */
 html.dark .bg-bg,
-[data-theme="dark"] .bg-bg {
-  background-color: #080A0D !important;
-}
-
-html.dark .bg-surface,
-[data-theme="dark"] .bg-surface {
-  background-color: #121518 !important;
+html.dark .bg-paper,
+html.dark .bg-mist,
+[data-theme="dark"] .bg-bg,
+[data-theme="dark"] .bg-paper,
+[data-theme="dark"] .bg-mist {
+  background-color: transparent !important;
 }
 
 html.dark .bg-bg\/95,
 html.dark .bg-bg\/98,
 [data-theme="dark"] .bg-bg\/95,
 [data-theme="dark"] .bg-bg\/98 {
-  background-color: rgba(8, 10, 13, 0.95) !important;
+  background-color: rgba(8, 10, 13, 0.92) !important;
 }
 
+/* ─── UBIX Dedicated Ambient Metallic Background & Reflection Layers ──────── */
+.ubix-base-canvas {
+  background-color: #080A0D !important;
+}
+
+.ubix-metallic-ambient-sheen {
+  background-image:
+    /* Center Studio Soft Silver Ellipse */
+    radial-gradient(
+      ellipse 72% 54% at 50% 42%,
+      rgba(210, 220, 228, 0.13) 0%,
+      rgba(160, 172, 182, 0.085) 20%,
+      rgba(110, 122, 132, 0.048) 40%,
+      rgba(40, 48, 55, 0.018) 60%,
+      transparent 78%
+    ),
+    /* Elongated brushed metallic horizontal reflection */
+    radial-gradient(
+      ellipse 92% 38% at 50% 48%,
+      rgba(195, 206, 215, 0.075) 0%,
+      rgba(140, 152, 162, 0.04) 38%,
+      transparent 75%
+    ),
+    /* Upper ambient soft silver reflection */
+    radial-gradient(
+      ellipse 58% 36% at 50% 18%,
+      rgba(215, 225, 232, 0.055) 0%,
+      transparent 65%
+    );
+  background-repeat: no-repeat;
+}
+
+.ubix-cursor-reflection {
+  background-image:
+    radial-gradient(
+      ellipse 620px 460px at var(--ubix-pointer-x, -1000px) var(--ubix-pointer-y, -1000px),
+      rgba(210, 220, 228, 0.085) 0%,
+      rgba(120, 227, 238, 0.042) 22%,
+      rgba(145, 155, 165, 0.02) 48%,
+      transparent 72%
+    );
+  background-repeat: no-repeat;
+  transition: opacity 0.25s ease;
+}
+
+/* Cards & Elevated Surfaces (#121518) — Overrides old light card styles */
+html.dark .bg-surface,
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80,
+html.dark .bg-white\/70,
+html.dark .bg-white\/60,
+html.dark .bg-white\/50,
+html.dark .bg-card,
+html.dark .glass-card,
+[data-theme="dark"] .bg-surface,
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white\/95,
+[data-theme="dark"] .bg-white\/90,
+[data-theme="dark"] .bg-white\/80,
+[data-theme="dark"] .bg-white\/70,
+[data-theme="dark"] .bg-white\/60,
+[data-theme="dark"] .bg-white\/50,
+[data-theme="dark"] .bg-card,
+[data-theme="dark"] .glass-card {
+  background-color: #121518 !important;
+}
+
+/* Higher Elevation & Sub-panels (#181B1F) */
 html.dark .bg-surface\/80,
 html.dark .bg-surface\/70,
 html.dark .bg-surface\/60,
 html.dark .bg-surface\/50,
+html.dark .bg-surface\/40,
+html.dark .bg-neutral-50,
+html.dark .bg-neutral-100,
+html.dark .bg-neutral-200,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-stone-50,
+html.dark .bg-stone-100,
 [data-theme="dark"] .bg-surface\/80,
 [data-theme="dark"] .bg-surface\/70,
 [data-theme="dark"] .bg-surface\/60,
-[data-theme="dark"] .bg-surface\/50 {
-  background-color: rgba(18, 21, 24, 0.85) !important;
+[data-theme="dark"] .bg-surface\/50,
+[data-theme="dark"] .bg-surface\/40,
+[data-theme="dark"] .bg-neutral-50,
+[data-theme="dark"] .bg-neutral-100,
+[data-theme="dark"] .bg-neutral-200,
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-gray-100,
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-slate-100,
+[data-theme="dark"] .bg-stone-50,
+[data-theme="dark"] .bg-stone-100 {
+  background-color: #181B1F !important;
 }
 
-/* Dark mode text re-mapping (WCAG AA compliant contrast) */
+/* Hover surfaces */
+html.dark .hover\:bg-neutral-50:hover,
+html.dark .hover\:bg-neutral-100:hover,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-white:hover,
+[data-theme="dark"] .hover\:bg-neutral-50:hover,
+[data-theme="dark"] .hover\:bg-neutral-100:hover,
+[data-theme="dark"] .hover\:bg-gray-50:hover,
+[data-theme="dark"] .hover\:bg-white:hover {
+  background-color: #181B1F !important;
+}
+
+/* ==========================================================================
+   UBIX GLOBAL SEMANTIC TEXT HIERARCHY (Matching Reference Readability)
+   Tiers:
+   1. PRIMARY / HERO / PAGE TITLE: #F5F7F8 (Cool White, 18.3:1)
+   2. IMPORTANT TEXT:              #E6E9EC (Crisp High-Contrast, 16.2:1)
+   3. BODY TEXT:                   #C7CCD1 (Soft Silver, 12.0:1)
+   4. SECONDARY TEXT:              #A5ABB2 (Grey Silver, 8.4:1)
+   5. MUTED TEXT:                  #8B9096 (Titanium, 6.0:1)
+   6. DISABLED TEXT:               #62676D (Restrained Grey, 3.2:1)
+   7. ACCENT / ACTIVE:             #7DE1EA (Icy Cyan, 12.6:1)
+   8. ERROR:                       #F87171 (Restrained Accessible Red, 7.8:1)
+   9. SUCCESS:                     #34D399 (Restrained Accessible Green, 10.4:1)
+   ========================================================================== */
+
+/* ─── Tier 1: Primary / Hero / Page Titles (#F5F7F8) ─────────────────────── */
+html.dark h1,
+html.dark h2,
+html.dark .font-display,
 html.dark .text-ink,
-[data-theme="dark"] .text-ink {
-  color: #F5F7F8 !important; /* Cool White — 18.3:1 contrast on #080A0D */
+html.dark .text-white,
+html.dark .text-neutral-900,
+html.dark .text-neutral-800,
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-stone-900,
+html.dark .text-stone-800,
+html.dark .text-slate-900,
+html.dark .text-foreground-primary,
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] .font-display,
+[data-theme="dark"] .text-ink,
+[data-theme="dark"] .text-white,
+[data-theme="dark"] .text-neutral-900,
+[data-theme="dark"] .text-neutral-800,
+[data-theme="dark"] .text-gray-900,
+[data-theme="dark"] .text-gray-800,
+[data-theme="dark"] .text-stone-900,
+[data-theme="dark"] .text-stone-800,
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-foreground-primary {
+  color: #F5F7F8 !important;
 }
 
+/* ─── Tier 2: Important Text / Section Headers (#E6E9EC) ─────────────────── */
+html.dark h3,
+html.dark h4,
+html.dark th,
+html.dark .text-ink\/90,
+html.dark .text-ink\/85,
 html.dark .text-ink\/80,
+html.dark .text-neutral-700,
+html.dark .text-gray-700,
+html.dark .text-stone-700,
+html.dark .text-slate-700,
+html.dark .text-foreground-important,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] th,
+[data-theme="dark"] .text-ink\/90,
+[data-theme="dark"] .text-ink\/85,
+[data-theme="dark"] .text-ink\/80,
+[data-theme="dark"] .text-neutral-700,
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-stone-700,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-foreground-important {
+  color: #E6E9EC !important;
+}
+
+/* ─── Tier 3: Body Text (#C7CCD1) ────────────────────────────────────────── */
+html.dark body,
+html.dark p,
+html.dark h5,
+html.dark h6,
+html.dark td,
+html.dark li,
 html.dark .text-ink\/75,
 html.dark .text-ink\/70,
 html.dark .text-ink\/65,
-html.dark .text-ink\/60,
-[data-theme="dark"] .text-ink\/80,
+html.dark .text-neutral-600,
+html.dark .text-gray-600,
+html.dark .text-stone-600,
+html.dark .text-slate-200,
+html.dark .text-foreground-body,
+[data-theme="dark"] body,
+[data-theme="dark"] p,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6,
+[data-theme="dark"] td,
+[data-theme="dark"] li,
 [data-theme="dark"] .text-ink\/75,
 [data-theme="dark"] .text-ink\/70,
 [data-theme="dark"] .text-ink\/65,
-[data-theme="dark"] .text-ink\/60 {
-  color: #C7CCD1 !important; /* Soft Silver — 12.0:1 contrast on #080A0D */
+[data-theme="dark"] .text-neutral-600,
+[data-theme="dark"] .text-gray-600,
+[data-theme="dark"] .text-stone-600,
+[data-theme="dark"] .text-slate-200,
+[data-theme="dark"] .text-foreground-body {
+  color: #C7CCD1 !important;
 }
 
+/* ─── Tier 4: Secondary Text & Supporting Metadata (#A5ABB2) ─────────────── */
+html.dark .text-ink\/60,
 html.dark .text-ink\/55,
 html.dark .text-ink\/50,
+html.dark .text-graphite,
+html.dark .text-foreground-secondary,
+[data-theme="dark"] .text-ink\/60,
+[data-theme="dark"] .text-ink\/55,
+[data-theme="dark"] .text-ink\/50,
+[data-theme="dark"] .text-graphite,
+[data-theme="dark"] .text-foreground-secondary {
+  color: #A5ABB2 !important;
+}
+
+/* ─── Tier 5: Muted Text, Small Labels, Timestamps (#8B9096) ─────────────── */
+html.dark .text-ink\/45,
 html.dark .text-ink\/40,
 html.dark .text-ink\/35,
 html.dark .text-ink\/30,
-[data-theme="dark"] .text-ink\/55,
-[data-theme="dark"] .text-ink\/50,
+html.dark .text-muted,
+html.dark .text-neutral-500,
+html.dark .text-neutral-400,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-stone-500,
+html.dark .text-stone-400,
+html.dark .text-slate-400,
+html.dark .text-foreground-muted,
+[data-theme="dark"] .text-ink\/45,
 [data-theme="dark"] .text-ink\/40,
 [data-theme="dark"] .text-ink\/35,
-[data-theme="dark"] .text-ink\/30 {
-  color: #8B9096 !important; /* Titanium — 5.98:1 contrast on #080A0D, passes WCAG AA 4.5:1 */
+[data-theme="dark"] .text-ink\/30,
+[data-theme="dark"] .text-muted,
+[data-theme="dark"] .text-neutral-500,
+[data-theme="dark"] .text-neutral-400,
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-gray-400,
+[data-theme="dark"] .text-stone-500,
+[data-theme="dark"] .text-stone-400,
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-foreground-muted {
+  color: #8B9096 !important;
+}
+
+/* ─── Tier 6: Disabled Text (#62676D) ────────────────────────────────────── */
+html.dark .text-ink\/25,
+html.dark .text-ink\/20,
+html.dark .text-ink\/15,
+html.dark .text-ink\/10,
+html.dark .text-neutral-300,
+html.dark .text-neutral-200,
+html.dark :disabled,
+html.dark [aria-disabled="true"],
+html.dark .disabled,
+html.dark .text-foreground-disabled,
+[data-theme="dark"] .text-ink\/25,
+[data-theme="dark"] .text-ink\/20,
+[data-theme="dark"] .text-ink\/15,
+[data-theme="dark"] .text-ink\/10,
+[data-theme="dark"] .text-neutral-300,
+[data-theme="dark"] .text-neutral-200,
+[data-theme="dark"] :disabled,
+[data-theme="dark"] [aria-disabled="true"],
+[data-theme="dark"] .disabled,
+[data-theme="dark"] .text-foreground-disabled {
+  color: #62676D !important;
+}
+
+/* ─── Tier 7: Accent / Active / Focus (#7DE1EA) ─────────────────────────── */
+html.dark .text-accent,
+html.dark .text-accent-soft,
+html.dark .text-cyan-400,
+html.dark .text-foreground-accent,
+[data-theme="dark"] .text-accent,
+[data-theme="dark"] .text-accent-soft,
+[data-theme="dark"] .text-cyan-400,
+[data-theme="dark"] .text-foreground-accent {
+  color: #7DE1EA !important;
+}
+
+/* ─── Tier 8: Error (#F87171) ────────────────────────────────────────────── */
+html.dark .text-danger,
+html.dark .text-red-400,
+html.dark .text-red-500,
+html.dark .text-red-600,
+[data-theme="dark"] .text-danger,
+[data-theme="dark"] .text-red-400,
+[data-theme="dark"] .text-red-500,
+[data-theme="dark"] .text-red-600 {
+  color: #F87171 !important;
+}
+
+/* ─── Tier 9: Success (#34D399) ──────────────────────────────────────────── */
+html.dark .text-success,
+html.dark .text-emerald-400,
+html.dark .text-emerald-500,
+html.dark .text-emerald-600,
+html.dark .text-green-400,
+html.dark .text-green-500,
+[data-theme="dark"] .text-success,
+[data-theme="dark"] .text-emerald-400,
+[data-theme="dark"] .text-emerald-500,
+[data-theme="dark"] .text-emerald-600,
+[data-theme="dark"] .text-green-400,
+[data-theme="dark"] .text-green-500 {
+  color: #34D399 !important;
+}
+
+/* ─── Inverted High-Contrast Accent Controls ─────────────────────────────── */
+html.dark .bg-accent,
+html.dark button.bg-accent,
+html.dark a.bg-accent,
+[data-theme="dark"] .bg-accent,
+[data-theme="dark"] button.bg-accent,
+[data-theme="dark"] a.bg-accent {
+  background-color: #7DE1EA !important;
+  color: #080A0D !important;
+}
+
+html.dark .bg-accent .text-bg,
+[data-theme="dark"] .bg-accent .text-bg {
+  color: #080A0D !important;
 }
 
 /* Dark mode borders — subtle metallic hairlines */
@@ -134,18 +450,6 @@ html.dark .border-ink\/25,
 [data-theme="dark"] .border-ink\/20,
 [data-theme="dark"] .border-ink\/25 {
   border-color: rgba(199, 204, 209, 0.24) !important;
-}
-
-/* Accent text and badges in dark mode */
-html.dark .text-accent,
-[data-theme="dark"] .text-accent {
-  color: #7DE1EA !important; /* Icy Cyan */
-}
-
-html.dark .bg-accent,
-[data-theme="dark"] .bg-accent {
-  background-color: #7DE1EA !important;
-  color: #080A0D !important;
 }
 
 html.dark .bg-accent\/10,
@@ -229,7 +533,7 @@ html.dark .prose-cf blockquote,
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: -2 !important;
   overflow: hidden;
   background:
     radial-gradient(ellipse 75% 60% at 50% 48%, rgba(199, 204, 209, 0.045) 0%, rgba(139, 144, 150, 0.028) 35%, rgba(18, 21, 24, 0.45) 70%, transparent 100%),
@@ -241,7 +545,7 @@ html.dark .prose-cf blockquote,
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: -1 !important;
   background: radial-gradient(
     circle 280px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
     rgba(199, 204, 209, 0.032) 0%,
@@ -415,4 +719,347 @@ html.reduced-motion .ubix-orb-success {
 .ubix-min-h-screen {
   min-height: 100vh;
 }
+
+/* ─── Form Controls & Inputs Contrast (WCAG AA) ──────────────────────────── */
+html.dark input,
+html.dark select,
+html.dark textarea,
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: #0D0F12 !important;
+  border-color: rgba(199, 204, 209, 0.18) !important;
+  color: #F5F7F8 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #8B9096 !important;
+  opacity: 1 !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus,
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+  border-color: #7DE1EA !important;
+  outline: 2px solid #7DE1EA !important;
+  outline-offset: 1px !important;
+}
+
+html.dark input:disabled,
+html.dark select:disabled,
+html.dark textarea:disabled,
+[data-theme="dark"] input:disabled,
+[data-theme="dark"] select:disabled,
+[data-theme="dark"] textarea:disabled {
+  background-color: #080A0D !important;
+  border-color: rgba(139, 144, 150, 0.10) !important;
+  color: #62676D !important;
+  cursor: not-allowed !important;
+}
+
+/* ─── Screen Preview for Printable Resume Document ───────────────────────── */
+@media screen {
+  html.dark #printable-resume,
+  [data-theme="dark"] #printable-resume {
+    background-color: #121518 !important;
+    border-color: rgba(139, 144, 150, 0.22) !important;
+    color: #F5F7F8 !important;
+    box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.6) !important;
+  }
+  html.dark #printable-resume h1,
+  html.dark #printable-resume h2,
+  html.dark #printable-resume h3,
+  html.dark #printable-resume h4,
+  [data-theme="dark"] #printable-resume h1,
+  [data-theme="dark"] #printable-resume h2,
+  [data-theme="dark"] #printable-resume h3,
+  [data-theme="dark"] #printable-resume h4 {
+    color: #F5F7F8 !important;
+  }
+  html.dark #printable-resume p,
+  html.dark #printable-resume li,
+  html.dark #printable-resume span,
+  [data-theme="dark"] #printable-resume p,
+  [data-theme="dark"] #printable-resume li,
+  [data-theme="dark"] #printable-resume span {
+    color: #C7CCD1 !important;
+  }
+  html.dark #printable-resume .border-neutral-900,
+  html.dark #printable-resume .border-neutral-800,
+  html.dark #printable-resume .border-neutral-700,
+  [data-theme="dark"] #printable-resume .border-neutral-900,
+  [data-theme="dark"] #printable-resume .border-neutral-800,
+  [data-theme="dark"] #printable-resume .border-neutral-700 {
+    border-color: rgba(139, 144, 150, 0.25) !important;
+  }
+}
+
+/* ─── Google Translate Widget Dark Pill ─────────────────────────────────── */
+.goog-te-gadget {
+  font-family: inherit !important;
+  color: transparent !important;
+  font-size: 0px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  line-height: 0 !important;
+}
+.goog-te-gadget > span {
+  display: none !important;
+}
+.goog-te-combo {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  color: #F4F7F8 !important;
+  background-color: #0D0F12 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 9999px !important;
+  padding: 3px 8px !important;
+  outline: none !important;
+  cursor: pointer !important;
+}
+.goog-te-combo:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  background-color: #121518 !important;
+}
+.goog-te-gadget-simple {
+  background-color: #0D0F12 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  border-radius: 9999px !important;
+  cursor: pointer !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+}
+.goog-te-gadget-simple:hover {
+  background-color: #121518 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+.goog-te-gadget-simple .goog-te-menu-value {
+  color: #F4F7F8 !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+}
+.goog-te-gadget-simple .goog-te-menu-value span {
+  border-left: none !important;
+  color: #F4F7F8 !important;
+  font-size: 11px !important;
+  font-family: inherit !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+}
+.goog-te-gadget-simple .goog-te-menu-value span:last-child {
+  font-size: 8px !important;
+  margin-left: 5px !important;
+  color: #A8B0B7 !important;
+}
+.goog-te-gadget-icon {
+  display: none !important;
+}
+.skiptranslate iframe,
+.goog-te-banner-frame {
+  display: none !important;
+}
+
+/* ─── UBIX Dark Chat Message & Voice Control System ─────────────────────── */
+.ubix-chat-msg-user {
+  background-color: #15191D !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #F4F7F8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+.ubix-chat-msg-assistant {
+  background-color: #0D0F12 !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  color: #F4F7F8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+}
+
+.ubix-chat-meta-bar {
+  color: #A8B0B7 !important;
+}
+
+.ubix-chat-subtext {
+  color: #737C84 !important;
+}
+
+.ubix-chat-btn-idle {
+  color: #737C84 !important;
+}
+.ubix-chat-btn-idle:hover {
+  background-color: #111418 !important;
+  color: #F4F7F8 !important;
+}
+
+.ubix-chat-btn-active {
+  background-color: #111418 !important;
+  color: #78E3EE !important;
+  border: 1px solid rgba(120, 227, 238, 0.3) !important;
+}
+
+.ubix-voice-btn-idle {
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  background-color: #111418 !important;
+  color: #C8CED3 !important;
+}
+.ubix-voice-btn-idle:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #F4F7F8 !important;
+  background-color: #15191D !important;
+}
+
+.ubix-voice-btn-listening {
+  border: 1px solid rgba(120, 227, 238, 0.5) !important;
+  background-color: rgba(120, 227, 238, 0.15) !important;
+  color: #78E3EE !important;
+  box-shadow: 0 0 12px rgba(120, 227, 238, 0.2) !important;
+  font-weight: 600 !important;
+}
+
+.ubix-voice-btn-busy {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background-color: #15191D !important;
+  color: #E3E7EA !important;
+  font-weight: 600 !important;
+}
+
+.ubix-voice-icon-idle {
+  color: #8B9298 !important;
+}
+
+.ubix-voice-icon-active {
+  color: #78E3EE !important;
+}
+
+/* ─── UBIX Thinking Orb Status Indicator (§11) ───────────────────────────── */
+.ubix-orb-glow {
+  filter: blur(4px);
+  opacity: 0.6;
+}
+.ubix-orb-glow-idle {
+  background: radial-gradient(circle, rgba(191, 197, 202, 0.4) 0%, transparent 70%);
+}
+.ubix-orb-glow-listening {
+  background: radial-gradient(circle, rgba(125, 225, 234, 0.65) 0%, transparent 75%);
+  animation: orbPulse 1.8s ease-in-out infinite;
+}
+.ubix-orb-glow-thinking {
+  background: radial-gradient(circle, rgba(125, 225, 234, 0.45) 0%, rgba(191, 197, 202, 0.3) 40%, transparent 75%);
+  animation: orbSpin 3s linear infinite;
+}
+.ubix-orb-glow-processing {
+  background: radial-gradient(circle, rgba(191, 197, 202, 0.5) 0%, transparent 70%);
+  animation: orbPulse 3s ease-in-out infinite;
+}
+.ubix-orb-glow-success {
+  background: radial-gradient(circle, rgba(125, 225, 234, 0.7) 0%, transparent 75%);
+}
+.ubix-orb-glow-error {
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.6) 0%, transparent 75%);
+}
+
+.ubix-orb-core-idle {
+  background: radial-gradient(circle at 35% 35%, #F1F4F5 0%, #BFC5CA 45%, #484E54 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.ubix-orb-core-listening {
+  background: radial-gradient(circle at 35% 35%, #F1F4F5 0%, #7DE1EA 40%, #15454C 100%);
+  border: 1px solid rgba(125, 225, 234, 0.6);
+  box-shadow: 0 0 10px rgba(125, 225, 234, 0.45);
+}
+.ubix-orb-core-thinking {
+  background: radial-gradient(circle at 40% 30%, #F1F4F5 0%, #BFC5CA 35%, #2B575D 85%, #0F1316 100%);
+  border: 1px solid rgba(125, 225, 234, 0.4);
+  animation: orbBreathing 2.2s ease-in-out infinite;
+}
+.ubix-orb-core-processing {
+  background: radial-gradient(circle at 35% 35%, #E1E6EB 0%, #858B91 50%, #202428 100%);
+  border: 1px solid rgba(191, 197, 202, 0.3);
+}
+.ubix-orb-core-success {
+  background: radial-gradient(circle at 35% 35%, #FFFFFF 0%, #7DE1EA 55%, #153C42 100%);
+  border: 1px solid rgba(125, 225, 234, 0.7);
+}
+.ubix-orb-core-error {
+  background: radial-gradient(circle at 35% 35%, #FCA5A5 0%, #EF4444 60%, #450A0A 100%);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+}
+
+.ubix-orb-highlight {
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.75) 0%, transparent 45%);
+}
+
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 0.9; }
+}
+
+@keyframes orbSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbBreathing {
+  0%, 100% { transform: scale(0.96); }
+  50% { transform: scale(1.04); }
+}
+
+/* ─── UBIX Metallic Surfaces & Glow Borders (§24) ────────────────────────── */
+.ubix-metallic-surface {
+  background: linear-gradient(145deg, rgba(21, 25, 29, 0.85) 0%, rgba(11, 14, 17, 0.92) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.ubix-metallic-surface:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(145deg, rgba(25, 30, 35, 0.9) 0%, rgba(13, 17, 21, 0.95) 100%);
+}
+
+.ubix-metallic-glow {
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.6), 0 0 16px -2px rgba(125, 225, 234, 0.12);
+  border-color: rgba(125, 225, 234, 0.25) !important;
+}
+
+.ubix-glow-border-idle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ubix-glow-border-idle:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.ubix-glow-border-active {
+  border: 1px solid rgba(125, 225, 234, 0.45);
+  box-shadow: 0 0 14px rgba(125, 225, 234, 0.18);
+}
+
+/* Accessibility: Disable orb motion under prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .ubix-orb-glow,
+  .ubix-orb-core {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+
 

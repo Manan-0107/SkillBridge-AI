@@ -1485,10 +1485,10 @@ export function AssistantHome({
                     key={m.id}
                     className={`flex flex-col animate-messageIn ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-ink/60 px-1">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium ubix-chat-meta-bar px-1">
                       <span>{isUser ? userDisplayName : "ubix Assistant"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] text-ink/40">
+                        <span className="text-[10px] ubix-chat-subtext">
                           {m.engine}
                         </span>
                       )}
@@ -1499,19 +1499,19 @@ export function AssistantHome({
                             onClick={() => toggleSpeech(m.id, m.text)}
                             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
                               speakingMsgId === m.id
-                                ? "bg-surface text-accent border border-accent/30"
-                                : "text-ink/60 hover:bg-surface hover:text-ink"
+                                ? "ubix-chat-btn-active"
+                                : "ubix-chat-btn-idle"
                             }`}
                             title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
                           >
                             {speakingMsgId === m.id ? (
                               <>
-                                <StopIcon className="w-2.5 h-2.5 text-accent" />
+                                <StopIcon className="w-2.5 h-2.5 ubix-voice-icon-active" />
                                 <span>Stop</span>
                               </>
                             ) : (
                               <>
-                                <SpeakerIcon className="w-2.5 h-2.5 text-ink/60" />
+                                <SpeakerIcon className="w-2.5 h-2.5 ubix-voice-icon-idle" />
                                 <span>Listen</span>
                               </>
                             )}
@@ -1526,7 +1526,7 @@ export function AssistantHome({
                                 setTimeout(() => setToastMessage(null), 2500);
                               }
                             }}
-                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-ink/60 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ubix-chat-btn-idle transition-colors cursor-pointer"
                             title="Copy response to clipboard"
                             aria-label="Copy response to clipboard"
                           >
@@ -1538,7 +1538,7 @@ export function AssistantHome({
                           </button>
                         </>
                       )}
-                      {m.time && <span className="text-ink/40">{m.time}</span>}
+                      {m.time && <span className="ubix-chat-subtext">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
@@ -1552,8 +1552,8 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink/[0.06] border border-ink/10 text-ink font-medium"
-                            : "bg-surface text-ink border border-ink/10"
+                            ? "ubix-chat-msg-user font-medium"
+                            : "ubix-chat-msg-assistant"
                         }`}
                       >
                         {isUser ? (
@@ -1724,19 +1724,16 @@ export function AssistantHome({
                     onClick={toggleListening}
                     aria-pressed={listening}
                     aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-accent/15 text-accent border border-accent/40 font-semibold"
+                        ? "ubix-voice-btn-listening"
                         : busy
-                        ? "bg-surface text-ink/80 border border-ink/20 font-semibold"
-                        : "border border-ink/12 bg-bg/80 text-ink/70 hover:bg-surface hover:text-ink"
+                        ? "ubix-voice-btn-busy"
+                        : "ubix-voice-btn-idle"
                     }`}
                     title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
                   >
-                    <UbixThinkingOrb
-                      state={listening ? "listening" : busy ? "processing" : "idle"}
-                      size="sm"
-                    />
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "ubix-voice-icon-active animate-pulse" : "ubix-voice-icon-idle"}`} />
 
                     <span>
                       {listening

@@ -45,7 +45,7 @@ const COUNTRY_CODES = [
   { code: "+82", country: "South Korea", flag: "🇰🇷" },
 ];
 
-export function AuthGate() {
+export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } = {}) {
   const { signIn, signInWithGoogle, signInWithGithub, signInWithPhone, voiceLanguage } = useApp();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [name, setName] = useState("");
@@ -446,426 +446,232 @@ export function AuthGate() {
   const isPasswordDone = password.length >= 6;
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="min-h-[calc(100vh-3rem)] w-full flex flex-col items-center justify-center px-4 py-8 sm:px-6 relative z-10">
+      <div className="w-full max-w-[420px] mx-auto space-y-6">
 
-      {/* ─── LEFT BRAND PANEL ─────────────────────────────────────────────────── */}
-      <div
-        className="hidden lg:flex lg:w-[42%] xl:w-[45%] flex-col justify-between bg-surface border-r border-ink/8 p-10 xl:p-14"
-        aria-hidden="true"
-      >
-        {/* Logo (Section 3: No AI logo, lowercase ubix in Space Grotesk, no icon) */}
-        <div className="flex items-center">
+        {onBackToLanding && (
+          <div className="w-full flex justify-start">
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="text-xs text-ink/50 hover:text-ink transition-colors cursor-pointer font-sans"
+            >
+              &larr; Back to overview
+            </button>
+          </div>
+        )}
+
+        {/* ─── Logo & Heading (Step 2, Step 7, Step 9) ──────────────────── */}
+        <div className="flex flex-col items-center text-center space-y-2">
           <span className="font-display text-2xl font-semibold tracking-[-0.03em] text-ink select-none">
             ubix
           </span>
-        </div>
-
-        {/* Headline */}
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl xl:text-4xl font-bold tracking-tight text-ink leading-tight">
-              Your AI career operating system.
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
+              {mode === "signup" ? "Create account" : "Welcome back"}
             </h1>
-            <p className="mt-4 text-sm text-ink/55 leading-relaxed max-w-sm">
-              Skill gap analysis, personalized roadmaps, resume ATS optimization, and interview practice — all connected by one intelligent assistant.
+            <p className="text-xs text-ink/50 leading-relaxed font-sans">
+              {mode === "signup"
+                ? "Set up your workspace."
+                : "Sign in to continue to your workspace."}
             </p>
           </div>
-
-          {/* Value props */}
-          <ul className="space-y-3" role="list">
-            {[
-              "Accessibility-first — built for blind and deaf users",
-              "Voice-native interaction with any question",
-              "AI roadmap from beginner to role-ready",
-              "ATS resume scoring against real benchmarks",
-              "Job discovery + mock interview practice",
-            ].map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-xs text-ink/65">
-                <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-accent/15 flex items-center justify-center">
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className="text-accent">
-                    <path d="M1.5 4L3 5.5L6.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                {item}
-              </li>
-            ))}
-          </ul>
         </div>
 
-        {/* Footer quote */}
-        <p className="text-[11px] text-ink/35">
-          &ldquo;The platform that thinks about your career so you can focus on your craft.&rdquo;
-        </p>
-      </div>
+        {/* ─── Mode Switcher: Create account vs Sign in ──────────────────── */}
+        <div className="flex rounded-xl border border-ink/12 bg-surface/80 p-1">
+          <button
+            type="button"
+            onClick={() => { setMode("signup"); setError(""); }}
+            className={`flex-1 rounded-lg py-2 text-xs font-semibold font-sans transition-all cursor-pointer ${
+              mode === "signup"
+                ? "bg-ink text-bg shadow-xs"
+                : "text-ink/60 hover:text-ink"
+            }`}
+          >
+            Create account
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("signin"); setError(""); }}
+            className={`flex-1 rounded-lg py-2 text-xs font-semibold font-sans transition-all cursor-pointer ${
+              mode === "signin"
+                ? "bg-ink text-bg shadow-xs"
+                : "text-ink/60 hover:text-ink"
+            }`}
+          >
+            Sign in
+          </button>
+        </div>
 
-      {/* ─── RIGHT FORM PANEL ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12 overflow-y-auto">
-        <div className="w-full max-w-md space-y-6">
+        {/* ─── Authentication Form (Step 2, Step 4, Step 5) ─────────────── */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="auth-name-input"
+                className="block text-xs font-medium text-ink font-sans"
+              >
+                Name
+              </label>
+              <input
+                ref={nameInputRef}
+                id="auth-name-input"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Alex Rivera"
+                className="w-full rounded-xl border border-ink/15 bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/50 focus:border-accent focus:outline-none transition-colors font-sans"
+              />
+            </div>
+          )}
 
-          {/* Mobile logo (hidden on large screens) */}
-          <div className="flex items-center lg:hidden">
-            <span className="font-display text-xl font-semibold tracking-[-0.03em] text-ink select-none">
-              ubix
+          <div className="space-y-1.5">
+            <label
+              htmlFor="auth-email-input"
+              className="block text-xs font-medium text-ink font-sans"
+            >
+              Email
+            </label>
+            <input
+              ref={emailInputRef}
+              id="auth-email-input"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="alex.rivera@example.com"
+              className="w-full rounded-xl border border-ink/15 bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/50 focus:border-accent focus:outline-none transition-colors font-sans"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="auth-password-input"
+                className="block text-xs font-medium text-ink font-sans"
+              >
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[11px] font-medium text-ink/60 hover:text-ink transition-colors cursor-pointer font-sans"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            <input
+              ref={passwordInputRef}
+              id="auth-password-input"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              className="w-full rounded-xl border border-ink/15 bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/50 focus:border-accent focus:outline-none transition-colors font-sans"
+            />
+          </div>
+
+          {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
+            <div
+              role="alert"
+              className="rounded-xl bg-danger/10 border border-danger/30 p-3 text-xs font-medium text-danger font-sans"
+            >
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            id="submit-btn"
+            disabled={loading}
+            className="w-full rounded-xl bg-accent text-bg font-semibold py-2.5 px-4 text-xs font-sans transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Processing...</span>
+              </>
+            ) : (
+              <span>{mode === "signup" ? "Create account" : "Sign in"}</span>
+            )}
+          </button>
+        </form>
+
+        {/* ─── Secondary Actions (Step 2) ───────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="relative flex items-center justify-center">
+            <div className="w-full border-t border-ink/10" />
+            <span className="absolute bg-bg px-3 text-[11px] font-medium text-ink/40 uppercase tracking-wider font-sans">
+              or continue
             </span>
           </div>
 
-          {/* Form heading */}
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-ink">
-              {mode === "signup" ? "Create your account" : "Welcome back"}
-            </h2>
-            <p className="mt-1 text-sm text-ink/50">
-              {mode === "signup"
-                ? "Free access. No credit card required."
-                : "Sign in to continue your career journey."}
-            </p>
-          </div>
-
-        {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-ink/10 bg-surface/60 p-5 sm:p-6">
-          {/* Mode Switcher: Create Account vs Sign In */}
-          <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
+          <div className="grid grid-cols-3 gap-2.5">
             <button
-              type="button"
-              onClick={() => setMode("signup")}
-              className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
-                mode === "signup" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
-              }`}
-            >
-              Create account
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("signin")}
-              className={`flex-1 rounded py-2 text-sm font-medium transition-colors ${
-                mode === "signin" ? "bg-ink text-paper shadow-sm" : "text-graphite hover:text-ink"
-              }`}
-            >
-              Sign in
-            </button>
-          </div>
-
-          {/* ─── Multi-Section Step Indicator ─────────────────────────────────── */}
-          <div className="mb-6 rounded-xl border border-ink/15 bg-bg p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/60 mb-2 font-mono">
-              Step-by-Step Entry:
-            </p>
-            <div className="flex items-center gap-1.5 text-xs">
-              {mode === "signup" && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSection("name");
-                      nameInputRef.current?.focus();
-                    }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                      activeSection === "name"
-                        ? "bg-ink text-bg shadow-xs"
-                        : isNameDone
-                        ? "bg-success/15 text-success border border-success/30"
-                        : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
-                    }`}
-                  >
-                    <span>{isNameDone ? "✓" : "1"}</span>
-                    <span>Name</span>
-                  </button>
-                  <span className="text-ink/30">→</span>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSection("email");
-                  emailInputRef.current?.focus();
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                  activeSection === "email"
-                    ? "bg-ink text-bg shadow-xs"
-                    : isEmailDone
-                    ? "bg-success/15 text-success border border-success/30"
-                    : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
-                }`}
-              >
-                <span>{isEmailDone ? "✓" : mode === "signup" ? "2" : "1"}</span>
-                <span>Email</span>
-              </button>
-
-              <span className="text-ink/30">→</span>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSection("password");
-                  passwordInputRef.current?.focus();
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                  activeSection === "password"
-                    ? "bg-ink text-bg shadow-xs"
-                    : isPasswordDone
-                    ? "bg-success/15 text-success border border-success/30"
-                    : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
-                }`}
-              >
-                <span>{isPasswordDone ? "✓" : mode === "signup" ? "3" : "2"}</span>
-                <span>Password</span>
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* ── SECTION 1: Full Name (Signup only) ────────────────────────── */}
-            {mode === "signup" && (
-              <div
-                className={`rounded-xl border p-3.5 transition-all ${
-                  activeSection === "name"
-                    ? "border-accent/40 bg-surface shadow-xs"
-                    : "border-ink/15 bg-surface/50 hover:border-ink/25"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <FieldLabel>
-                    Full Name {isNameDone && <span className="text-success font-bold ml-1">✓</span>}
-                  </FieldLabel>
-                  <button
-                    type="button"
-                    onClick={() => toggleFieldDictation("name")}
-                    title="Dictate Full Name with Voice"
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                      dictatingField === "name"
-                        ? "bg-accent text-bg animate-pulse"
-                        : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
-                    }`}
-                  >
-                    <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                    <span>{dictatingField === "name" ? "Listening..." : "Speak Name"}</span>
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    ref={nameInputRef}
-                    id="auth-name-input"
-                    name="name"
-                    type="text"
-                    aria-label="Full Name"
-                    className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
-                    value={name}
-                    onFocus={() => setActiveSection("name")}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Alex Rivera"
-                    required
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-ink/55 font-mono">
-                  {activeSection === "name"
-                    ? "Active Section: Type your name or click 'Speak Name'."
-                    : "Your display name across ubix."}
-                </p>
-              </div>
-            )}
-
-            {/* ── SECTION 2: Email Address ──────────────────────────────────── */}
-            <div
-              className={`rounded-xl border p-3.5 transition-all ${
-                activeSection === "email"
-                  ? "border-accent/40 bg-surface shadow-xs"
-                  : "border-ink/15 bg-surface/50 hover:border-ink/25"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <FieldLabel>
-                  Email Address {isEmailDone && <span className="text-success font-bold ml-1">✓</span>}
-                </FieldLabel>
-                <button
-                  type="button"
-                  onClick={() => toggleFieldDictation("email")}
-                  title="Dictate Email Address with Voice"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                    dictatingField === "email"
-                      ? "bg-accent text-bg animate-pulse"
-                      : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
-                  }`}
-                >
-                  <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                  <span>{dictatingField === "email" ? "Listening..." : "Speak Email"}</span>
-                </button>
-              </div>
-              <div className="relative">
-                <input
-                  ref={emailInputRef}
-                  id="auth-email-input"
-                  name="email"
-                  type="email"
-                  aria-label="Email Address"
-                  className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
-                  value={email}
-                  onFocus={() => setActiveSection("email")}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex.rivera@example.com"
-                  required
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-ink/55 font-mono">
-                {activeSection === "email"
-                  ? "Active Section: Type your email or click 'Speak Email'."
-                  : "Used for your roadmap alerts and account sign-in."}
-              </p>
-            </div>
-
-            {/* ── SECTION 3: Password ───────────────────────────────────────── */}
-            <div
-              className={`rounded-xl border p-3.5 transition-all ${
-                activeSection === "password"
-                  ? "border-accent/40 bg-surface shadow-xs"
-                  : "border-ink/15 bg-surface/50 hover:border-ink/25"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <FieldLabel>
-                  Password {isPasswordDone && <span className="text-success font-bold ml-1">✓</span>}
-                </FieldLabel>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-[11px] font-semibold text-ink/65 hover:text-ink underline cursor-pointer"
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleFieldDictation("password")}
-                    title="Dictate Password with Voice"
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                      dictatingField === "password"
-                        ? "bg-accent text-bg animate-pulse"
-                        : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
-                    }`}
-                  >
-                    <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                    <span>{dictatingField === "password" ? "Listening..." : "Speak Password"}</span>
-                  </button>
-                </div>
-              </div>
-              <div className="relative">
-                <input
-                  ref={passwordInputRef}
-                  id="auth-password-input"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  aria-label="Password"
-                  className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
-                  value={password}
-                  onFocus={() => setActiveSection("password")}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  required
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-ink/55 font-mono">
-                {activeSection === "password"
-                  ? "Active Section: Type or speak password. For security, it is never read aloud."
-                  : "Needs at least 6 characters (e.g. 123456)."}
-              </p>
-            </div>
-
-            {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
-              <div className="rounded-xl bg-danger/10 border border-danger/30 p-3 text-xs font-medium text-danger">
-                {error}
-              </div>
-            )}
-
-            <PrimaryButton
-              type="submit"
-              id="submit-btn"
-              disabled={loading}
-              className="w-full py-3 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <span>{mode === "signup" ? "Create account" : "Sign in"}</span>
-              )}
-            </PrimaryButton>
-          </form>
-
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-line" />
-            <span className="text-xs text-graphite uppercase tracking-wider">or continue with</span>
-            <div className="h-px flex-1 bg-line" />
-          </div>
-
-          {/* Multi-Provider Auth Buttons */}
-          <div className="grid gap-2.5 sm:grid-cols-3">
-            {/* Google Button */}
-            <GhostButton
               type="button"
               onClick={handleGoogleAuth}
               disabled={googleBusy}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+              className="flex items-center justify-center gap-2 rounded-xl border border-ink/12 bg-surface/80 py-2.5 px-3 text-xs font-semibold text-ink hover:border-ink/25 hover:bg-surface transition-all cursor-pointer font-sans"
             >
               <GoogleMark />
-              <span className="text-xs font-semibold">Google</span>
-            </GhostButton>
+              <span>Google</span>
+            </button>
 
-            {/* GitHub Button */}
-            <GhostButton
+            <button
               type="button"
               onClick={() => {
                 setError("");
                 setGithubModalOpen(true);
               }}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+              className="flex items-center justify-center gap-2 rounded-xl border border-ink/12 bg-surface/80 py-2.5 px-3 text-xs font-semibold text-ink hover:border-ink/25 hover:bg-surface transition-all cursor-pointer font-sans"
             >
               <GithubMark />
-              <span className="text-xs font-semibold">GitHub</span>
-            </GhostButton>
+              <span>GitHub</span>
+            </button>
 
-            {/* Phone Button */}
-            <GhostButton
+            <button
               type="button"
               onClick={() => {
                 setError("");
                 setPhoneStep("input");
                 setPhoneModalOpen(true);
               }}
-              className="w-full justify-center gap-2 bg-white shadow-sm hover:bg-neutral-50 border-line py-2.5"
+              className="flex items-center justify-center gap-2 rounded-xl border border-ink/12 bg-surface/80 py-2.5 px-3 text-xs font-semibold text-ink hover:border-ink/25 hover:bg-surface transition-all cursor-pointer font-sans"
             >
               <PhoneMark />
-              <span className="text-xs font-semibold">Phone</span>
-            </GhostButton>
+              <span>Phone</span>
+            </button>
           </div>
 
-          {/* Guest / Demo Access Button for Instant Evaluation */}
-          <div className="mt-4 pt-4 border-t border-line/60">
+          {/* Candidate Demo Access */}
+          <div className="pt-1">
             <button
               type="button"
               onClick={handleGuestLogin}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/80 py-2.5 px-3 text-xs font-semibold text-neutral-700 hover:bg-white hover:border-neutral-900 hover:text-neutral-900 transition-all shadow-2xs cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-ink/20 bg-surface/40 py-2.5 px-3 text-xs font-medium text-ink/75 hover:bg-surface/80 hover:border-ink/40 hover:text-ink transition-all cursor-pointer font-sans"
             >
-              <span>🚀 Explore Platform as Guest (Candidate Demo)</span>
+              <span>Explore as Guest</span>
             </button>
           </div>
 
-          <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
+          <p className="text-center text-[11px] text-ink/40 leading-relaxed font-sans">
             By continuing, you agree to ubix’s Terms of Service and Accessibility Standards.
           </p>
         </div>
-        </div>
+
       </div>
 
       {/* ─── Google OAuth Permission Screen Modal ─────────────────────────────── */}
@@ -1157,7 +963,7 @@ function GoogleMark() {
 
 function GithubMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0 text-neutral-900">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0 text-ink">
       <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
     </svg>
   );
@@ -1165,7 +971,7 @@ function GithubMark() {
 
 function PhoneMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-emerald-600">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-accent">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
     </svg>
   );

@@ -29,6 +29,7 @@ export function FloatingControlBar() {
     setAccessibilityProfile,
     voiceConsentStatus,
     setVoiceConsentStatus,
+    user,
   } = useApp();
 
   const [voiceState, setVoiceState] = useState<AssistantVoiceState>("idle");
@@ -199,6 +200,20 @@ export function FloatingControlBar() {
     speaking: "bg-success/10 border-success/30",
     error: "bg-danger/10 border-danger/30",
   }[voiceState];
+
+  // Step 10: Do not display persistent floating voice widget on authentication screen
+  if (!user) {
+    return (
+      <div
+        id="voice-assistant-announcer"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {liveCaption ? `${speakerLabel}: ${liveCaption}` : `Voice assistant is currently ${voiceState}.`}
+      </div>
+    );
+  }
 
   return (
     <>

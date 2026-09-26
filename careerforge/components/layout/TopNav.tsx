@@ -17,8 +17,6 @@ import {
   ChevronDown,
   Menu,
   X,
-  Sun,
-  Moon,
 } from "lucide-react";
 
 interface NavLinkItem {
@@ -41,28 +39,7 @@ export function TopNav() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isDark, setIsDark] = useState<boolean>(true);
   const profileRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const nextDark = !isDark;
-    setIsDark(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-      localStorage.setItem("ubix_theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.removeAttribute("data-theme");
-      localStorage.setItem("ubix_theme", "light");
-    }
-  };
 
   const getActiveTab = (): FeatureId | "assistant" => {
     if (pathname.startsWith("/resume")) return "resume";
@@ -98,6 +75,12 @@ export function TopNav() {
   };
 
   const avatarChar = user?.name ? user.name.charAt(0).toUpperCase() : "U";
+
+  // Section 3 & 19: Do NOT show main application navigation on auth / sign-in pages
+  const isAuthPage = (!user && pathname === "/") || pathname.startsWith("/auth") || pathname.startsWith("/login") || pathname.startsWith("/signup");
+  if (isAuthPage) {
+    return null;
+  }
 
   return (
     <header
@@ -145,7 +128,7 @@ export function TopNav() {
                     title={link.label}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
                       isActive
-                        ? "bg-bg text-ink shadow-sm border border-ink/12 font-semibold"
+                        ? "bg-bg text-ink shadow-sm border border-accent/40 shadow-[0_0_12px_rgba(120,227,238,0.15)] font-semibold"
                         : "text-ink/55 hover:text-ink hover:bg-bg/60"
                     }`}
                   >
@@ -157,18 +140,8 @@ export function TopNav() {
             </div>
           </nav>
 
-          {/* Right: Theme Toggle + Language + Profile */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Theme Toggle (Section 5: Preserve light theme / allow toggle) */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-              title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-              className="flex items-center justify-center h-7 w-7 rounded-full border border-ink/12 bg-surface/80 text-ink/70 hover:text-ink hover:border-ink/25 transition-all cursor-pointer"
-            >
-              {isDark ? <Sun size={13} strokeWidth={2} /> : <Moon size={13} strokeWidth={2} />}
-            </button>
+          {/* Right: Language + Profile */}
+          <div className="flex items-center gap-2.5 shrink-0">
 
             {/* Language widget — small */}
             <div className="hidden sm:block scale-90 origin-right opacity-80 hover:opacity-100 transition-opacity">

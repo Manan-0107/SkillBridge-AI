@@ -28,6 +28,7 @@ export function FloatingControlBar() {
     setAccessibilityProfile,
     voiceConsentStatus,
     setVoiceConsentStatus,
+    user,
   } = useApp();
 
   const [voiceState, setVoiceState] = useState<AssistantVoiceState>("idle");
@@ -201,6 +202,20 @@ export function FloatingControlBar() {
       : settings.captionSize === "large"
       ? "text-base sm:text-lg"
       : "text-sm sm:text-base";
+
+  // Step 10: Do not display persistent floating voice widget on authentication screen
+  if (!user) {
+    return (
+      <div
+        id="voice-assistant-announcer"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {ariaAnnouncement}
+      </div>
+    );
+  }
 
   return (
     <>

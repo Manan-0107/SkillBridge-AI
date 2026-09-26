@@ -389,7 +389,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...dynamicResponse,
       thinking: (dynamicResponse as any).thinking || defaultCognitiveThinking,
-      engine: "CareerForge Autonomous AI Brain",
+      engine: "ubix Assistant",
     });
   } catch (error) {
     console.error("[Assistant API] Fatal error:", error);
@@ -412,7 +412,7 @@ function getSystemPrompt(
   currentEntity?: any,
   accessibilityPrefs?: any
 ) {
-  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
+  return `You are ubix Assistant, the central Career Assistant + Accessibility Assistant + Workspace Assistant for ubix.
 You are collaborating with ${userName}, whose target role is "${role}".
 Current Active Page: "${currentPage}".
 ${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
@@ -1637,27 +1637,46 @@ To find the smallest figurine in the center, you open each outer doll (recursive
   }
 
   // ─── J. Greetings & General Inquiries
+  const isGreeting =
+    /^(hi|hello|hey|greetings|hola|bonjour|salut|namaste|kem cho|नमस्ते|કેમ છો)\b/i.test(query) ||
+    lower === "hi" ||
+    lower === "hello" ||
+    lower === "hey" ||
+    lower === "namaste";
+
   if (isFrench) {
     return {
-      reply: `Bonjour ${userName} ! 👋 Je suis votre assistant de carrière et d'accessibilité CareerForge. Je peux vous aider à rédiger ou analyser votre CV, trouver des cours, des projets open-source et des emplois en direct. Comment souhaitez-vous continuer ?`,
+      reply: isGreeting
+        ? `Bonjour ${userName} ! 👋 Je suis votre assistant ubix. Je peux vous aider à rédiger ou analyser votre CV, explorer votre feuille de route, trouver des cours et des projets. Comment puis-je vous aider ?`
+        : `Concernant "${query}" : je peux vous fournir des explications détaillées ou vous aider à relier cela à votre feuille de route, vos compétences ou votre CV sur ubix. Que souhaitez-vous approfondir ?`,
     };
   }
 
   if (isGujarati) {
     return {
-      reply: `નમસ્તે ${userName}! 👋 હું કરિયરફોર્જ AI સહાયક છું. હું તમારા રેઝ્યૂમે નિર્માણ, સ્કિલ ગેપ એનાલિસિસ, કોર્સ, પ્રોજેક્ટ્સ અને જોબ્સ શોધવામાં મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`,
+      reply: isGreeting
+        ? `નમસ્તે ${userName}! 👋 હું ubix સહાયક છું. હું તમારા રેઝ્યૂમે, સ્કિલ ગેપ રોડમેપ, કોર્સ અને જોબ્સ માટે મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`
+        : `તમારા પ્રશ્ન "${query}" સંદર્ભે: હું તમને આ વિષય સમજાવી શકું છું અથવા તમારા કરિયર રોડમેપ અને કૌશલ્યો સાથે જોડી શકું છું. તમે આગળ શું જાણવા માંગો છો?`,
     };
   }
 
   if (isHindi) {
     return {
-      reply: `नमस्ते ${userName}! 👋 मैं करियरफोर्ज AI सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, कोर्स, प्रोजेक्ट और लाइव नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`,
+      reply: isGreeting
+        ? `नमस्ते ${userName}! 👋 मैं ubix सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, रोडमैप और नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+        : `"${query}" के बारे में: मैं इस पर विस्तृत जानकारी दे सकता हूँ या इसे आपके ubix रोडमैप और कौशल विकास से जोड़ सकता हूँ। आप क्या जानना चाहेंगे?`,
+    };
+  }
+
+  if (isGreeting) {
+    return {
+      reply: voiceMode
+        ? `Hello ${userName}! I'm your ubix assistant. How can I assist you with your career roadmap, interview practice, or resume today?`
+        : `Hello ${userName}! 👋 I'm your **ubix Assistant**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Roadmaps**: Tier-by-tier learning milestones and project blueprints\n• **Interview Practice**: Instant interactive drills with targeted feedback\n• **Accessible Voice Guidance**: Hands-free navigation across the entire workspace\n\nWhat would you like to explore today?`,
     };
   }
 
   return {
-    reply: voiceMode
-      ? `Hello ${userName}! I'm your CareerForge assistant. I can guide you through resume audits, skill gap roadmaps, curated courses, projects, or local jobs. Where shall we begin?`
-      : `Hello ${userName}! 👋 I'm your **CareerForge AI Career & Accessibility Co-Pilot**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Learning**: High-impact courses and portfolio project blueprints\n• **Verified Job Opportunities**: Matching positions and automated email alerts\n• **Accessible Voice Guidance**: Hands-free navigation across the entire platform\n\nWhat would you like to explore today?`,
+    reply: `Regarding **"${query}"**:\n\nI can provide insights on this topic or help you connect it to your **${role}** roadmap, skill verification, practice questions, or resume highlights in ubix.\n\nWould you like an in-depth breakdown, code example, or roadmap alignment?`,
   };
 }
