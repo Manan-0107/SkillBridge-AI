@@ -47,13 +47,20 @@ html.dark,
   --ubix-titanium: #8B9096;
   --ubix-silver: #C7CCD1;
   --ubix-white: #F5F7F8;
-  --ubix-cyan: #7DE1EA;
+
+  /* ─── PRIMARY ACCENT — single authored source of truth ───────────────────
+     Only this line may declare the cyan hex value.
+     All other accent aliases below are derived from this one decision.    */
+  --accent: #7DE1EA;
+
+  /* Derived representations — do NOT manually set these to another value */
+  --ubix-cyan: var(--accent);
+  --color-accent: var(--accent);
+  --color-accent-soft: #9CE7EE;  /* secondary authored value, distinct shade */
 
   --color-bg: #080A0D;
   --color-surface: #121518;
   --color-ink: #F5F7F8;
-  --color-accent: #7DE1EA;
-  --color-accent-soft: #9CE7EE;
 
   /* ─── Semantic Text Hierarchy Variables ─────────────────────────────────── */
   --foreground-primary: #F5F7F8;
@@ -62,7 +69,6 @@ html.dark,
   --foreground-secondary: #A5ABB2;
   --muted-foreground: #8B9096;
   --disabled-foreground: #62676D;
-  --accent: #7DE1EA;
   --background: #080A0D;
   --surface: #121518;
   --border: #292D32;

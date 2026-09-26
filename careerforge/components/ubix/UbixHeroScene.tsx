@@ -21,6 +21,16 @@ export function UbixHeroScene() {
     const container = containerRef.current;
     if (!container || typeof window === "undefined") return;
 
+    // ─── Read primary accent from CSS single source of truth ─────────────────
+    // --accent is the single authored hex value in ubix-effects.css.
+    // THREE.Color accepts a hex string directly, so no conversion is needed.
+    const rawAccent = getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim();
+    // Fallback only if CSS variable is unavailable (e.g. SSR escape hatch)
+    const accentHex = rawAccent.startsWith("#") ? rawAccent : "#7DE1EA";
+    const accentColor = new THREE.Color(accentHex);
+
     // Check prefers-reduced-motion
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isMobile = window.innerWidth < 768;
@@ -58,9 +68,10 @@ export function UbixHeroScene() {
     scene.add(knotMesh);
 
     // Inner Wireframe Latitude Ring (Technical Precision Layer)
+    // Color consumed from CSS --accent source, not hardcoded
     const ringGeometry = new THREE.IcosahedronGeometry(2.1, isMobile ? 1 : 2);
     const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0x7DE1EA,
+      color: accentColor,
       wireframe: true,
       transparent: true,
       opacity: 0.14,
@@ -77,8 +88,8 @@ export function UbixHeroScene() {
     keyLight.position.set(3, 4, 5);
     scene.add(keyLight);
 
-    // Subtle Icy Cyan Reflected Rim Light
-    const cyanRimLight = new THREE.DirectionalLight(0x7DE1EA, 1.8);
+    // Subtle Icy Cyan Reflected Rim Light — color from CSS --accent source
+    const cyanRimLight = new THREE.DirectionalLight(accentColor, 1.8);
     cyanRimLight.position.set(-4, -2, -2);
     scene.add(cyanRimLight);
 
