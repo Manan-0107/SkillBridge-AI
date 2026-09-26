@@ -11,30 +11,39 @@ import {
   Mic,
   MessageSquare,
   Target,
-  Map,
+  BookOpen,
   Code2,
   FileText,
   Briefcase,
-  TrendingUp,
+  Map,
+  Sparkles,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
+import { CareerNodeId } from "@/components/ubix/UbixCareerGraph";
 
-// ─── Three.js Hero — dynamically imported, SSR disabled, landing-page only ───
-const UbixHeroScene = dynamic(
-  () => import("@/components/ubix/UbixHeroScene").then((m) => m.UbixHeroScene),
+// ── Dynamic 3D Career Graph Scene (SSR: false) ───────────────────────────────
+const UbixCareerGraph = dynamic(
+  () => import("@/components/ubix/UbixCareerGraph").then((m) => m.UbixCareerGraph),
   {
     ssr: false,
     loading: () => (
       <div
-        className="w-full h-[380px] sm:h-[460px] lg:h-[540px] flex items-center justify-center"
+        className="w-full h-[620px] sm:h-[720px] lg:h-[820px] rounded-3xl border border-white/[0.07] bg-[#080A0D] flex items-center justify-center"
         aria-hidden="true"
       >
-        <div className="w-16 h-16 rounded-full border border-white/10 bg-[#121518]" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full border border-white/10 bg-[#121518] animate-pulse flex items-center justify-center">
+            <span className="font-display font-bold text-white text-xs">ubix</span>
+          </div>
+          <span className="text-xs font-mono text-[#8B9096]">Loading Career Universe...</span>
+        </div>
       </div>
     ),
   }
 );
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 interface LandingPageProps {
   onEnter: () => void;
   onGuestLogin: () => void;
@@ -48,7 +57,7 @@ type AssistantState = {
   orbPulse: boolean;
 };
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ── Data ─────────────────────────────────────────────────────────────────────
 const ASSISTANT_STATES: AssistantState[] = [
   { id: "idle",       label: "Idle",             sublabel: "Ready when you are.",             orbColor: "#8B9096",  orbPulse: false },
   { id: "listening",  label: "Listening\u2026",   sublabel: "Voice input active. Speak now.",  orbColor: "var(--accent)",  orbPulse: true  },
@@ -58,36 +67,40 @@ const ASSISTANT_STATES: AssistantState[] = [
   { id: "action",     label: "Action completed", sublabel: "Task executed successfully.",      orbColor: "#34D399",  orbPulse: false },
 ];
 
-const JOURNEY_STEPS = [
-  { label: "Goal",       desc: "Define aspiration & seniority tier" },
-  { label: "AI Profile", desc: "Synthesise background & strengths" },
-  { label: "Skill Gaps", desc: "Compute exact missing proficiencies" },
-  { label: "Roadmap",    desc: "Generate sequenced milestone curriculum" },
-  { label: "Learning",   desc: "Master verified fundamentals" },
-  { label: "Practice",   desc: "Targeted coding & behavioral drills" },
-  { label: "Progress",   desc: "Benchmark readiness in real-time" },
-  { label: "Resume",     desc: "Engineer ATS-optimised documents" },
-  { label: "Jobs",       desc: "Match with vetted employers" },
-  { label: "Growth",     desc: "Sustain lifelong mastery" },
+const SCATTER_VS_SYSTEM = [
+  {
+    phase: "1. Resume Profile",
+    scattered: "Static PDF updated once a year. ATS keywords guessed blindly.",
+    system: "Living profile intelligence continuously updated by verified work.",
+  },
+  {
+    phase: "2. Skill Gaps",
+    scattered: "Gaps stay invisible until you receive rejection emails.",
+    system: "Exact missing proficiencies computed against live employer benchmarks.",
+  },
+  {
+    phase: "3. Adaptive Learning",
+    scattered: "Unfocused 60-hour video playlists with 90% redundant content.",
+    system: "Laser-focused micro-curriculums addressing only your identified gaps.",
+  },
+  {
+    phase: "4. Practical Validation",
+    scattered: "Isolated coding drills disconnected from real interview scenarios.",
+    system: "Targeted engineering & behavioral drills validating job readiness.",
+  },
+  {
+    phase: "5. Job Opportunities",
+    scattered: "Mass-applying to hundreds of unvetted listings with low response rates.",
+    system: "Direct matching to verified roles where your demonstrated skills qualify you.",
+  },
 ];
 
-const ECOSYSTEM_NODES = [
-  { icon: <Map size={16} />,      label: "Roadmap"  },
-  { icon: <Target size={16} />,   label: "Skills"   },
-  { icon: <Code2 size={16} />,    label: "Learning" },
-  { icon: <Code2 size={16} />,    label: "Practice" },
-  { icon: <FileText size={16} />, label: "Resume"   },
-  { icon: <Briefcase size={16} />,label: "Jobs"     },
-  { icon: <TrendingUp size={16} />,label: "Progress"},
-  { icon: <Volume2 size={16} />,  label: "Voice"    },
-];
-
-// ─── IntersectionObserver reveal hook ────────────────────────────────────────
+// ── IntersectionObserver reveal hook ────────────────────────────────────────
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setVisible(true);
       return;
     }
@@ -111,7 +124,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(18px)",
+        transform: visible ? "translateY(0)" : "translateY(16px)",
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
     >
@@ -137,61 +150,63 @@ function StateOrb({ color, pulse }: { color: string; pulse: boolean }) {
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ── Main Component ───────────────────────────────────────────────────────────
 export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
   const [activeState, setActiveState] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check, { passive: true });
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = setInterval(
       () => setActiveState((s) => (s + 1) % ASSISTANT_STATES.length),
-      2200
+      2400
     );
     return () => clearInterval(id);
   }, []);
 
   const state = ASSISTANT_STATES[activeState];
 
-  return (
-    <div className="w-full text-ink selection:bg-surface selection:text-ink">
+  const handleNodeAction = (nodeId: CareerNodeId | "core") => {
+    onEnter();
+  };
 
-      {/* ── NAV ─────────────────────────────────────────────────────────────── */}
+  return (
+    <div className="w-full text-ink selection:bg-surface selection:text-ink min-h-screen bg-[#080A0D]">
+
+      {/* ── HEADER / NAV ────────────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-40 w-full border-b border-white/[0.06] bg-[#080A0D]/90 backdrop-blur-md"
         role="banner"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <a
-            href="#"
-            aria-label="ubix home"
-            className="font-display text-xl font-bold tracking-tight text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D] rounded-sm"
-          >
-            ubix
-          </a>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <a
+              href="#"
+              aria-label="ubix home"
+              className="font-display text-xl font-bold tracking-tight text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] rounded-sm"
+            >
+              ubix
+            </a>
+            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full border border-white/10 bg-[#121518] text-[10px] font-mono text-[#8B9096]">
+              CONNECTED SYSTEM
+            </span>
+          </div>
 
           <nav
             aria-label="Landing navigation"
-            className="hidden md:flex items-center gap-6 text-sm text-[#8B9096] font-medium font-sans"
+            className="hidden md:flex items-center gap-7 text-xs font-medium font-mono text-[#8B9096]"
           >
             {[
-              { href: "#product",      label: "Product"        },
-              { href: "#how-it-works", label: "How it works"   },
-              { href: "#accessibility",label: "Accessibility"  },
-            ].map((l) => (
+              { href: "#career-graph",  label: "01 // CAREER GRAPH" },
+              { href: "#system-arch",   label: "02 // ARCHITECTURE" },
+              { href: "#intelligence",  label: "03 // INTELLIGENCE" },
+              { href: "#accessibility", label: "04 // ACCESSIBILITY"},
+            ].map((link) => (
               <a
-                key={l.href}
-                href={l.href}
-                className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] rounded-sm"
+                key={link.href}
+                href={link.href}
+                className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm tracking-wider uppercase"
               >
-                {l.label}
+                {link.label}
               </a>
             ))}
           </nav>
@@ -201,7 +216,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
               id="nav-signin-btn"
               type="button"
               onClick={onEnter}
-              className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-[#C7CCD1] hover:text-white transition-colors cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D]"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-[#C7CCD1] hover:text-white transition-colors cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
             >
               Sign In
             </button>
@@ -209,7 +224,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
               id="nav-getstarted-btn"
               type="button"
               onClick={onEnter}
-              className="px-4 py-1.5 rounded-lg bg-[--accent] text-[#080A0D] text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D]"
+              className="px-4 py-1.5 rounded-lg bg-[--accent] text-[#080A0D] text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
             >
               Get Started
             </button>
@@ -217,207 +232,194 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         </div>
       </header>
 
-      {/* ── SECTION 1: HERO ──────────────────────────────────────────────────── */}
-      <section id="hero" aria-labelledby="hero-heading" className="relative pt-16 pb-24 sm:pt-24 sm:pb-32 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+      {/* ── HERO: THE LIVING CAREER GRAPH (THE CORE UBIX EXPERIENCE) ────────── */}
+      <section
+        id="career-graph"
+        aria-labelledby="hero-title"
+        className="relative pt-8 pb-16 sm:pt-12 sm:pb-24 overflow-hidden"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
 
-            {/* Copy */}
-            <div className="lg:col-span-6 space-y-7 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-[#121518] text-xs text-[#8B9096] font-medium font-sans">
-                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[--accent]" style={{ animation: "ubix-orb-pulse 2s ease-in-out infinite" }} />
-                Quiet, intelligent career infrastructure
-              </div>
-
-              <h1 id="hero-heading" className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.04]">
-                ubix
-              </h1>
-
-              <p className="text-base sm:text-lg text-[#A5ABB2] font-sans leading-relaxed max-w-md mx-auto lg:mx-0">
-                Goal &rarr; Skills &rarr; Learning &rarr; Practice &rarr; Resume &rarr; Opportunities &rarr; Growth
-              </p>
-
-              <p className="text-sm text-[#8B9096] font-sans leading-relaxed max-w-md mx-auto lg:mx-0">
-                One focused workspace that closes the gap between where you are and where you want to be.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 pt-1">
-                <button
-                  id="hero-getstarted-btn"
-                  type="button"
-                  onClick={onEnter}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-[--accent] text-[#080A0D] text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D]"
-                >
-                  <span>Get Started</span>
-                  <ArrowRight size={16} aria-hidden="true" />
-                </button>
-                <button
-                  id="hero-guest-btn"
-                  type="button"
-                  onClick={onGuestLogin}
-                  className="w-full sm:w-auto inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/10 text-sm font-semibold text-[#C7CCD1] hover:border-white/20 hover:text-white transition-all cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D]"
-                >
-                  Try as Guest
-                </button>
-              </div>
-            </div>
-
-            {/* Three.js hero — mobile gets static placeholder */}
-            <div className="lg:col-span-6 relative flex items-center justify-center" aria-hidden="true">
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{ background: "radial-gradient(ellipse 70% 60% at 50% 50%, rgba(125,225,234,0.055) 0%, transparent 70%)" }}
+          {/* Core Concept Header */}
+          <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-8 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-[#121518] text-xs text-[#8B9096] font-medium font-sans">
+              <span
+                aria-hidden="true"
+                className="w-1.5 h-1.5 rounded-full bg-[--accent]"
+                style={{ animation: "ubix-orb-pulse 2s ease-in-out infinite" }}
               />
-              <div className="relative w-full rounded-2xl border border-white/[0.06] bg-[#0D0F12] overflow-hidden">
-                {isMobile ? (
-                  <div className="w-full h-64 flex items-center justify-center">
-                    <div
-                      className="w-24 h-24 rounded-full border border-white/[0.08]"
-                      style={{ background: "radial-gradient(circle at 35% 35%, #1A1F24 0%, #0D0F12 100%)" }}
-                    />
-                  </div>
-                ) : (
-                  <UbixHeroScene />
-                )}
-              </div>
+              Quiet, intelligent career infrastructure
             </div>
 
-          </div>
-        </div>
-      </section>
+            <h1
+              id="hero-title"
+              className="font-display text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.05]"
+            >
+              YOUR CAREER.
+              <br />
+              <span className="text-white/90">CONNECTED.</span>
+            </h1>
 
-      {/* ── SECTION 2: PROBLEM ───────────────────────────────────────────────── */}
-      <section id="problem" aria-labelledby="problem-heading" className="py-20 border-t border-white/[0.06]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <Reveal>
-            <span className="text-xs uppercase tracking-widest text-[--accent] font-semibold font-sans">The real problem</span>
-          </Reveal>
-          <Reveal delay={80}>
-            <h2 id="problem-heading" className="mt-4 font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-tight">
-              Career tools are scattered. The path is unclear.
-            </h2>
-          </Reveal>
-          <Reveal delay={160}>
-            <p className="mt-6 text-[#A5ABB2] text-base sm:text-lg leading-relaxed font-sans">
-              Most technologists navigate career growth across a dozen disconnected tools — one for resumes, another for courses, a third for practice problems. Nobody tells you which skills are actually missing, or in what order to learn them.
-            </p>
-          </Reveal>
-          <Reveal delay={220}>
-            <p className="mt-4 text-[#8B9096] text-sm sm:text-base leading-relaxed font-sans">
-              Skill gaps stay invisible until a rejection letter arrives. Interview preparation happens in isolation from resume engineering. Job discovery ignores what you have actually built. And for candidates with accessibility needs, every extra tool is another barrier.
-            </p>
-          </Reveal>
-          <Reveal delay={280}>
-            <p className="mt-4 text-[#8B9096] text-sm sm:text-base leading-relaxed font-sans">
-              ubix replaces the scatter with one connected system that knows your background, your goal, and your exact gaps — and works with you to close them.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── SECTION 3: JOURNEY ───────────────────────────────────────────────── */}
-      <section id="how-it-works" aria-labelledby="journey-heading" className="py-20 border-t border-white/[0.06] bg-[#0D0F12]/50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center max-w-2xl mx-auto mb-14">
-            <span className="text-xs uppercase tracking-widest text-[--accent] font-semibold font-sans">How it works</span>
-            <h2 id="journey-heading" className="mt-4 font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
-              One continuous career system
-            </h2>
-            <p className="mt-3 text-[#8B9096] text-sm leading-relaxed font-sans">
-              Every stage connects. What you learn updates your roadmap. What you build updates your resume. Progress is never siloed.
-            </p>
-          </Reveal>
-
-          {/* Pipeline */}
-          <div role="list" aria-label="Career journey stages">
-            {/* Desktop: horizontal row */}
-            <div className="hidden lg:flex items-start gap-0 relative">
-              <div aria-hidden="true" className="absolute top-[1.25rem] left-5 right-5 h-px bg-white/[0.06]" />
-              {JOURNEY_STEPS.map((step, idx) => (
-                <Reveal key={step.label} delay={idx * 50} className="relative flex-1 flex flex-col items-center text-center px-1">
-                  <div role="listitem">
-                    <div
-                      aria-hidden="true"
-                      className="relative z-10 mx-auto w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-mono font-bold mb-3"
-                      style={{
-                        borderColor: idx === 0 ? "var(--accent)" : "rgba(255,255,255,0.08)",
-                        color:       idx === 0 ? "var(--accent)" : "#8B9096",
-                        background: "#080A0D",
-                      }}
-                    >
-                      {String(idx + 1).padStart(2, "0")}
-                    </div>
-                    <h3 className="text-[11px] font-semibold text-white font-display mb-1">{step.label}</h3>
-                    <p className="text-[10px] text-[#62676D] leading-snug font-sans">{step.desc}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-
-            {/* Mobile: vertical list */}
-            <div className="lg:hidden space-y-3">
-              {JOURNEY_STEPS.map((step, idx) => (
-                <Reveal key={step.label} delay={idx * 40}>
-                  <div
-                    role="listitem"
-                    className="flex items-start gap-4 p-3.5 rounded-xl border border-white/[0.06] bg-[#0D0F12]"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-[10px] font-mono font-bold"
-                      style={{
-                        borderColor: idx === 0 ? "var(--accent)" : "rgba(255,255,255,0.08)",
-                        color:       idx === 0 ? "var(--accent)" : "#8B9096",
-                      }}
-                    >
-                      {String(idx + 1).padStart(2, "0")}
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-semibold text-white font-display">{step.label}</h3>
-                      <p className="text-xs text-[#8B9096] font-sans mt-0.5">{step.desc}</p>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
+            <div className="pt-1">
+              <p className="text-xs sm:text-sm font-mono tracking-wide text-[--accent]">
+                Resume &rarr; Skills &rarr; Learning &rarr; Practice &rarr; Opportunities
+              </p>
+              <p className="text-xs sm:text-sm text-[#8B9096] font-sans mt-2 max-w-xl mx-auto">
+                ubix is not a collection of disconnected features. It is a living, continuous career system.
+                Interact with the graph or select any node to enter.
+              </p>
             </div>
           </div>
 
-          <Reveal delay={200} className="mt-12 text-center">
+          {/* 3D Career Graph Interactive System */}
+          <div className="relative w-full">
+            <UbixCareerGraph
+              onCtaClick={handleNodeAction}
+            />
+          </div>
+
+          {/* Quick entry action bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
             <button
-              id="journey-getstarted-btn"
+              id="hero-getstarted-btn"
               type="button"
               onClick={onEnter}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[--accent] text-[#080A0D] text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[#080A0D]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-[--accent] text-[#080A0D] text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
             >
-              <span>Start your journey</span>
-              <ArrowRight size={15} aria-hidden="true" />
+              <span>Enter Career System</span>
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+            <button
+              id="hero-guest-btn"
+              type="button"
+              onClick={onGuestLogin}
+              className="w-full sm:w-auto inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/10 text-sm font-semibold text-[#C7CCD1] hover:border-white/20 hover:text-white transition-all cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+            >
+              Try as Guest
+            </button>
+          </div>
+
+          {/* Accessibility & Keyboard Quick Guide */}
+          <p className="text-center text-[11px] font-mono text-[#62676D] mt-4">
+            Navigation: Press <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">Tab</kbd> to cycle nodes, <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">1-7</kbd> for direct focus, <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">Esc</kbd> to reset view.
+          </p>
+
+        </div>
+      </section>
+
+      {/* ── SECTION 2: THE CONNECTED ARCHITECTURE ───────────────────────────── */}
+      <section
+        id="system-arch"
+        aria-labelledby="arch-heading"
+        className="py-24 border-t border-white/[0.06] bg-[#0A0D11]/60"
+      >
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal className="text-center max-w-3xl mx-auto mb-16">
+            <span className="text-xs uppercase tracking-widest text-[--accent] font-mono font-semibold">
+              The Architecture
+            </span>
+            <h2
+              id="arch-heading"
+              className="mt-3 font-display text-3xl sm:text-5xl font-bold tracking-tight text-white leading-tight"
+            >
+              Why a connected system changes everything
+            </h2>
+            <p className="mt-4 text-[#8B9096] text-sm sm:text-base leading-relaxed font-sans">
+              Most career tools exist in isolated silos. When tools don't communicate, candidates waste months on the wrong courses, submit misaligned resumes, and discover skill deficiencies only after rejection.
+            </p>
+          </Reveal>
+
+          {/* Comparison Matrix: Scattered vs Connected */}
+          <div className="space-y-3">
+            {SCATTER_VS_SYSTEM.map((row, idx) => (
+              <Reveal key={row.phase} delay={idx * 60}>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 sm:p-5 rounded-2xl border border-white/[0.06] bg-[#0D0F12] items-center">
+                  <div className="md:col-span-3">
+                    <span className="text-xs font-mono text-[--accent] font-semibold">
+                      {row.phase}
+                    </span>
+                  </div>
+
+                  <div className="md:col-span-4 p-3 rounded-xl bg-[#14181D]/60 border border-white/[0.04]">
+                    <span className="text-[10px] font-mono text-[#8B9096] uppercase block mb-1">
+                      Scattered Tools
+                    </span>
+                    <p className="text-xs text-[#A5ABB2] font-sans leading-relaxed">
+                      {row.scattered}
+                    </p>
+                  </div>
+
+                  <div className="hidden md:flex md:col-span-1 justify-center text-[#62676D]">
+                    <ArrowRight size={16} />
+                  </div>
+
+                  <div className="md:col-span-4 p-3 rounded-xl bg-[#080A0D] border border-[--accent]/20">
+                    <span className="text-[10px] font-mono text-[--accent] uppercase block mb-1">
+                      ubix Connected System
+                    </span>
+                    <p className="text-xs text-white font-sans leading-relaxed">
+                      {row.system}
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Pipeline Summary Banner */}
+          <Reveal delay={200} className="mt-14 p-6 sm:p-8 rounded-3xl border border-white/[0.08] bg-[#0D0F12] text-center">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#8B9096]">
+              Continuous feedback loop
+            </span>
+            <h3 className="font-display text-xl sm:text-2xl font-bold text-white mt-1 mb-2">
+              Every action informs the next step
+            </h3>
+            <p className="text-xs sm:text-sm text-[#8B9096] max-w-2xl mx-auto font-sans leading-relaxed mb-6">
+              What you learn updates your roadmap. What you practice updates your readiness score. What you build updates your ATS resume. Opportunities unlock automatically.
+            </p>
+            <button
+              type="button"
+              onClick={onEnter}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-white text-xs font-bold font-sans transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+            >
+              <span>Explore The System</span>
+              <ArrowRight size={14} aria-hidden="true" />
             </button>
           </Reveal>
         </div>
       </section>
 
-      {/* ── SECTION 4: ASSISTANT ─────────────────────────────────────────────── */}
-      <section id="assistant" aria-labelledby="assistant-heading" className="py-20 border-t border-white/[0.06]">
+      {/* ── SECTION 3: THE INTELLIGENCE LAYER ───────────────────────────────── */}
+      <section
+        id="intelligence"
+        aria-labelledby="intelligence-heading"
+        className="py-24 border-t border-white/[0.06]"
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
 
             <div className="lg:col-span-5 space-y-5">
               <Reveal>
-                <span className="text-xs uppercase tracking-widest text-[--accent] font-semibold font-sans">ubix Assistant</span>
+                <span className="text-xs uppercase tracking-widest text-[--accent] font-mono font-semibold">
+                  Intelligence Layer
+                </span>
               </Reveal>
               <Reveal delay={80}>
-                <h2 id="assistant-heading" className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
-                  Intelligence that answers, acts, and adapts
+                <h2
+                  id="intelligence-heading"
+                  className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white leading-tight"
+                >
+                  The Assistant connects every dot
                 </h2>
               </Reveal>
               <Reveal delay={140}>
                 <p className="text-[#A5ABB2] text-sm leading-relaxed font-sans">
-                  The ubix Assistant handles general questions, research, technical deep-dives, coding walkthroughs, skill-gap analysis, roadmap generation, resume feedback, and job discovery — all in one conversation, with full voice and keyboard access.
+                  The ubix Assistant is not an isolated chatbot widget. It is the intelligence layer spanning the entire career graph — synthesizing your profile, computing missing skills, generating roadmaps, evaluating code, and tailoring resume bullet points in real-time.
                 </p>
               </Reveal>
               <Reveal delay={200}>
-                <p className="text-[#8B9096] text-sm leading-relaxed font-sans">
-                  Every assistant state carries a visible text label. Color and animation supplement the label — they never replace it.
+                <p className="text-[#8B9096] text-xs sm:text-sm leading-relaxed font-sans">
+                  Every state communicates clearly. When processing complex career inferences, visible text and live feedback keep you in complete control.
                 </p>
               </Reveal>
             </div>
@@ -428,7 +430,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
                   className="rounded-2xl border border-white/[0.06] bg-[#0D0F12] overflow-hidden"
                   aria-label="Assistant state demonstration"
                 >
-                  {/* Active state — aria-live for screen readers */}
+                  {/* Active state display */}
                   <div
                     className="p-6 border-b border-white/[0.06] flex items-start gap-4"
                     aria-live="polite"
@@ -436,14 +438,17 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
                   >
                     <StateOrb color={state.orbColor} pulse={state.orbPulse} />
                     <div>
-                      {/* MANDATORY visible text label */}
                       <p className="text-sm font-semibold text-white font-display">{state.label}</p>
                       <p className="text-xs text-[#8B9096] mt-0.5 font-sans">{state.sublabel}</p>
                     </div>
                   </div>
 
                   {/* All 6 state selector buttons */}
-                  <div role="group" aria-label="Select assistant state" className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-white/[0.04]">
+                  <div
+                    role="group"
+                    aria-label="Select assistant state"
+                    className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-white/[0.04]"
+                  >
                     {ASSISTANT_STATES.map((s, idx) => (
                       <button
                         key={s.id}
@@ -459,7 +464,6 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
                         }`}
                       >
                         <StateOrb color={activeState === idx ? s.orbColor : "#292D32"} pulse={false} />
-                        {/* Textual label always visible */}
                         <p className="text-[10px] mt-1.5 font-medium leading-tight">{s.label}</p>
                       </button>
                     ))}
@@ -472,37 +476,54 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         </div>
       </section>
 
-      {/* ── SECTION 5: ACCESSIBILITY ─────────────────────────────────────────── */}
-      <section id="accessibility" aria-labelledby="a11y-heading" className="py-20 border-t border-white/[0.06] bg-[#0D0F12]/50">
+      {/* ── SECTION 4: ACCESSIBILITY FIRST ──────────────────────────────────── */}
+      <section
+        id="accessibility"
+        aria-labelledby="a11y-heading"
+        className="py-24 border-t border-white/[0.06] bg-[#0A0D11]/60"
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
 
             <div className="lg:col-span-5 space-y-5">
               <Reveal>
-                <span className="text-xs uppercase tracking-widest text-[--accent] font-semibold font-sans">Accessibility-first</span>
+                <span className="text-xs uppercase tracking-widest text-[--accent] font-mono font-semibold">
+                  Accessibility-First
+                </span>
               </Reveal>
               <Reveal delay={80}>
-                <h2 id="a11y-heading" className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
+                <h2
+                  id="a11y-heading"
+                  className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white leading-tight"
+                >
                   Engineered for complete independence
                 </h2>
               </Reveal>
               <Reveal delay={140}>
                 <p className="text-[#A5ABB2] text-sm leading-relaxed font-sans">
-                  Most career platforms treat accessibility as a retrofit. ubix is designed from the start so that blind, low-vision, deaf, and motor-impaired technologists operate with full autonomy — no workarounds required.
+                  Most platforms treat accessibility as a secondary patch. ubix is architected from day one so that blind, low-vision, deaf, and motor-impaired technologists operate with total autonomy across every tool.
                 </p>
+              </Reveal>
+              <Reveal delay={200}>
+                <div className="pt-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[--accent]/30 bg-[#080A0D] text-xs font-mono text-[--accent]">
+                    <ShieldCheck size={14} />
+                    <span>WCAG 2.1 AA COMPLIANT ARCHITECTURE</span>
+                  </div>
+                </div>
               </Reveal>
             </div>
 
             <div className="lg:col-span-7 space-y-3">
               {[
-                { icon: <Volume2 size={18} />,     title: "Voice interaction & dictation",    desc: "Hands-free workspace navigation, route dispatch, audiobook roadmap playback, and real-time voice dictation across all inputs." },
-                { icon: <MessageSquare size={18} />,title: "Captions & transcripts",           desc: "Every audio output and assistant response is available as simultaneous on-screen text for deaf and hard-of-hearing users." },
-                { icon: <Eye size={18} />,          title: "Screen-reader support",            desc: "Full ARIA 1.2 semantic tree, live regions for all assistant state changes, and descriptive labels on every interactive control." },
-                { icon: <Mic size={18} />,          title: "Spoken confirmation",              desc: "Critical actions — submit, navigate, delete — are confirmed aloud so users with visual impairments always know what happened." },
-                { icon: <Sliders size={18} />,      title: "Visible state feedback",           desc: "Every assistant state has a permanent visible text label. Color supplements; it never replaces text." },
-                { icon: <Keyboard size={18} />,     title: "Full keyboard accessibility",      desc: "Zero keyboard traps. Every route, assistant action, and settings control is reachable without a pointer device." },
+                { icon: <Volume2 size={18} />,      title: "Voice interaction & dictation", desc: "Hands-free workspace navigation, route dispatch, audiobook roadmap playback, and real-time voice dictation." },
+                { icon: <MessageSquare size={18} />, title: "Captions & transcripts",        desc: "Every audio output and assistant response is available as simultaneous on-screen text for deaf and hard-of-hearing users." },
+                { icon: <Eye size={18} />,           title: "Screen-reader support",         desc: "Full ARIA 1.2 semantic tree, live regions for state updates, and descriptive accessible labels on all controls." },
+                { icon: <Mic size={18} />,           title: "Spoken confirmation",           desc: "Critical actions — submit, navigate, delete — are confirmed aloud for users with visual impairments." },
+                { icon: <Sliders size={18} />,       title: "Visible state feedback",        desc: "Every assistant state features permanent visible text labels. Colors supplement; they never substitute text." },
+                { icon: <Keyboard size={18} />,      title: "Complete keyboard autonomy",    desc: "Zero keyboard traps. Every node, route, and assistant tool is fully operable without a mouse." },
               ].map((item, idx) => (
-                <Reveal key={item.title} delay={idx * 55}>
+                <Reveal key={item.title} delay={idx * 50}>
                   <div className="flex items-start gap-4 p-4 rounded-xl border border-white/[0.06] bg-[#080A0D]">
                     <span className="shrink-0 mt-0.5 text-[--accent]" aria-hidden="true">{item.icon}</span>
                     <div>
@@ -518,80 +539,82 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         </div>
       </section>
 
-      {/* ── SECTION 6: ECOSYSTEM ─────────────────────────────────────────────── */}
-      <section id="ecosystem" aria-labelledby="ecosystem-heading" className="py-20 border-t border-white/[0.06]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center max-w-2xl mx-auto mb-14">
-            <span className="text-xs uppercase tracking-widest text-[--accent] font-semibold font-sans">Ecosystem</span>
-            <h2 id="ecosystem-heading" className="mt-4 font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
-              One product. Nine connected layers.
+      {/* ── FINAL SECTION: SIGNATURE PAYOFF & CTA ───────────────────────────── */}
+      <section
+        id="final-cta"
+        aria-labelledby="cta-heading"
+        className="py-28 border-t border-white/[0.06] relative overflow-hidden"
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(circle at 50% 50%, rgba(125,225,234,0.06) 0%, transparent 70%)",
+          }}
+        />
+
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center relative z-10 space-y-6">
+          <Reveal>
+            <span className="text-2xl font-bold font-display text-[#8B9096]">ubix</span>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <h2
+              id="cta-heading"
+              className="font-display text-4xl sm:text-6xl font-bold tracking-tight text-white leading-tight"
+            >
+              YOUR CAREER.
+              <br />
+              CONNECTED.
             </h2>
-            <p className="mt-3 text-[#8B9096] text-sm leading-relaxed font-sans">
-              The Assistant sits at the centre as the intelligence layer connecting every capability. Nothing operates in isolation.
+          </Reveal>
+
+          <Reveal delay={140}>
+            <p className="text-xs sm:text-sm font-mono text-[--accent] tracking-wider uppercase">
+              Resume &rarr; Skills &rarr; Learning &rarr; Practice &rarr; Opportunities
             </p>
           </Reveal>
 
-          <div
-            className="max-w-3xl mx-auto"
-            role="img"
-            aria-label="Ecosystem diagram: Assistant at centre connected to Roadmap, Skills, Learning, Practice, Resume, Jobs, Progress, and Voice"
-          >
-            {/* Centre node */}
-            <Reveal className="flex justify-center mb-8">
-              <div
-                className="relative w-28 h-28 rounded-full border-2 flex flex-col items-center justify-center bg-[#0D0F12] text-center"
-                style={{ borderColor: "var(--accent)", boxShadow: "0 0 40px -8px rgba(125,225,234,0.15)" }}
-              >
-                <span className="text-[--accent]" aria-hidden="true"><MessageSquare size={22} /></span>
-                <span className="text-xs font-bold text-white mt-1 font-display">Assistant</span>
-                <span className="text-[9px] text-[--accent] font-sans mt-0.5 leading-tight">intelligence layer</span>
-              </div>
-            </Reveal>
-
-            {/* Outer nodes */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {ECOSYSTEM_NODES.map((node, idx) => (
-                <Reveal key={node.label} delay={idx * 45}>
-                  <div className="flex flex-col items-center gap-2 p-4 rounded-xl border border-white/[0.06] bg-[#0D0F12] text-center">
-                    <span className="text-[#8B9096]" aria-hidden="true">{node.icon}</span>
-                    <span className="text-xs font-medium text-[#C7CCD1] font-sans">{node.label}</span>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── SECTION 7: CTA ───────────────────────────────────────────────────── */}
-      <section id="cta" aria-labelledby="cta-heading" className="py-24 border-t border-white/[0.06]">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
-          <Reveal>
-            <h2 id="cta-heading" className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white">
-              Start building your career infrastructure.
-            </h2>
+          <Reveal delay={200}>
+            <p className="text-sm text-[#8B9096] max-w-md mx-auto font-sans leading-relaxed">
+              Step out of the scatter. Enter the career system designed to guide, validate, and accelerate your trajectory.
+            </p>
           </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-8">
+
+          <Reveal delay={240}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
               <button
                 id="cta-getstarted-btn"
                 type="button"
                 onClick={onEnter}
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-[--accent] text-[#080A0D] text-base font-bold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-4 focus-visible:ring-offset-[#080A0D]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[--accent] text-[#080A0D] text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] focus-visible:ring-offset-4 focus-visible:ring-offset-[#080A0D]"
               >
-                <span>Get Started</span>
+                <span>Get Started Now</span>
                 <ArrowRight size={18} aria-hidden="true" />
+              </button>
+
+              <button
+                id="cta-guest-btn"
+                type="button"
+                onClick={onGuestLogin}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl border border-white/10 text-sm font-semibold text-[#C7CCD1] hover:border-white/20 hover:text-white transition-all cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+              >
+                Explore as Guest
               </button>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
-      <footer role="contentinfo" className="border-t border-white/[0.06] py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#62676D] font-sans">
-          <span className="font-display font-bold text-[#8B9096]">ubix</span>
-          <div className="flex flex-wrap items-center justify-center gap-5">
+      {/* ── FOOTER ──────────────────────────────────────────────────────────── */}
+      <footer role="contentinfo" className="border-t border-white/[0.06] py-8 bg-[#06080A]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#62676D] font-sans">
+          <div className="flex items-center gap-3">
+            <span className="font-display font-bold text-[#8B9096]">ubix</span>
+            <span>&bull;</span>
+            <span className="font-mono text-[11px]">Connected Career Infrastructure</span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-5 font-mono text-[11px]">
             <span>Dark-mode environment</span>
             <span>WCAG 2.1 AA</span>
             <span>Privacy-first</span>
@@ -600,7 +623,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         </div>
       </footer>
 
-      {/* Inline keyframe — avoids modifying any authenticated stylesheet */}
+      {/* Inline keyframe for pulse animation without modifying global sheets */}
       <style>{`
         @keyframes ubix-orb-pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
