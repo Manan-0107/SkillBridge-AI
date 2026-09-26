@@ -17,7 +17,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 export const supabaseConfigured =
-  supabaseUrl.startsWith("https://") && supabaseAnonKey.length > 10;
+  supabaseUrl.startsWith("https://") &&
+  !supabaseUrl.includes("placeholder.supabase.co") &&
+  supabaseAnonKey.length > 20 &&
+  !supabaseAnonKey.includes("placeholder");
 
 // Export a real client when configured, otherwise a typed stub that no-ops.
 export const supabase: SupabaseClient | null = supabaseConfigured

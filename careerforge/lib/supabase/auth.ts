@@ -49,7 +49,7 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
     // Proceed to session token validation
   }
 
-  // 2. Try cryptographically signed HMAC session token (`cf_session` or `cf_uid`)
+  // 2. Try cryptographically signed HMAC session token (`cf_session` or signed `cf_uid`)
   const tokenCandidate = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(LEGACY_COOKIE)?.value;
   if (tokenCandidate) {
     const payload = verifySessionToken(tokenCandidate);
@@ -63,53 +63,8 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
     }
   }
 
-  // 3. Check legacy cookie `cf_uid`: Validate against database when configured
-  const legacyEmail = cookieStore.get(LEGACY_COOKIE)?.value?.toLowerCase().trim();
-  if (legacyEmail && legacyEmail.includes("@")) {
-    // Basic format check
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(legacyEmail)) {
-      return null;
-    }
-
-    const { supabaseConfigured } = await import("@/lib/supabase");
-
-    if (supabaseConfigured) {
-      try {
-        const client = createSupabaseServerClient();
-        const queryPromise = client
-          .from("users")
-          .select("id, email, name")
-          .eq("email", legacyEmail)
-          .maybeSingle();
-
-        const { data: dbUser } = (await Promise.race([
-          queryPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error("DB timeout")), 1200)),
-        ])) as any;
-
-        if (dbUser && dbUser.id && dbUser.email) {
-          return {
-            id: dbUser.id,
-            email: dbUser.email,
-            name: dbUser.name || null,
-            isGuest: false,
-          };
-        }
-      } catch {
-        return null;
-      }
-    } else {
-      // Local dev / test environments without remote Supabase credentials
-      const crypto = await import("crypto");
-      return {
-        id: `user_${crypto.createHash("sha256").update(legacyEmail).digest("hex").slice(0, 16)}`,
-        email: legacyEmail,
-        name: legacyEmail.split("@")[0],
-        isGuest: false,
-      };
-    }
-  }
-
+  // 3. Security Contract: Plain, unsigned email cookies (e.g. raw cf_uid=email@example.com)
+  // are strictly rejected. Only cryptographically verified sessions are authoritative.
   return null;
 }
 

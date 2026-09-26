@@ -133,9 +133,110 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const displayName = extractDisplayName(cleanEmail, name);
+    let displayName = extractDisplayName(cleanEmail, name);
+    let effectiveUserId: string = "";
 
-    // 4. Record/Upsert User in Database (with fast timeout)
+    // 4. Credential Verification & Authentication (Part 18)
+    const { supabaseConfigured, supabase } = await import("@/lib/supabase");
+    const {
+      registerCredential,
+      authenticateCredential,
+      isEmailRegistered,
+    } = await import("@/lib/security/credentials");
+
+    if (mode === "signup") {
+      let sbSuccess = false;
+      if (supabaseConfigured && supabase) {
+        try {
+          const { data: sbData, error: sbErr } = await supabase.auth.signUp({
+            email: cleanEmail,
+            password,
+            options: { data: { name: displayName } },
+          });
+          if (!sbErr && sbData.user) {
+            effectiveUserId = sbData.user.id;
+            sbSuccess = true;
+          } else if (sbErr) {
+            const msg = sbErr.message || "";
+            if (msg.includes("already registered") || msg.includes("already exists")) {
+              return createApiErrorResponse(
+                "CONFLICT",
+                "An account with this email address already exists. Please sign in.",
+                requestId,
+                { statusCode: 409 }
+              );
+            }
+            if (!msg.includes("fetch failed") && !msg.includes("NetworkError")) {
+              return createApiErrorResponse(
+                "BAD_REQUEST",
+                msg,
+                requestId,
+                { statusCode: 400 }
+              );
+            }
+          }
+        } catch {
+          // Supabase network unreachable; fall back to local credential store
+        }
+      }
+
+      if (!sbSuccess) {
+        if (isEmailRegistered(cleanEmail)) {
+          return createApiErrorResponse(
+            "CONFLICT",
+            "An account with this email address already exists. Please sign in.",
+            requestId,
+            { statusCode: 409 }
+          );
+        }
+        effectiveUserId = `user_${crypto.createHash("sha256").update(cleanEmail).digest("hex").slice(0, 16)}`;
+      }
+
+      // Securely register salted password hash
+      registerCredential({
+        userId: effectiveUserId,
+        email: cleanEmail,
+        name: displayName,
+        password,
+      });
+    } else {
+      // mode === "signin"
+      let authenticated = false;
+
+      if (supabaseConfigured && supabase) {
+        try {
+          const { data: sbData, error: sbErr } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password,
+          });
+          if (!sbErr && sbData.user) {
+            effectiveUserId = sbData.user.id;
+            displayName = sbData.user.user_metadata?.name || displayName;
+            authenticated = true;
+          }
+        } catch {
+          // Fall back to local credential check
+        }
+      }
+
+      if (!authenticated) {
+        const cred = authenticateCredential(cleanEmail, password);
+        if (!cred) {
+          // Reject incorrect password or unregistered user
+          return createApiErrorResponse(
+            "UNAUTHORIZED",
+            "Invalid email or password.",
+            requestId,
+            { statusCode: 401 }
+          );
+        }
+        effectiveUserId = cred.userId;
+        displayName = cred.name || displayName;
+        authenticated = true;
+      }
+    }
+
+    // 5. Record/Upsert User in Database (with fast timeout)
     let dbId: string | null = null;
     try {
       const dbPromise = upsertUser({
@@ -153,9 +254,7 @@ export async function POST(req: NextRequest) {
       console.warn("[Auth API] Database recording note:", dbErr);
     }
 
-    const effectiveUserId = dbId || `user_${crypto.createHash("sha256").update(cleanEmail).digest("hex").slice(0, 16)}`;
-
-    // 5. Create Cryptographically Signed Session Token
+    // 6. Create Cryptographically Signed Session Token
     const sessionToken = createSignedSessionToken({
       userId: effectiveUserId,
       email: cleanEmail,

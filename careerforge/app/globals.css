@@ -253,14 +253,6 @@ body {
   margin: 1em 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
 
 /* thin numbered-step connector used by the roadmap module */
 .step-line {
@@ -358,6 +350,9 @@ html.high-contrast textarea {
 }
 
 html.high-contrast .bg-white,
+html.high-contrast .bg-surface,
+html.high-contrast .bg-card,
+html.high-contrast .bg-bg,
 html.high-contrast .bg-paper,
 html.high-contrast .bg-mist,
 html.high-contrast .bg-paper\/90,
@@ -367,6 +362,8 @@ html.high-contrast .bg-white\/95 {
 }
 
 html.high-contrast .text-ink,
+html.high-contrast .text-muted,
+html.high-contrast .text-subtle,
 html.high-contrast .text-graphite,
 html.high-contrast .text-graphite\/55,
 html.high-contrast .text-graphite\/60,
@@ -387,6 +384,14 @@ html.large-text select {
 }
 
 html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -397,4 +402,5 @@ html.reduced-motion *,
     scroll-behavior: auto !important;
   }
 }
+
 

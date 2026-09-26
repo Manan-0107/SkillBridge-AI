@@ -31,7 +31,7 @@ export interface RateLimitResult {
 
 // Default presets by category
 export const RATE_LIMIT_PRESETS = {
-  auth: { limit: 10, windowMs: 60 * 1000 }, // 10 attempts per minute
+  auth: { limit: 60, windowMs: 60 * 1000 }, // 60 attempts per minute
   aiChat: { limit: 30, windowMs: 60 * 1000 }, // 30 queries per minute
   audioTranscribe: { limit: 15, windowMs: 60 * 1000 }, // 15 audio uploads per minute
   AUDIO_TRANSCRIBE: { limit: 15, windowMs: 60 * 1000 },

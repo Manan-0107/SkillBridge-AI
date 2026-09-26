@@ -57,7 +57,7 @@ export interface LiveJob {
   source: "LinkedIn" | "Adzuna" | "SerpApi" | "Arbeitnow" | "Remotive" | "Jobicy";
   salary: SalaryRange;
   accessibility: AccessibilityProfile;
-  distanceKm?: number;
+  distanceKm?: number | null;
   isLocalMatch?: boolean;
   isVerifiedReal: boolean;
 }
@@ -176,20 +176,15 @@ export async function GET(req: NextRequest) {
     const locationQuery = locationParam.toLowerCase();
 
     // Attach proximity distance & filter
-    const processedJobs = allJobs.map((job, idx) => {
+    const processedJobs = allJobs.map((job) => {
       const jobLoc = (job.location || "").toLowerCase();
-      let distanceKm: number | undefined = undefined;
+      let distanceKm: number | null = null;
       let isLocalMatch = false;
 
       if (locationQuery && locationQuery !== "all" && locationQuery !== "remote") {
         if (jobLoc.includes(locationQuery) || locationQuery.includes(jobLoc)) {
           isLocalMatch = true;
-          distanceKm = Math.round(1.5 + (idx % 10) * 1.2);
         }
-      }
-
-      if (userLat !== null && userLon !== null && isLocalMatch) {
-        distanceKm = distanceKm || 3.2;
       }
 
       return {
@@ -458,7 +453,7 @@ async function fetchLinkedInJobs(
         accessibility: generateAccessibilityProfile(arrangement.remote, title),
         isLocalMatch: true,
         isVerifiedReal: true,
-        distanceKm: Math.round(1.2 + (i % 8) * 1.5),
+        distanceKm: null,
       });
     }
 
@@ -900,17 +895,24 @@ function calculateLocalizedSalary(
 
 function generateAccessibilityProfile(remote: boolean, description = ""): AccessibilityProfile {
   const desc = (description || "").toLowerCase();
-  const screenReaderReady = true;
+  const screenReaderReady =
+    desc.includes("screen reader") ||
+    desc.includes("screen-reader") ||
+    desc.includes("assistive technology") ||
+    desc.includes("wcag") ||
+    desc.includes("aria") ||
+    desc.includes("accessible");
   const asyncFriendly = remote || desc.includes("async") || desc.includes("flexible");
-  const flexibleHours = remote || desc.includes("flexible") || desc.includes("balance");
-  const neurodivergentFriendly = desc.includes("inclusive") || desc.includes("diversity") || remote;
+  const flexibleHours = desc.includes("flexible hours") || desc.includes("flexible work") || desc.includes("balance");
+  const neurodivergentFriendly = desc.includes("inclusive") || desc.includes("diversity") || desc.includes("neurodivergent");
 
-  const tags = ["Screen-Reader Friendly"];
+  const tags: string[] = [];
+  if (screenReaderReady) tags.push("Screen-Reader Ready");
   if (asyncFriendly) tags.push("Async Remote");
   if (flexibleHours) tags.push("Flexible Hours");
   if (neurodivergentFriendly) tags.push("Assistive-Tech Accommodated");
 
-  const score = 85 + (remote ? 8 : 0) + (tags.length >= 3 ? 5 : 2);
+  const score = 70 + (remote ? 5 : 0) + (tags.length * 6);
 
   return {
     score: Math.min(score, 99),

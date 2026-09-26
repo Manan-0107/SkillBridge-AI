@@ -924,7 +924,16 @@ export function AssistantHome({
         }),
       });
 
-      if (!res.ok) throw new Error("Chat request failed");
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => null);
+        const errorMsg =
+          errorJson?.error?.message ||
+          errorJson?.message ||
+          (res.status === 401
+            ? "Please sign in to interact with the assistant."
+            : `AI Assistant request failed (${res.status})`);
+        throw new Error(errorMsg);
+      }
       const data = await res.json();
 
       if (data.resumeDraftState) {
@@ -1042,15 +1051,19 @@ export function AssistantHome({
         }, 3200);
         setActiveTimer(timer);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[AssistantHome] LLM call error:", err);
+      const errorMessageText =
+        err?.message && err.message !== "Chat request failed"
+          ? err.message
+          : "I encountered an issue connecting to the AI assistant service. Please check your connection and try again.";
       const fallbackMessages: Msg[] = [
         ...nextMessages,
         {
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          text: "I am right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+          text: `⚠️ ${errorMessageText}`,
         },
       ];
       saveConversations(

@@ -29,11 +29,21 @@ const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GUEST_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getSessionSecret(): string {
-  const secret =
-    process.env.SESSION_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "careerforge-cryptographic-session-hmac-salt-production-fallback";
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "FATAL SECURITY ERROR: SESSION_SECRET must be explicitly configured in production. Silent fallback is prohibited."
+      );
+    }
+    // Explicit development-only salt (never used when NODE_ENV === 'production')
+    return "careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars";
+  }
+  if (process.env.NODE_ENV === "production" && secret.length < 32) {
+    throw new Error(
+      "FATAL SECURITY ERROR: Production SESSION_SECRET must be at least 32 characters long."
+    );
+  }
   return secret;
 }
 
