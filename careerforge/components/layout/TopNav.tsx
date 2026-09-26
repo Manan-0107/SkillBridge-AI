@@ -76,6 +76,9 @@ export function TopNav() {
 
   const avatarChar = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
+  // Don't render nav on the auth/login screen
+  if (!user) return null;
+
   return (
     <header
       className="sticky top-0 z-40 w-full"

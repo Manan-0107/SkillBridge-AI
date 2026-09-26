@@ -48,9 +48,7 @@ export default function RootLayout({
                 Skip to voice assistant controls
               </a>
               <TopNav />
-              <div className="pb-6">
-                {children}
-              </div>
+              {children}
               <FloatingControlBar />
               <AccessibilityProfileModal />
               <VoiceModeDetector />

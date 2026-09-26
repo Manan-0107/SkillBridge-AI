@@ -445,18 +445,86 @@ export function AuthGate() {
   const isPasswordDone = password.length >= 6;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-8 sm:px-6 sm:py-12">
-      <div className="w-full max-w-md space-y-6">
-        {/* Top Header */}
-        <div className="text-center">
-          <p className="font-display text-4xl italic text-ink">CareerForge</p>
-          <p className="mt-2 text-sm text-graphite">
-            AI-powered career intelligence, skill gap discovery, and roadmap engineering.
-          </p>
+    <div className="flex min-h-screen bg-bg">
+
+      {/* ─── LEFT BRAND PANEL ─────────────────────────────────────────────────── */}
+      <div
+        className="hidden lg:flex lg:w-[42%] xl:w-[45%] flex-col justify-between bg-surface border-r border-ink/8 p-10 xl:p-14"
+        aria-hidden="true"
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-white text-xs font-black shadow-sm">
+            CF
+          </div>
+          <span className="font-sans text-lg font-bold tracking-tight text-ink">CareerForge</span>
+          <span className="rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-accent">AI</span>
         </div>
 
+        {/* Headline */}
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl xl:text-4xl font-bold tracking-tight text-ink leading-tight">
+              Your AI career operating system.
+            </h1>
+            <p className="mt-4 text-sm text-ink/55 leading-relaxed max-w-sm">
+              Skill gap analysis, personalized roadmaps, resume ATS optimization, and interview practice — all connected by one intelligent assistant.
+            </p>
+          </div>
+
+          {/* Value props */}
+          <ul className="space-y-3" role="list">
+            {[
+              "Accessibility-first — built for blind and deaf users",
+              "Voice-native interaction with any question",
+              "AI roadmap from beginner to role-ready",
+              "ATS resume scoring against real benchmarks",
+              "Job discovery + mock interview practice",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-xs text-ink/65">
+                <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-accent/15 flex items-center justify-center">
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <path d="M1.5 4L3 5.5L6.5 2" stroke="#B5541F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Footer quote */}
+        <p className="text-[11px] text-ink/35">
+          &ldquo;The platform that thinks about your career so you can focus on your craft.&rdquo;
+        </p>
+      </div>
+
+      {/* ─── RIGHT FORM PANEL ─────────────────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12 overflow-y-auto">
+        <div className="w-full max-w-md space-y-6">
+
+          {/* Mobile logo (hidden on large screens) */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white text-xs font-black">
+              CF
+            </div>
+            <span className="font-sans text-base font-bold tracking-tight text-ink">CareerForge</span>
+          </div>
+
+          {/* Form heading */}
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-ink">
+              {mode === "signup" ? "Create your account" : "Welcome back"}
+            </h2>
+            <p className="mt-1 text-sm text-ink/50">
+              {mode === "signup"
+                ? "Free access. No credit card required."
+                : "Sign in to continue your career journey."}
+            </p>
+          </div>
+
         {/* ─── Main Auth Card ──────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-line bg-white p-6 sm:p-8 shadow-sm">
+        <div className="rounded-2xl border border-ink/10 bg-surface/60 p-5 sm:p-6">
           {/* Mode Switcher: Create Account vs Sign In */}
           <div className="mb-6 flex rounded-md border border-line p-1 bg-neutral-50">
             <button
@@ -798,6 +866,7 @@ export function AuthGate() {
           <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
             By continuing, you agree to CareerForge’s Terms of Service and Accessibility Standards.
           </p>
+        </div>
         </div>
       </div>
 

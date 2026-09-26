@@ -22,6 +22,11 @@ const config: Config = {
         info: "#2F4858",
         success: "#5C6B44",
         danger: "#99341F",
+        // ─── Legacy aliases (used in AuthGate) ──────────────────────────────
+        paper: "#FAF6F1",       // = bg
+        graphite: "#6B6560",    // ≈ ink/60
+        line: "rgba(20,17,15,0.12)", // hairline border
+        muted: "#A09890",       // ≈ ink/40
       },
       borderColor: {
         hairline: "rgba(27, 24, 21, 0.12)",
