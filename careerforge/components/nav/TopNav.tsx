@@ -30,19 +30,12 @@ export function TopNav({
           <button
             type="button"
             onClick={onAssistant}
-            className="group flex items-center gap-2.5 text-left cursor-pointer"
+            className="group flex items-center text-left cursor-pointer focus-visible:outline-offset-4"
+            aria-label="ubix — home"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-bg font-black text-xs tracking-tighter shadow-md shadow-accent/20 group-hover:scale-105 transition-transform">
-              CF
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-sans text-xl font-bold tracking-tight text-ink group-hover:text-accent transition-colors">
-                CareerForge
-              </span>
-              <span className="rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-accent">
-                AI
-              </span>
-            </div>
+            <span className="font-display text-xl font-semibold tracking-[-0.03em] text-ink select-none">
+              ubix
+            </span>
           </button>
         </div>
 

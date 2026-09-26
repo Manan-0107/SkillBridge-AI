@@ -57,10 +57,10 @@ export function VoiceModeDetector() {
 
     const detectedLang = detectTextLanguage(transcript) || voiceLanguage || "en-US";
     const welcomeMessages: Record<string, string> = {
-      "hi-IN": "वॉयस एक्सेसिबिलिटी सक्रिय हो गई है। करियरफोर्ज में आपका स्वागत है।",
-      "gu-IN": "વોઈસ એક્સેસિબિલિટી સક્રિય થઈ ગઈ છે. કરિયરફોર્જમાં આપનું સ્વાગત છે.",
-      "en-US": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
-      "en-IN": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
+      "hi-IN": "वॉयस एक्सेसिबिलिटी सक्रिय हो गई है। ubix में आपका स्वागत है।",
+      "gu-IN": "વોઈસ એક્સેસિબિલિટી સક્રિય થઈ ગઈ છે. ubix માં આપનું સ્વાગત છે.",
+      "en-US": "Voice accessibility enabled. Welcome to ubix. You can ask me anything or say open my roadmap.",
+      "en-IN": "Voice accessibility enabled. Welcome to ubix. You can ask me anything or say open my roadmap.",
     };
 
     const msg = welcomeMessages[detectedLang] || welcomeMessages["en-US"];

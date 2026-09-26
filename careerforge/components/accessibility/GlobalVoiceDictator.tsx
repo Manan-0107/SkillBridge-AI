@@ -60,9 +60,9 @@ const PROFILE_QUESTIONS: ProfileQuestion[] = [
     label: "Full Name",
     stepNumber: 1,
     prompts: {
-      en: "Let's create your CareerForge account. First, tell me your full name.",
-      gu: "કરિયરફોર્જમાં આપનું સ્વાગત છે! સ્ટેપ ૧: તમારું પૂરું નામ શું છે?",
-      hi: "करियरफोर्ज में आपका स्वागत है! स्टेप १: आपका पूरा नाम क्या है?",
+      en: "Let's create your ubix account. First, tell me your full name.",
+      gu: "ubix માં આપનું સ્વાગત છે! સ્ટેપ ૧: તમારું પૂરું નામ શું છે?",
+      hi: "ubix में आपका स्वागत है! स्टेप १: आपका पूरा नाम क्या है?",
     },
     retryPrompts: {
       en: "Okay. Please say your name again.",
@@ -1094,6 +1094,7 @@ function GlobalVoiceDictatorInner() {
         lower.includes("to re-speak") ||
         lower.includes("is that correct") ||
         lower.includes("welcome to careerforge") ||
+        lower.includes("welcome to ubix") ||
         lower.includes("let's try again") ||
         lower.includes("no problem") ||
         lower.includes("got it you said") ||
@@ -1422,7 +1423,7 @@ function GlobalVoiceDictatorInner() {
               ? "અભિનંદન! તમારા બધા પ્રશ્નો વેરિફાય થઈ ગયા છે. તમારું એકાઉન્ટ અને પ્રોફાઇલ તૈયાર છે!"
               : isHindi
               ? "बधाई हो! आपके सभी सवाल सत्यापित हो गए हैं। आपकी प्रोफ़ाइल तैयार है!"
-              : "Awesome! All sections are verified. Your CareerForge profile is ready!";
+              : "Awesome! All sections are verified. Your ubix profile is ready!";
 
             setAiSpeechPrompt(allDoneMsg);
             showStatus(`🎉 ${allDoneMsg}`, 5000);
@@ -1543,10 +1544,10 @@ function GlobalVoiceDictatorInner() {
 
       if (lower === "help" || lower === "help me" || lower.includes("મદદ") || lower.includes("सहायता")) {
         const helpPrompt = isGujarati
-          ? "નમસ્તે! હું કરિયરફોર્જ સહાયક છું. તમારું નામ, ઈમેઇલ, જોબ રોલ બોલો અથવા કરિયર પ્રશ્ન પૂછો."
+          ? "નમસ્તે! હું ubix સહાયક છું. તમારું નામ, ઈમેઇલ, જોબ રોલ બોલો અથવા કરિયર પ્રશ્ન પૂછો."
           : isHindi
-          ? "नमस्ते! मैं करियरफोर्ज सहायक हूँ। अपना नाम, ईमेल, जॉब रोल बोलें या करियर सवाल पूछें।"
-          : "Hello! I am CareerForge Assistant. Speak to answer profile questions, fill forms, or ask career advice.";
+          ? "नमस्ते! मैं ubix सहायक हूँ। अपना नाम, ईमेल, जॉब रोल बोलें या करियर सवाल पूछें।"
+          : "Hello! I am ubix Assistant. Speak to answer profile questions, fill forms, or ask career advice.";
         setAiSpeechPrompt(helpPrompt);
         showStatus(helpPrompt, 6000);
         speakAndListen(helpPrompt);
@@ -1946,7 +1947,7 @@ function GlobalVoiceDictatorInner() {
       // For blind_low_vision with prompt state: activate voice assistant
       if (accessibilityProfile === "blind_low_vision") {
         const welcome =
-          "CareerForge voice assistant active. Say 'help', or speak your answers to begin.";
+          "ubix voice assistant active. Say 'help', or speak your answers to begin.";
         setAiSpeechPrompt(welcome);
         showStatus(welcome, 5000);
         startVoiceDictation();

@@ -1,0 +1,16 @@
+{
+  "name": "ubix",
+  "short_name": "ubix",
+  "description": "Quiet career and accessibility workspace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080A0D",
+  "theme_color": "#080A0D",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

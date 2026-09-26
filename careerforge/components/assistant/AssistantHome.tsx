@@ -25,6 +25,7 @@ import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
+import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
 
 export type Msg = {
   id: string;
@@ -1370,14 +1371,8 @@ export function AssistantHome({
               <div className="mb-12 max-w-xl animate-slideUp">
                 {/* Welcome mark */}
                 <div className="mb-6">
-                  <div
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white text-sm font-bold shadow-sm mb-4"
-                    aria-hidden="true"
-                  >
-                    CF
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "CareerForge Assistant"}
+                  <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-ink">
+                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "ubix Assistant"}
                   </h1>
                   <p className="mt-1.5 text-sm text-ink/55 leading-relaxed max-w-md">
                     General AI assistant with career superpowers — ask anything.
@@ -1480,7 +1475,7 @@ export function AssistantHome({
               role="log"
               aria-live="polite"
               aria-relevant="additions text"
-              aria-label="CareerForge conversation"
+              aria-label="ubix conversation"
             >
               {messages.map((m) => {
                 const isUser = m.role === "user";
@@ -1490,7 +1485,7 @@ export function AssistantHome({
                     className={`flex flex-col animate-messageIn ${isUser ? "items-end" : "items-start"}`}
                   >
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-ink/60 px-1">
-                      <span>{isUser ? userDisplayName : "CareerForge Assistant"}</span>
+                      <span>{isUser ? userDisplayName : "ubix Assistant"}</span>
                       {m.engine && !isUser && (
                         <span className="text-[10px] text-ink/40">
                           {m.engine}
@@ -1616,8 +1611,9 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start animate-messageIn">
-                  <div className="mb-1 text-[11px] font-medium text-ink/50 px-1">
-                    CareerForge is thinking
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink/50 px-1">
+                    <UbixThinkingOrb state="thinking" size="sm" />
+                    <span>ubix is thinking</span>
                   </div>
                   <div className="rounded-2xl border border-ink/10 bg-surface px-4 py-3">
                     <div className="flex items-center gap-1" aria-label="Assistant is thinking" role="status">
@@ -1671,7 +1667,7 @@ export function AssistantHome({
 
               {/* Textarea Input with Instant Enter Submission */}
               <label htmlFor="assistant-composer" className="sr-only">
-                Message CareerForge Assistant
+                Message ubix Assistant
               </label>
               <textarea
                 id="assistant-composer"

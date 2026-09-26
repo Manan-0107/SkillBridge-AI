@@ -17,6 +17,8 @@ import {
   ChevronDown,
   Menu,
   X,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 interface NavLinkItem {
@@ -39,7 +41,28 @@ export function TopNav() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDark, setIsDark] = useState<boolean>(true);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("ubix_theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("ubix_theme", "light");
+    }
+  };
 
   const getActiveTab = (): FeatureId | "assistant" => {
     if (pathname.startsWith("/resume")) return "resume";
@@ -85,21 +108,15 @@ export function TopNav() {
       <div className="border-b border-ink/8 bg-bg/95 backdrop-blur-md">
         <div className="app-shell flex items-center justify-between h-12 gap-4">
 
-          {/* Left: Brand */}
+          {/* Left: Brand Wordmark (Section 3: No AI logo, lowercase ubix in Space Grotesk, no icon) */}
           <Link
             href="/"
             onClick={() => handleNavClick("assistant")}
-            className="flex items-center gap-2 shrink-0 group"
-            aria-label="CareerForge — home"
+            className="flex items-center shrink-0 group focus-visible:outline-offset-4"
+            aria-label="ubix — home"
           >
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white text-[11px] font-bold tracking-tight shadow-sm group-hover:bg-accent-soft transition-colors"
-              aria-hidden="true"
-            >
-              CF
-            </span>
-            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-ink group-hover:text-accent transition-colors">
-              CareerForge
+            <span className="font-display text-lg font-semibold tracking-[-0.03em] text-ink select-none">
+              ubix
             </span>
           </Link>
 
@@ -140,8 +157,19 @@ export function TopNav() {
             </div>
           </nav>
 
-          {/* Right: Language + Profile */}
+          {/* Right: Theme Toggle + Language + Profile */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Theme Toggle (Section 5: Preserve light theme / allow toggle) */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              className="flex items-center justify-center h-7 w-7 rounded-full border border-ink/12 bg-surface/80 text-ink/70 hover:text-ink hover:border-ink/25 transition-all cursor-pointer"
+            >
+              {isDark ? <Sun size={13} strokeWidth={2} /> : <Moon size={13} strokeWidth={2} />}
+            </button>
+
             {/* Language widget — small */}
             <div className="hidden sm:block scale-90 origin-right opacity-80 hover:opacity-100 transition-opacity">
               <GoogleTranslateWidget />

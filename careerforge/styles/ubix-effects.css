@@ -1,0 +1,355 @@
+/* ==========================================================================
+   UBIX Isolated Visual Effects & Theme Stylesheet
+   Preserves existing light theme while providing the dark graphite metallic system.
+   ========================================================================== */
+
+/* ─── Typography Binding ────────────────────────────────────────────────── */
+:root {
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+/* Control typography tiebreaker: interactive controls always use Instrument Sans */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+.btn,
+.chip {
+  font-family: var(--font-sans) !important;
+}
+
+/* ─── Dark Theme Tokens (Applied when html has .dark or [data-theme="dark"]) ── */
+html.dark,
+[data-theme="dark"] {
+  --ubix-base-950: #080A0D;
+  --ubix-base-900: #0D0F12;
+  --ubix-base-850: #121518;
+  --ubix-base-800: #181B1F;
+  --ubix-titanium: #8B9096;
+  --ubix-silver: #C7CCD1;
+  --ubix-white: #F5F7F8;
+  --ubix-cyan: #7DE1EA;
+
+  --color-bg: #080A0D;
+  --color-surface: #121518;
+  --color-ink: #F5F7F8;
+  --color-accent: #7DE1EA;
+  --color-accent-soft: #9CE7EE;
+}
+
+html.dark body,
+[data-theme="dark"] body {
+  background-color: #080A0D !important;
+  color: #F5F7F8 !important;
+}
+
+/* Dark mode surface re-mapping for uniform zero-seam graphite aesthetic */
+html.dark .bg-bg,
+[data-theme="dark"] .bg-bg {
+  background-color: #080A0D !important;
+}
+
+html.dark .bg-surface,
+[data-theme="dark"] .bg-surface {
+  background-color: #121518 !important;
+}
+
+html.dark .bg-bg\/95,
+html.dark .bg-bg\/98,
+[data-theme="dark"] .bg-bg\/95,
+[data-theme="dark"] .bg-bg\/98 {
+  background-color: rgba(8, 10, 13, 0.95) !important;
+}
+
+html.dark .bg-surface\/80,
+html.dark .bg-surface\/70,
+html.dark .bg-surface\/60,
+html.dark .bg-surface\/50,
+[data-theme="dark"] .bg-surface\/80,
+[data-theme="dark"] .bg-surface\/70,
+[data-theme="dark"] .bg-surface\/60,
+[data-theme="dark"] .bg-surface\/50 {
+  background-color: rgba(18, 21, 24, 0.85) !important;
+}
+
+/* Dark mode text re-mapping (WCAG AA compliant contrast) */
+html.dark .text-ink,
+[data-theme="dark"] .text-ink {
+  color: #F5F7F8 !important; /* Cool White — 18.3:1 contrast on #080A0D */
+}
+
+html.dark .text-ink\/80,
+html.dark .text-ink\/75,
+html.dark .text-ink\/70,
+html.dark .text-ink\/65,
+html.dark .text-ink\/60,
+[data-theme="dark"] .text-ink\/80,
+[data-theme="dark"] .text-ink\/75,
+[data-theme="dark"] .text-ink\/70,
+[data-theme="dark"] .text-ink\/65,
+[data-theme="dark"] .text-ink\/60 {
+  color: #C7CCD1 !important; /* Soft Silver — 12.0:1 contrast on #080A0D */
+}
+
+html.dark .text-ink\/55,
+html.dark .text-ink\/50,
+html.dark .text-ink\/40,
+html.dark .text-ink\/35,
+html.dark .text-ink\/30,
+[data-theme="dark"] .text-ink\/55,
+[data-theme="dark"] .text-ink\/50,
+[data-theme="dark"] .text-ink\/40,
+[data-theme="dark"] .text-ink\/35,
+[data-theme="dark"] .text-ink\/30 {
+  color: #8B9096 !important; /* Titanium — 5.98:1 contrast on #080A0D, passes WCAG AA 4.5:1 */
+}
+
+/* Dark mode borders — subtle metallic hairlines */
+html.dark .border-ink\/8,
+html.dark .border-ink\/10,
+html.dark .border-ink\/12,
+html.dark .border-ink\/15,
+[data-theme="dark"] .border-ink\/8,
+[data-theme="dark"] .border-ink\/10,
+[data-theme="dark"] .border-ink\/12,
+[data-theme="dark"] .border-ink\/15 {
+  border-color: rgba(139, 144, 150, 0.16) !important;
+}
+
+html.dark .border-ink\/20,
+html.dark .border-ink\/25,
+[data-theme="dark"] .border-ink\/20,
+[data-theme="dark"] .border-ink\/25 {
+  border-color: rgba(199, 204, 209, 0.24) !important;
+}
+
+/* Accent text and badges in dark mode */
+html.dark .text-accent,
+[data-theme="dark"] .text-accent {
+  color: #7DE1EA !important; /* Icy Cyan */
+}
+
+html.dark .bg-accent,
+[data-theme="dark"] .bg-accent {
+  background-color: #7DE1EA !important;
+  color: #080A0D !important;
+}
+
+html.dark .bg-accent\/10,
+html.dark .bg-accent\/15,
+html.dark .bg-accent\/20,
+[data-theme="dark"] .bg-accent\/10,
+[data-theme="dark"] .bg-accent\/15,
+[data-theme="dark"] .bg-accent\/20 {
+  background-color: rgba(125, 225, 234, 0.12) !important;
+}
+
+html.dark .border-accent\/20,
+html.dark .border-accent\/25,
+html.dark .border-accent\/30,
+[data-theme="dark"] .border-accent\/20,
+[data-theme="dark"] .border-accent\/25,
+[data-theme="dark"] .border-accent\/30 {
+  border-color: rgba(125, 225, 234, 0.28) !important;
+}
+
+/* Selection */
+html.dark ::selection,
+[data-theme="dark"] ::selection {
+  background-color: #181B1F;
+  color: #7DE1EA;
+}
+
+/* Focus visible in dark mode */
+html.dark :focus-visible,
+[data-theme="dark"] :focus-visible {
+  outline: 2px solid #7DE1EA;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+html.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(139, 144, 150, 0.25);
+}
+html.dark ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(199, 204, 209, 0.4);
+}
+
+/* Prose markdown assistant styles in dark mode */
+html.dark .prose-cf,
+[data-theme="dark"] .prose-cf {
+  color: #F5F7F8;
+}
+html.dark .prose-cf h1,
+html.dark .prose-cf h2,
+html.dark .prose-cf h3,
+html.dark .prose-cf h4,
+[data-theme="dark"] .prose-cf h1,
+[data-theme="dark"] .prose-cf h2,
+[data-theme="dark"] .prose-cf h3,
+[data-theme="dark"] .prose-cf h4 {
+  color: #F5F7F8;
+}
+html.dark .prose-cf a,
+[data-theme="dark"] .prose-cf a {
+  color: #7DE1EA;
+}
+html.dark .prose-cf code,
+[data-theme="dark"] .prose-cf code {
+  background: rgba(139, 144, 150, 0.15);
+  color: #7DE1EA;
+}
+html.dark .prose-cf pre,
+[data-theme="dark"] .prose-cf pre {
+  background: #0D0F12;
+  border-color: rgba(139, 144, 150, 0.18);
+}
+html.dark .prose-cf blockquote,
+[data-theme="dark"] .prose-cf blockquote {
+  border-left-color: #7DE1EA;
+}
+
+/* ─── Center-Weighted Ambient Light (Section 6) ─────────────────────────── */
+.ubix-ambient-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(139, 144, 150, 0.09), transparent 60%),
+    radial-gradient(ellipse 70% 40% at 50% 110%, rgba(18, 21, 24, 0.8), transparent 70%),
+    linear-gradient(180deg, #080A0D 0%, #0D0F12 50%, #080A0D 100%);
+}
+
+/* ─── Cursor-Reactive Glow (Section 6) ─────────────────────────────────── */
+.ubix-cursor-glow-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(
+    circle 260px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
+    rgba(125, 225, 234, 0.04),
+    rgba(199, 204, 209, 0.018) 45%,
+    transparent 80%
+  );
+  transform: translateZ(0);
+}
+
+/* ─── Glow Border (Section 7) ─────────────────────────────────────────── */
+.ubix-glow-border {
+  position: relative;
+  border: 1px solid rgba(139, 144, 150, 0.18);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ubix-glow-border:hover,
+.ubix-glow-border:focus-within {
+  border-color: rgba(125, 225, 234, 0.35);
+  box-shadow: 0 0 16px -2px rgba(125, 225, 234, 0.08), inset 0 1px 0 0 rgba(245, 247, 248, 0.04);
+}
+
+/* ─── Thinking Orb Keyframes (Section 9) ─────────────────────────────────── */
+@keyframes ubix-orb-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@keyframes ubix-orb-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ubix-orb-flash {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+.ubix-orb-listening {
+  animation: ubix-orb-pulse 1.8s ease-in-out infinite;
+}
+
+.ubix-orb-thinking {
+  animation: ubix-orb-spin 2.4s linear infinite;
+}
+
+.ubix-orb-processing {
+  animation: ubix-orb-spin 4.5s linear infinite;
+}
+
+.ubix-orb-success {
+  animation: ubix-orb-flash 0.6s ease-out forwards;
+}
+
+/* ─── Accessibility & Reduced Motion Handling (Section 11) ──────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ubix-cursor-glow-layer {
+    display: none !important;
+  }
+  .ubix-orb-listening,
+  .ubix-orb-thinking,
+  .ubix-orb-processing,
+  .ubix-orb-success {
+    animation: none !important;
+    transform: none !important;
+  }
+  .ubix-glow-border {
+    transition: none !important;
+  }
+}
+
+html.reduced-motion .ubix-cursor-glow-layer {
+  display: none !important;
+}
+html.reduced-motion .ubix-orb-listening,
+html.reduced-motion .ubix-orb-thinking,
+html.reduced-motion .ubix-orb-processing,
+html.reduced-motion .ubix-orb-success {
+  animation: none !important;
+  transform: none !important;
+}
+
+/* ─── Layout Helper Utilities ───────────────────────────────────────────── */
+.ubix-flex {
+  display: flex;
+}
+.ubix-min-h-screen {
+  min-height: 100vh;
+}
+

@@ -322,7 +322,7 @@ export function AuthGate() {
 
       playAccessibleChime("success");
       speakText(
-        "You're signed in. Welcome back to CareerForge. You can say open my roadmap or ask me anything.",
+        "You're signed in. Welcome back to ubix. You can say open my roadmap or ask me anything.",
         { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
       );
       // Persist authenticated user to App Store
@@ -348,7 +348,7 @@ export function AuthGate() {
       if (data.success && data.user) {
         playAccessibleChime("success");
         speakText(
-          "You're signed in. Welcome back to CareerForge. You can say open my roadmap or ask me anything.",
+          "You're signed in. Welcome back to ubix. You can say open my roadmap or ask me anything.",
           { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
         );
         await signIn(data.user.email, data.user.name);
@@ -453,13 +453,11 @@ export function AuthGate() {
         className="hidden lg:flex lg:w-[42%] xl:w-[45%] flex-col justify-between bg-surface border-r border-ink/8 p-10 xl:p-14"
         aria-hidden="true"
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-white text-xs font-black shadow-sm">
-            CF
-          </div>
-          <span className="font-sans text-lg font-bold tracking-tight text-ink">CareerForge</span>
-          <span className="rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-accent">AI</span>
+        {/* Logo (Section 3: No AI logo, lowercase ubix in Space Grotesk, no icon) */}
+        <div className="flex items-center">
+          <span className="font-display text-2xl font-semibold tracking-[-0.03em] text-ink select-none">
+            ubix
+          </span>
         </div>
 
         {/* Headline */}
@@ -505,11 +503,10 @@ export function AuthGate() {
         <div className="w-full max-w-md space-y-6">
 
           {/* Mobile logo (hidden on large screens) */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white text-xs font-black">
-              CF
-            </div>
-            <span className="font-sans text-base font-bold tracking-tight text-ink">CareerForge</span>
+          <div className="flex items-center lg:hidden">
+            <span className="font-display text-xl font-semibold tracking-[-0.03em] text-ink select-none">
+              ubix
+            </span>
           </div>
 
           {/* Form heading */}
@@ -665,7 +662,7 @@ export function AuthGate() {
                 <p className="mt-1 text-[11px] text-ink/55 font-mono">
                   {activeSection === "name"
                     ? "Active Section: Type your name or click 'Speak Name'."
-                    : "Your display name across CareerForge."}
+                    : "Your display name across ubix."}
                 </p>
               </div>
             )}
@@ -865,7 +862,7 @@ export function AuthGate() {
           </div>
 
           <p className="mt-6 text-center text-xs text-graphite leading-relaxed">
-            By continuing, you agree to CareerForge’s Terms of Service and Accessibility Standards.
+            By continuing, you agree to ubix’s Terms of Service and Accessibility Standards.
           </p>
         </div>
         </div>
@@ -885,10 +882,10 @@ export function AuthGate() {
 
             <div className="pt-4">
               <h2 className="text-base font-bold text-neutral-900 leading-snug">
-                CareerForge wants to access your Google Account
+                ubix wants to access your Google Account
               </h2>
               <p className="mt-1 text-xs text-neutral-500">
-                Grant permission to share your basic profile and email address with <strong>CareerForge</strong>.
+                Grant permission to share your basic profile and email address with <strong>ubix</strong>.
               </p>
 
               <form onSubmit={allowGooglePermission} className="mt-4 space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
@@ -954,7 +951,7 @@ export function AuthGate() {
 
             <div className="pt-4">
               <h2 className="text-base font-bold text-neutral-900 leading-snug">
-                Authorize CareerForge on GitHub
+                Authorize ubix on GitHub
               </h2>
               <p className="mt-1 text-xs text-neutral-500">
                 Connect your GitHub profile to showcase code repositories and import verified skills.
@@ -1000,7 +997,7 @@ export function AuthGate() {
                     type="submit"
                     className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-neutral-800"
                   >
-                    Authorize CareerForge
+                    Authorize ubix
                   </button>
                 </div>
               </form>

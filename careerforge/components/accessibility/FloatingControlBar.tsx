@@ -32,7 +32,7 @@ export function FloatingControlBar() {
 
   const [voiceState, setVoiceState] = useState<AssistantVoiceState>("idle");
   const [liveCaption, setLiveCaption] = useState<string>("");
-  const [speakerLabel, setSpeakerLabel] = useState<string>("CareerForge");
+  const [speakerLabel, setSpeakerLabel] = useState<string>("ubix");
   const [amplitude, setAmplitude] = useState<number>(0);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<AccessibilitySettings>(DEFAULT_SETTINGS);
