@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
 
 // ─── AI Bullet / Summary Optimizer Engine ─────────────────────────────────────
 async function runAiOptimization(text: string, role: string, type: string) {
-  const prompt = `You are a Principal Resume Evaluator at Google/Meta.
+  const prompt = `You are a Principal Resume Evaluator.
 Rewrite and optimize the following ${type} for a ${role} resume.
 Follow the Google XYZ formula: "Accomplished [X] as measured by [Y] by doing [Z]".
 Make it punchy, metric-driven, and ATS-compliant.
@@ -134,61 +134,24 @@ Respond ONLY with valid JSON in this exact structure:
     "Alternative 2 (leadership & architecture focused)"
   ],
   "atsKeywordsAdded": ["keyword1", "keyword2", "keyword3"],
-  "scoreImprovement": "+24% ATS Parser Legibility"
+  "scoreImprovement": "Enhanced action-verb framing and quantified clarity (AI Suggestion)"
 }`;
 
-  // Try GitHub Models / Open-Source endpoint
-  const token = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-  if (token && token.trim().length > 5) {
-    try {
-      const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: prompt }],
-          model: "gpt-4o-mini",
-          temperature: 0.3,
-          max_tokens: 500,
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content || "";
-        const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-        const parsed = JSON.parse(clean);
-        if (isValidOptimization(parsed)) return parsed;
-      }
-    } catch {
-      // fallback
-    }
-  }
-
-  // Try Free Pollinations AI endpoint
   try {
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        model: "openai",
-        seed: 42,
-      }),
-      signal: AbortSignal.timeout(6000),
+    const { generateAIResponse } = await import("@/lib/ai/centralProvider");
+    const aiResult = await generateAIResponse({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      maxTokens: 500,
+      timeoutMs: 8000,
     });
 
-    if (res.ok) {
-      const raw = await res.text();
-      const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(clean);
-      if (isValidOptimization(parsed)) return parsed;
-    }
-  } catch {
-    // fallback
+    const raw = aiResult.text || "";
+    const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(clean);
+    if (isValidOptimization(parsed)) return parsed;
+  } catch (aiErr) {
+    console.warn("[optimize] AI optimization note:", aiErr);
   }
 
   return null;

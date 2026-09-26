@@ -1,17 +1,35 @@
 /**
  * POST /api/auth/login
  *
- * Unified Authentication API for CareerForge:
- * - Handles sign in, sign up, and guest exploration
- * - Validates email format, password complexity, and required fields
+ * Unified Secure Authentication API for CareerForge:
+ * - Handles sign in, sign up, and isolated guest exploration
+ * - Zod validation for email format, password complexity, and required fields
+ * - Generates cryptographically signed HMAC session tokens
+ * - Eliminates shared accounts (e.g. Alex Rivera); guarantees isolated guest sessions
+ * - Rate limited against brute-force and credential stuffing attacks
  * - Interfaces with database/Supabase user storage
- * - Returns structured user object with authenticated session metadata
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import crypto from "crypto";
 import { upsertUser } from "@/lib/db";
+import {
+  createSignedSessionToken,
+  generateIsolatedGuestIdentity,
+  SESSION_CONFIG,
+} from "@/lib/security/session";
+import { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
+import { createApiErrorResponse } from "@/lib/errors/apiError";
 
 export const runtime = "nodejs";
+
+const LoginRequestSchema = z.object({
+  email: z.string().email("Please provide a valid email address.").optional(),
+  password: z.string().min(6, "Password must be at least 6 characters.").optional(),
+  name: z.string().min(2, "Name must be at least 2 characters.").optional(),
+  mode: z.enum(["signin", "signup", "guest"]).default("signin"),
+});
 
 function extractDisplayName(email: string, name?: string): string {
   if (name && name.trim()) return name.trim();
@@ -24,71 +42,100 @@ function extractDisplayName(email: string, name?: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password, name, mode = "signin" } = body;
+  const requestId = crypto.randomUUID();
+  const clientIp = getClientIp(req);
 
-    // 1. Guest Mode
+  // 1. Rate Limiting (10 requests per minute per IP)
+  const rateLimitResult = checkRateLimit(`auth:${clientIp}`, RATE_LIMIT_PRESETS.auth);
+  if (rateLimitResult.isLimited) {
+    return createApiErrorResponse(
+      "RATE_LIMITED",
+      "Too many login attempts. Please wait a minute before trying again.",
+      requestId,
+      { statusCode: 429, retryable: true }
+    );
+  }
+
+  try {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return createApiErrorResponse("BAD_REQUEST", "Invalid JSON request payload.", requestId, {
+        statusCode: 400,
+      });
+    }
+
+    const parseResult = LoginRequestSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0]?.message || "Invalid authentication parameters.";
+      return createApiErrorResponse("BAD_REQUEST", firstIssue, requestId, {
+        statusCode: 400,
+        details: parseResult.error.format(),
+      });
+    }
+
+    const { email, password, name, mode } = parseResult.data;
+
+    // 2. Guest Mode: Isolated Unique Identity
     if (mode === "guest") {
+      const guestIdentity = generateIsolatedGuestIdentity();
+      const signedToken = createSignedSessionToken({
+        userId: guestIdentity.userId,
+        email: guestIdentity.email,
+        name: guestIdentity.name,
+        isGuest: true,
+      });
+
       const guestUser = {
-        name: "Alex Rivera",
-        email: "alex.rivera@example.com",
+        id: guestIdentity.userId,
+        name: guestIdentity.name,
+        email: guestIdentity.email,
         authProvider: "guest",
         targetRole: "frontend",
-        token: `guest_${Date.now()}`,
+        token: signedToken,
       };
+
       const res = NextResponse.json({
         success: true,
         message: "Welcome to CareerForge as Guest!",
         user: guestUser,
       });
-      res.cookies.set("cf_uid", guestUser.email, {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
+
+      // Set tamper-proof cryptographically signed session cookie
+      res.cookies.set(SESSION_CONFIG.cookieName, signedToken, SESSION_CONFIG.cookieOptions);
+      // Set legacy cookie for backward compatibility
+      res.cookies.set("cf_uid", guestIdentity.email, SESSION_CONFIG.cookieOptions);
+
       return res;
     }
 
-    // 2. Validate Email
-    if (!email || typeof email !== "string" || !email.includes("@")) {
-      return NextResponse.json(
-        { success: false, error: "Please provide a valid email address." },
-        { status: 400 }
+    // 3. Regular Email Signin / Signup validation
+    if (!email) {
+      return createApiErrorResponse("BAD_REQUEST", "Please provide a valid email address.", requestId, {
+        statusCode: 400,
+      });
+    }
+
+    if (!password) {
+      return createApiErrorResponse("BAD_REQUEST", "Password is required.", requestId, {
+        statusCode: 400,
+      });
+    }
+
+    if (mode === "signup" && (!name || name.trim().length < 2)) {
+      return createApiErrorResponse(
+        "BAD_REQUEST",
+        "Please provide your full name (minimum 2 characters) for signup.",
+        requestId,
+        { statusCode: 400 }
       );
     }
 
     const cleanEmail = email.trim().toLowerCase();
-
-    // 3. Validate Password
-    if (!password || typeof password !== "string") {
-      return NextResponse.json(
-        { success: false, error: "Password is required." },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json(
-        { success: false, error: "Password must be at least 6 characters." },
-        { status: 400 }
-      );
-    }
-
-    // 4. Validate Name for Sign Up
-    if (mode === "signup") {
-      if (!name || typeof name !== "string" || name.trim().length < 2) {
-        return NextResponse.json(
-          { success: false, error: "Please provide your full name (minimum 2 characters)." },
-          { status: 400 }
-        );
-      }
-    }
-
     const displayName = extractDisplayName(cleanEmail, name);
 
-    // 5. Database Upsert / Record (non-blocking with 1.2s timeout)
+    // 4. Record/Upsert User in Database (with fast timeout)
     let dbId: string | null = null;
     try {
       const dbPromise = upsertUser({
@@ -106,14 +153,24 @@ export async function POST(req: NextRequest) {
       console.warn("[Auth API] Database recording note:", dbErr);
     }
 
-    // 6. Return Authenticated User
+    const effectiveUserId = dbId || `user_${crypto.createHash("sha256").update(cleanEmail).digest("hex").slice(0, 16)}`;
+
+    // 5. Create Cryptographically Signed Session Token
+    const sessionToken = createSignedSessionToken({
+      userId: effectiveUserId,
+      email: cleanEmail,
+      name: displayName,
+      isGuest: false,
+    });
+
     const userPayload = {
+      id: effectiveUserId,
       name: displayName,
       email: cleanEmail,
       authProvider: "email",
       targetRole: null,
       dbId,
-      token: `cf_token_${Buffer.from(cleanEmail).toString("base64")}`,
+      token: sessionToken,
     };
 
     const res = NextResponse.json({
@@ -122,19 +179,15 @@ export async function POST(req: NextRequest) {
       user: userPayload,
     });
 
-    res.cookies.set("cf_uid", cleanEmail, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
+    // Set secure cookies
+    res.cookies.set(SESSION_CONFIG.cookieName, sessionToken, SESSION_CONFIG.cookieOptions);
+    res.cookies.set("cf_uid", cleanEmail, SESSION_CONFIG.cookieOptions);
 
     return res;
   } catch (err: any) {
     console.error("[Auth API] Error:", err);
-    return NextResponse.json(
-      { success: false, error: err.message || "An error occurred during authentication." },
-      { status: 500 }
-    );
+    return createApiErrorResponse("INTERNAL_ERROR", "An error occurred during authentication.", requestId, {
+      statusCode: 500,
+    });
   }
 }

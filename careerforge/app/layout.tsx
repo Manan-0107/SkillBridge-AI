@@ -9,7 +9,7 @@ import { VoiceProvider } from "@/context/VoiceContext";
 const fontSans = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-body",
+  variable: "--font-sans",
   display: "swap",
 });
 
@@ -31,6 +31,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fontSans.variable}`}>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
       <body className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink">
         <AppProvider>
           <GlobalVoiceProvider>

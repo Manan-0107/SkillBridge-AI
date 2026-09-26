@@ -13,7 +13,7 @@ type View =
   | { kind: "feature"; feature: FeatureId; resumeTab?: ResumeTab };
 
 export default function Home() {
-  const { user, ready } = useApp();
+  const { user } = useApp();
   const [view, setView] = useState<View>({ kind: "assistant" });
 
   useEffect(() => {
@@ -33,19 +33,6 @@ export default function Home() {
     window.addEventListener("careerforge:navigate" as any, handleNav);
     return () => window.removeEventListener("careerforge:navigate" as any, handleNav);
   }, []);
-
-  if (!ready) {
-    return (
-      <main className="min-h-screen bg-bg text-ink flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-surface text-ink flex items-center justify-center font-bold text-xl shadow-md animate-pulse border border-ink/15">
-            CF
-          </div>
-          <p className="text-sm font-medium text-ink/70">Loading CareerForge workspace...</p>
-        </div>
-      </main>
-    );
-  }
 
   if (!user) return <AuthGate />;
 

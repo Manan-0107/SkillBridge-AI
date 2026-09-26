@@ -12,7 +12,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
 import path from "path";
 import crypto from "crypto";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
@@ -126,18 +125,22 @@ interface RequestBody {
 }
 
 /**
- * Call Python AI Assistant Engine:
- * 1. Queries running FastAPI server on http://127.0.0.1:8000/api/chat
- * 2. Falls back to direct Python CLI execution via run_cli.py
+ * Call Python AI Assistant Engine (optional microservice):
+ * Only queries if PYTHON_AI_SERVICE_URL is explicitly configured with a strict 1.5s timeout.
+ * No child_process spawn in Next.js serverless execution.
  */
 async function callPythonAIEngine(body: RequestBody): Promise<any> {
-  // Step 1: Fast HTTP call to Python FastAPI backend
+  const pythonUrl = process.env.PYTHON_AI_SERVICE_URL;
+  if (!pythonUrl) {
+    return null;
+  }
+
   try {
-    const res = await fetch("http://127.0.0.1:8000/api/chat", {
+    const res = await fetch(`${pythonUrl.replace(/\/$/, "")}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(1500),
     });
     if (res.ok) {
       const data = await res.json();
@@ -146,39 +149,10 @@ async function callPythonAIEngine(body: RequestBody): Promise<any> {
       }
     }
   } catch (httpErr) {
-    // FastAPI server not listening or starting up; proceed to CLI fallback
+    // Microservice offline or not answering; proceed directly to TypeScript AI cascade
   }
 
-  // Step 2: Direct Python CLI Subprocess Execution
-  return new Promise((resolve) => {
-    try {
-      const scriptPath = path.join(process.cwd(), "python_ai", "run_cli.py");
-      const py = spawn("python", [scriptPath]);
-      let stdout = "";
-
-      py.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-      });
-
-      py.on("close", (code) => {
-        if (code === 0 && stdout.trim()) {
-          try {
-            const parsed = JSON.parse(stdout);
-            resolve(parsed);
-            return;
-          } catch (e) {}
-        }
-        resolve(null);
-      });
-
-      py.on("error", () => resolve(null));
-
-      py.stdin.write(JSON.stringify(body));
-      py.stdin.end();
-    } catch {
-      resolve(null);
-    }
-  });
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -391,36 +365,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 5. Try GitHub Models API (Azure AI Inference - GPT-4o) ───────────────
-    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-    if (githubToken && githubToken.trim().length > 5) {
-      try {
-        const ghResponse = await callGithubModelsLLM(
-          githubToken,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...ghResponse,
-            thinking: (ghResponse as any).thinking || [
-              `🧠 1. Intent Sensing: Examining user inquiry and technical or conceptual context.`,
-              `🔍 2. Inference Architecture: Reasoning with GitHub Models (GPT-4o).`,
-              `💡 3. Metaphor & Empathy: Crafting accessible explanations with authentic human touch.`,
-              `✨ 4. Final Polish: Structuring response with genuine warmth and depth.`,
-            ],
-            engine: "GitHub Models (GPT-4o)",
-          });
-        }
-      } catch (ghErr) {
-        console.warn("[Assistant API] GitHub Models error:", ghErr);
-      }
-    }
+
 
     // ─── 6. Autonomous Dynamic Cognitive Reasoner ─────────────────────────────
     const dynamicResponse = generateCognitiveAgentResponse(
@@ -447,13 +392,13 @@ export async function POST(req: NextRequest) {
       engine: "CareerForge Autonomous AI Brain",
     });
   } catch (error) {
-    console.error("[Assistant API] Error:", error);
-    return NextResponse.json(
-      {
-        reply: "I am actively listening and ready to assist you. What would you like to explore next?",
-        engine: "Autonomous Fallback",
-      },
-      { status: 200 }
+    console.error("[Assistant API] Fatal error:", error);
+    const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+    return createApiErrorResponse(
+      "AI_PROVIDER_UNAVAILABLE",
+      "The AI assistant is temporarily unavailable. Please try again shortly.",
+      requestId,
+      { statusCode: 503, retryable: true }
     );
   }
 }
@@ -474,7 +419,7 @@ ${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""
 ${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
 
 Core Directives & Behavioral Guidelines:
-1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
+1. VERSATILE AI CO-PILOT: You are a versatile frontier AI. You naturally answer ANY question with depth, warmth, and clarity (e.g., world leaders like PM Modi, science topics like photosynthesis, programming concepts like polymorphism, algorithms like binary search in Python). When the user asks general or conceptual questions, answer them directly and comprehensively—do NOT force general inquiries into career actions. Connect to CareerForge platform tools (Resume, Roadmap, Courses, Practice, Jobs) ONLY when the user specifically requests platform actions.
 2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
 3. NATURAL ACCESSIBILITY DISCOVERY:
    - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
@@ -664,46 +609,7 @@ async function callOpenRouterLLM(
   return parseActionFromReply(rawReply);
 }
 
-// ─── 5. GitHub Models API Provider ────────────────────────────────────────────
-async function callGithubModelsLLM(
-  token: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
 
-  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
 
 // ─── Action Parser Helper ─────────────────────────────────────────────────────
 function parseActionFromReply(rawReply: string) {

@@ -23,6 +23,8 @@ export interface SalaryRange {
   symbol: string;
   formatted: string;
   period: "year" | "month" | "hour";
+  isEstimated?: boolean;
+  source?: "source" | "estimated";
 }
 
 export interface AccessibilityProfile {
@@ -32,6 +34,7 @@ export interface AccessibilityProfile {
   flexibleHours: boolean;
   neurodivergentFriendly: boolean;
   tags: string[];
+  isInferred?: boolean;
 }
 
 export type WorkArrangement = "worldwide_remote" | "country_remote" | "hybrid" | "onsite";
@@ -252,13 +255,32 @@ export async function GET(req: NextRequest) {
       return 0;
     });
 
+    const providerStatuses = {
+      linkedIn: linkedInResults.status,
+      adzuna: adzunaResults.status,
+      serpApi: serpApiResults.status,
+      arbeitnow: arbeitnowResults.status,
+      remotive: remotiveResults.status,
+      jobicy: jobicyResults.status,
+    };
+
+    const allFailed = [
+      linkedInResults,
+      adzunaResults,
+      serpApiResults,
+      arbeitnowResults,
+      remotiveResults,
+      jobicyResults,
+    ].every((r) => r.status === "rejected");
+
     const marketBenchmark = calculateLocalizedSalary(role || "frontend", countryRule, false);
 
     return NextResponse.json({
-      status: "success",
+      status: allFailed ? "PROVIDER_FAILED" : filtered.length > 0 ? "success" : "NO_RESULTS",
       total: filtered.length,
       locationApplied: locationParam || "Worldwide / Remote",
       country: countryRule.currency,
+      providerStatuses,
       jobs: filtered.slice(0, 40),
       marketTrends: {
         targetRole: role || "frontend",
@@ -267,6 +289,7 @@ export async function GET(req: NextRequest) {
         currencySymbol: countryRule.symbol,
         demandIndex: "High Demand (Top 10% Industry Growth)",
         remotePercentage: "78% Remote / Hybrid Available",
+        salaryIsEstimated: true,
       },
     });
   } catch (error: any) {
@@ -870,6 +893,8 @@ function calculateLocalizedSalary(
     symbol: countryRule.symbol,
     formatted,
     period: "year",
+    isEstimated: true,
+    source: "estimated",
   };
 }
 
@@ -894,6 +919,7 @@ function generateAccessibilityProfile(remote: boolean, description = ""): Access
     flexibleHours,
     neurodivergentFriendly,
     tags,
+    isInferred: true,
   };
 }
 

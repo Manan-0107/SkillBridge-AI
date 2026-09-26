@@ -354,7 +354,8 @@ export function AuthGate() {
         await signIn(data.user.email, data.user.name);
       }
     } catch {
-      await signIn("alex.rivera@example.com", "Alex Rivera");
+      const guestId = Math.random().toString(36).slice(2, 8);
+      await signIn(`guest_${guestId}@guest.careerforge.internal`, `Guest Explorer (${guestId.toUpperCase()})`);
     } finally {
       setLoading(false);
     }
@@ -483,8 +484,8 @@ export function AuthGate() {
             ].map((item) => (
               <li key={item} className="flex items-start gap-2.5 text-xs text-ink/65">
                 <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-accent/15 flex items-center justify-center">
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <path d="M1.5 4L3 5.5L6.5 2" stroke="#B5541F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className="text-accent">
+                    <path d="M1.5 4L3 5.5L6.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
                 {item}

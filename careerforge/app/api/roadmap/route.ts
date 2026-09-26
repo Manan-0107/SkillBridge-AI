@@ -1787,11 +1787,11 @@ export async function GET(req: NextRequest) {
     categories: categoriesConfig,
     cacheMetadata: {
       cached: true,
-      cacheEngine: "Redis-v7.2-Cluster",
+      cacheEngine: "In-Memory Edge Cache",
       key: `roadmap:tree:${targetCategory}:v2026`,
       ttlSeconds: 86400,
       generatedMs: Math.max(1, durationMs),
-      backendWorker: "Rust/Actix-Web-Microservice-v2.8",
+      backendWorker: "CareerForge-Roadmap-Engine",
       timestamp: new Date().toISOString(),
     },
   };
@@ -1801,14 +1801,12 @@ export async function GET(req: NextRequest) {
     data: treeData,
   };
 
-  // High-performance cache headers simulating Redis/Rust edge cache
   return NextResponse.json(response, {
     status: 200,
     headers: {
       "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
       "X-Cache": "HIT",
-      "X-Cache-Backend": "Redis-Cluster-v7.2",
-      "X-Backend-Service": "Rust-Actix-Microservice-RoadmapEngine",
+      "X-Backend-Service": "CareerForge-Roadmap-Engine",
       "X-Content-Type-Options": "nosniff",
     },
   });

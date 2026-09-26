@@ -168,5 +168,6 @@ export async function PUT(req: NextRequest) {
 export async function DELETE() {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIE, "", { ...COOKIE_OPTS, maxAge: 0 });
+  res.cookies.set("cf_session", "", { ...COOKIE_OPTS, maxAge: 0 });
   return res;
 }

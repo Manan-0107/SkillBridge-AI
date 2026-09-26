@@ -2,7 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Screen reader only utility — guaranteed offscreen even before tailwind JS hydration */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border-width: 0 !important;
+}
+
+.sr-only:focus,
+.focus\:not-sr-only:focus {
+  position: fixed !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0.75rem 1rem !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  z-index: 100 !important;
+}
+
 :root {
+  --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --color-bg: #FAF6F1;

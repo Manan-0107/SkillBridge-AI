@@ -194,6 +194,8 @@ export async function POST(req: NextRequest) {
     let emailSentViaCloud = false;
 
     if (resendApiKey) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       try {
         const resendRes = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -207,6 +209,7 @@ export async function POST(req: NextRequest) {
             subject: emailSubject,
             html: emailHtml,
           }),
+          signal: controller.signal,
         });
 
         if (resendRes.ok) {
@@ -214,6 +217,8 @@ export async function POST(req: NextRequest) {
         }
       } catch (cloudErr) {
         console.warn("[Jobs Alert API] Resend email dispatch error:", cloudErr);
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 

@@ -144,20 +144,17 @@ export function VoiceModeDetector() {
   }, [handleFallbackToText, handleVoiceSuccess, voiceLanguage]);
 
   useEffect(() => {
-    // Check if voice capability has already been tested
-    let alreadyCalibrated = false;
-    try {
-      alreadyCalibrated = Boolean(localStorage.getItem("careerforge_voice_calibrated"));
-    } catch {}
-
-    if (!alreadyCalibrated && !checked) {
+    const handleCalibrate = () => {
       setModalOpen(true);
       const timer = setTimeout(() => {
         runAttempt(1);
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
-    }
-  }, [checked, runAttempt]);
+    };
+
+    window.addEventListener("careerforge:calibrate-voice" as any, handleCalibrate);
+    return () => window.removeEventListener("careerforge:calibrate-voice" as any, handleCalibrate);
+  }, [runAttempt]);
 
   useEffect(() => {
     return () => {
