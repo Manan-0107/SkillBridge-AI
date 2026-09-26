@@ -32,7 +32,7 @@ export function SearchBar({
 
   return (
     <div className={`relative flex items-center ${className}`}>
-      <div className="absolute left-3.5 text-charcoal-500 pointer-events-none">
+      <div className="absolute left-3.5 text-ink/40 pointer-events-none">
         <svg
           className="w-4 h-4"
           viewBox="0 0 20 20"
@@ -55,13 +55,13 @@ export function SearchBar({
         placeholder="Filter nodes (e.g. React, Event Loop, CSS Grid)..."
         value={internalValue}
         onChange={(e) => setInternalValue(e.target.value)}
-        className="w-full h-10 pl-10 pr-20 rounded-xl bg-charcoal-900 border border-hairline text-sm text-charcoal-100 placeholder-charcoal-500 focus:outline-hidden focus:border-accent-400 focus:ring-1 focus:ring-accent-400 transition-colors"
+        className="w-full h-10 pl-10 pr-20 rounded-xl bg-bg border border-ink/15 text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
       />
 
       {internalValue && (
         <div className="absolute right-3 flex items-center gap-2">
           {matchCount !== undefined && (
-            <span className="text-[11px] font-mono text-charcoal-400 bg-charcoal-800 px-1.5 py-0.5 rounded">
+            <span className="text-[11px] font-mono text-ink/60 bg-surface px-1.5 py-0.5 rounded border border-ink/10">
               {matchCount} {matchCount === 1 ? "match" : "matches"}
             </span>
           )}
@@ -72,7 +72,7 @@ export function SearchBar({
               onChange("");
             }}
             aria-label="Clear search query"
-            className="text-charcoal-400 hover:text-charcoal-200 transition-colors"
+            className="text-ink/40 hover:text-ink transition-colors cursor-pointer"
           >
             ✕
           </button>

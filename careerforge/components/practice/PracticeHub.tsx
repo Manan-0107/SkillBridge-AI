@@ -693,64 +693,64 @@ export function PracticeHub() {
         /* ─── ACTIVE QUESTION DRILL VIEW ──────────────────────────────────── */
         <div>
           {/* Session Progress Header */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ink/15 bg-surface px-5 py-3 shadow-xs text-ink">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-ink">
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-white font-bold text-xs">
-                {activeQuestionIdx + 1}/{questions.length}
-              </span>
+              {/* Progress dots */}
+              <div className="flex items-center gap-1">
+                {questions.map((q, idx) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveQuestionIdx(idx);
+                      setUserAnswer("");
+                      setExplanationOutput(null);
+                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                        window.speechSynthesis.cancel();
+                      }
+                      setSpeakingQuestion(false);
+                      setVocalizingExplanation(false);
+                    }}
+                    className={`h-6 w-6 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                      activeQuestionIdx === idx
+                        ? "bg-accent text-white ring-1 ring-accent/30"
+                        : completedIds[q.id]
+                        ? "bg-success/20 text-success border border-success/40"
+                        : "bg-bg text-ink/60 border border-ink/15 hover:border-accent/50"
+                    }`}
+                    title={`Question ${idx + 1}: ${q.type}`}
+                    aria-label={`Go to question ${idx + 1}`}
+                  >
+                    {completedIds[q.id] ? "✓" : idx + 1}
+                  </button>
+                ))}
+              </div>
               <div>
-                <p className="text-xs font-bold text-ink">Active Question Drill</p>
-                <p className="text-[11px] text-ink/75">
-                  Target Role: <strong className="capitalize text-accent">{role}</strong> ({completedCount} Completed)
+                <p className="text-xs font-semibold text-ink">
+                  Q{activeQuestionIdx + 1} <span className="text-ink/40 font-normal">of {questions.length}</span>
+                </p>
+                <p className="text-[11px] text-ink/50">
+                  {completedCount} answered · <span className="capitalize text-accent font-medium">{role}</span> track
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {questions.map((q, idx) => (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveQuestionIdx(idx);
-                    setUserAnswer("");
-                    setExplanationOutput(null);
-                    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                      window.speechSynthesis.cancel();
-                    }
-                    setSpeakingQuestion(false);
-                    setVocalizingExplanation(false);
-                  }}
-                  className={`h-7 w-7 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeQuestionIdx === idx
-                      ? "bg-accent text-white ring-2 ring-accent/30 font-bold"
-                      : completedIds[q.id]
-                      ? "bg-success text-white border border-success"
-                      : "bg-bg text-ink/80 hover:bg-surface border border-ink/15"
-                  }`}
-                  title={`Question ${idx + 1}: ${q.type}`}
-                >
-                  {completedIds[q.id] ? "✓" : idx + 1}
-                </button>
-              ))}
-
-              <GhostButton
-                type="button"
-                onClick={() => setIsQuizCompleted(true)}
-                className="text-xs ml-2 py-1 px-2.5 bg-bg text-ink hover:bg-surface border border-ink/15"
-              >
-                Global Summary →
-              </GhostButton>
-            </div>
+            <GhostButton
+              type="button"
+              onClick={() => setIsQuizCompleted(true)}
+              className="text-xs py-1 px-3"
+            >
+              View summary →
+            </GhostButton>
           </div>
 
           {/* Main Question Card */}
-          <div className="mb-10 rounded-2xl border border-ink/15 bg-surface p-6 shadow-sm text-ink">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-ink/15 pb-4 mb-4">
+          <div className="mb-8 rounded-2xl border border-ink/10 bg-surface/60 p-5 sm:p-6 text-ink">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-ink/8 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <Tag>{activeQuestion.type}</Tag>
-                <span className="text-xs font-bold text-ink/70 uppercase tracking-wider">
-                  Question {activeQuestionIdx + 1} of {questions.length}
+                <span className="text-[11px] font-semibold text-ink/40 uppercase tracking-widest">
+                  Q{activeQuestionIdx + 1} / {questions.length}
                 </span>
               </div>
 
@@ -761,12 +761,12 @@ export function PracticeHub() {
                   onClick={handleReadQuestion}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                     speakingQuestion
-                      ? "bg-accent text-white font-bold animate-pulse"
-                      : "bg-bg text-ink hover:bg-surface/80 border border-ink/15"
+                      ? "bg-accent text-white animate-pulse"
+                      : "bg-bg text-ink hover:bg-surface border border-ink/15"
                   }`}
                   title="Read question aloud (Speech Synthesis)"
                 >
-                  <span>{speakingQuestion ? "Stop Audio" : "Listen to Question"}</span>
+                  <span>{speakingQuestion ? "Stop" : "🔊 Listen"}</span>
                 </button>
 
                 {/* Question Switcher */}
@@ -775,17 +775,17 @@ export function PracticeHub() {
                   onClick={handleNextQuestion}
                   className="rounded-full border border-ink/15 bg-bg px-3 py-1 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors cursor-pointer"
                 >
-                  {activeQuestionIdx === questions.length - 1 ? "Finish & Summary →" : "Next Question →"}
+                  {activeQuestionIdx === questions.length - 1 ? "Finish →" : "Next →"}
                 </button>
               </div>
             </div>
 
             {/* Question Title */}
-            <h3 className="font-sans text-lg sm:text-xl font-bold text-ink leading-relaxed">
+            <h3 className="font-sans text-base sm:text-lg font-bold text-ink leading-relaxed">
               &ldquo;{activeQuestion.question}&rdquo;
             </h3>
-            <p className="mt-2 text-xs text-ink/80 bg-bg p-2.5 rounded-lg border border-ink/15">
-              <strong className="text-accent font-mono uppercase tracking-wider text-[11px] mr-1.5">Focus:</strong>
+            <p className="mt-2 text-xs text-ink/60 bg-ink/5 p-2.5 rounded-lg border border-ink/8">
+              <strong className="text-accent font-mono uppercase tracking-widest text-[10px] mr-1.5">Focus:</strong>
               {activeQuestion.hint}
             </p>
 

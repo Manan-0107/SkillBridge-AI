@@ -84,17 +84,17 @@ export function DailyPracticeList({
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Progress & State Navigation Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-hairline bg-charcoal-900">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-ink/10 bg-surface/50 text-ink">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono uppercase tracking-wider text-charcoal-400">
+          <span className="text-xs font-mono uppercase tracking-wider text-ink/50">
             Progress:
           </span>
-          <span className="text-sm font-bold text-accent-400 font-mono">
+          <span className="text-sm font-bold text-accent font-mono">
             {answeredCount} / {questions.length} Answered
           </span>
-          <div className="w-24 h-1.5 rounded-full bg-charcoal-800 overflow-hidden ml-1">
+          <div className="w-24 h-1.5 rounded-full bg-ink/10 overflow-hidden ml-1">
             <div
-              className="h-full bg-accent-500 rounded-full transition-all duration-300"
+              className="h-full bg-accent rounded-full transition-all duration-300"
               style={{ width: `${(answeredCount / questions.length) * 100}%` }}
             />
           </div>
@@ -105,10 +105,10 @@ export function DailyPracticeList({
             <button
               type="button"
               onClick={() => setActiveTab("quiz")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === "quiz"
-                  ? "bg-charcoal-800 text-white font-semibold border border-hairline"
-                  : "text-charcoal-400 hover:text-white"
+                  ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                  : "text-ink/60 hover:text-ink hover:bg-surface"
               }`}
             >
               Review Mode
@@ -116,10 +116,10 @@ export function DailyPracticeList({
             <button
               type="button"
               onClick={() => setActiveTab("summary")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === "summary"
-                  ? "bg-accent-500 text-charcoal-950 font-semibold"
-                  : "text-charcoal-400 hover:text-white"
+                  ? "bg-accent text-white font-semibold shadow-xs"
+                  : "text-ink/60 hover:text-ink hover:bg-surface"
               }`}
             >
               View Summary

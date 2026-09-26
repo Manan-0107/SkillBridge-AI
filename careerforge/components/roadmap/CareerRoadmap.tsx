@@ -520,83 +520,60 @@ export function CareerRoadmap({ role }: { role: RoleId }) {
       />
 
       {/* Overall Progress Tracker Bar */}
-      <div className="mb-6 rounded-2xl border border-ink/15 bg-surface p-5 shadow-sm text-ink">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-accent">Career Track Milestone Progress</span>
-              <span className="rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-ink border border-ink/15">
-                {completedCount} of {steps.length} Stages Complete
+      <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-ink/10 bg-surface/50 px-5 py-3.5 text-ink">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-ink/50">Milestone Progress</span>
+              <span className="rounded-full bg-bg border border-ink/12 px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                {completedCount} of {steps.length}
               </span>
             </div>
-            <p className="mt-1 text-xs text-ink/75">
-              Track your journey toward becoming a production-grade {roleLabel}.
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="font-sans text-2xl text-ink font-extrabold">{progressPercent}%</span>
-            <span className="text-xs text-ink/70 ml-1">Overall</span>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink/8">
+              <div
+                className="h-full bg-success transition-all duration-500 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+                role="progressbar"
+                aria-valuenow={progressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${progressPercent}% of roadmap complete`}
+              />
+            </div>
           </div>
         </div>
-
-        {/* Progress Bar */}
-        <div className="h-2 w-full overflow-hidden rounded-full bg-bg border border-ink/15">
-          <div
-            className="h-full bg-success transition-all duration-500 rounded-full"
-            style={{ width: `${progressPercent}%` }}
-          />
+        <div className="shrink-0 text-right">
+          <span className="font-sans text-xl font-bold text-ink">{progressPercent}%</span>
+          <span className="text-xs text-ink/40 ml-1">done</span>
         </div>
       </div>
 
-      {/* Sub-Navigation: Interactive Tree vs Milestones Path vs Course Catalog vs Repos */}
-      <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-ink/15 pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveTab("visual-tree")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "visual-tree"
-              ? "bg-accent text-white shadow-xs font-bold"
-              : "text-ink/75 hover:bg-surface hover:text-ink"
-          }`}
-        >
-          <span>⚡ roadmap.sh Visual Tree</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("milestones")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "milestones"
-              ? "bg-accent text-white shadow-xs font-bold"
-              : "text-ink/75 hover:bg-surface hover:text-ink"
-          }`}
-        >
-          <span>🗺️ Milestones &amp; Deep Research</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("courses")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "courses"
-              ? "bg-accent text-white shadow-xs font-bold"
-              : "text-ink/75 hover:bg-surface hover:text-ink"
-          }`}
-        >
-          <span>📚 Curated Course Catalog ({courses.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("projects")}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "projects"
-              ? "bg-accent text-white shadow-xs font-bold"
-              : "text-ink/75 hover:bg-surface hover:text-ink"
-          }`}
-        >
-          <span>⭐ Open-Source GitHub Repositories ({githubProjects.length})</span>
-        </button>
+      {/* Sub-Navigation tabs */}
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-ink/8 pb-3" role="tablist" aria-label="Roadmap views">
+        {([
+          { id: "visual-tree", label: "Visual Tree", sub: "roadmap.sh" },
+          { id: "milestones", label: "Milestones", sub: "Deep research" },
+          { id: "courses", label: "Courses", sub: `${courses.length} curated` },
+          { id: "projects", label: "Projects", sub: `${githubProjects.length} repos` },
+        ] as const).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === tab.id
+                ? "bg-bg text-ink border border-ink/12 shadow-sm"
+                : "text-ink/50 hover:text-ink hover:bg-bg/60"
+            }`}
+          >
+            <span>{tab.label}</span>
+            <span className={`text-[10px] font-normal ${
+              activeTab === tab.id ? "text-accent" : "text-ink/35"
+            }`}>{tab.sub}</span>
+          </button>
+        ))}
       </div>
 
       {/* ─── TAB 0: ROADMAP.SH INTERACTIVE VISUAL TREE ─────────────────────── */}

@@ -36,28 +36,28 @@ export const RoadmapNode = React.memo(function RoadmapNode({
   onKeyDown,
 }: RoadmapNodeProps) {
   // Border and background state based on selection tiers
-  let borderClasses = "border-hairline";
-  let bgClasses = "bg-charcoal-850 hover:bg-charcoal-800";
+  let borderClasses = "border-ink/12";
+  let bgClasses = "bg-surface/80 hover:bg-surface";
   let opacityClasses = "opacity-100";
   let scaleClasses = "hover:scale-[1.02]";
-  let shadowClasses = "";
+  let shadowClasses = "shadow-xs";
 
   if (isSelected) {
-    borderClasses = "border-accent-400 ring-2 ring-accent-500/30";
-    bgClasses = "bg-charcoal-800";
-    shadowClasses = "shadow-glow";
+    borderClasses = "border-accent ring-2 ring-accent/30";
+    bgClasses = "bg-bg shadow-md";
+    shadowClasses = "shadow-sm";
   } else if (isAncestor) {
-    borderClasses = "border-accent-500/60";
-    bgClasses = "bg-charcoal-800/90";
+    borderClasses = "border-accent/60";
+    bgClasses = "bg-surface";
   } else if (isChild) {
-    borderClasses = "border-accent-400/40";
+    borderClasses = "border-accent/40";
   } else if (isDimmed) {
     opacityClasses = "opacity-35";
     scaleClasses = "";
   }
 
   if (isSearchMatch) {
-    borderClasses += " ring-2 ring-amber-300";
+    borderClasses += " ring-2 ring-accent";
   }
 
   return (
@@ -83,20 +83,20 @@ export const RoadmapNode = React.memo(function RoadmapNode({
           onKeyDown(e, node);
         }
       }}
-      className={`group cursor-pointer rounded-node border p-3 flex flex-col justify-between select-none transition-all duration-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2 focus-visible:ring-offset-charcoal-950 ${borderClasses} ${bgClasses} ${opacityClasses} ${scaleClasses} ${shadowClasses}`}
+      className={`group cursor-pointer rounded-xl border p-3 flex flex-col justify-between select-none transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${borderClasses} ${bgClasses} ${opacityClasses} ${scaleClasses} ${shadowClasses}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-charcoal-100 leading-snug line-clamp-1 group-hover:text-white transition-colors">
+        <h3 className="text-sm font-semibold text-ink leading-snug line-clamp-1 group-hover:text-accent transition-colors">
           {node.title}
         </h3>
         <Badge status={node.status} showIcon={true} />
       </div>
 
-      <div className="flex items-center justify-between text-xs text-charcoal-400 font-mono mt-1">
-        <span className="text-[11px] uppercase tracking-wider text-charcoal-500">
+      <div className="flex items-center justify-between text-xs text-ink/50 font-mono mt-1">
+        <span className="text-[11px] uppercase tracking-wider text-ink/40">
           Depth {node.depth}
         </span>
-        <span className="text-[11px] text-charcoal-400">
+        <span className="text-[11px] text-ink/50">
           {node.concepts.length} {node.concepts.length === 1 ? "concept" : "concepts"}
         </span>
       </div>
