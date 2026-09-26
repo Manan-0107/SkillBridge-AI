@@ -642,6 +642,24 @@ export function AssistantHome({
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
+
+    const featureFeedback: Record<FeatureId, string> = {
+      roadmap: "Your career roadmap is now open. You can review your next learning steps.",
+      practice: "Your technical practice hub is now open. You can drill questions with instant feedback.",
+      resume: "Your resume workspace is now open. You can analyze, tailor, or build your resume.",
+      local: "Job discovery is now open. You can explore live opportunities and real-time alerts.",
+      courses: "Your curated course catalog is now open. You can explore learning resources.",
+    };
+
+    const announcement = featureFeedback[feature] || `Your ${feature} workspace is now open.`;
+    showToast(announcement);
+
+    if (voiceMode || isAISpeakingRef.current) {
+      speakText(announcement, {
+        lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      });
+    }
+
     onRedirect(feature, tab);
   };
 

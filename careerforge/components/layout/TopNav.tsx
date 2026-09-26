@@ -13,7 +13,7 @@ import {
   FileText,
   Settings,
   LogOut,
-  FolderOpen,
+  Briefcase,
   ChevronDown,
   Menu,
   X,
@@ -204,8 +204,8 @@ export function TopNav() {
                     onClick={() => { handleNavClick("local" as FeatureId); setProfileOpen(false); }}
                     className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
                   >
-                    <FolderOpen size={13} strokeWidth={2} aria-hidden="true" />
-                    Local Files
+                    <Briefcase size={13} strokeWidth={2} aria-hidden="true" />
+                    Job Discovery
                   </Link>
 
                   <Link

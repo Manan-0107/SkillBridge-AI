@@ -133,6 +133,21 @@ export function validateEmail(raw: string): ValidationResult {
 }
 
 /**
+ * Format an email address into NATO / phonetic spelling for speech confirmation (§12)
+ * Example: "manan@gmail.com" -> "M-A-N-A-N at G-M-A-I-L dot C-O-M"
+ */
+export function formatEmailForSpokenConfirmation(email: string): string {
+  if (!email || !email.includes("@")) return email;
+  const [local, domain] = email.split("@");
+  const localSpelled = local.toUpperCase().split("").join("-");
+  const domainParts = domain.split(".");
+  const domainSpelled = domainParts
+    .map((part) => part.toUpperCase().split("").join("-"))
+    .join(" dot ");
+  return `${localSpelled} at ${domainSpelled}`;
+}
+
+/**
  * Validate Career / Role / Free-text
  */
 export function validateFreeText(raw: string): ValidationResult {
