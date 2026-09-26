@@ -179,7 +179,7 @@ export function UbixHeroScene() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[380px] sm:h-[460px] lg:h-[540px] flex items-center justify-center pointer-events-none select-none"
+      className="w-full h-full flex items-center justify-center pointer-events-none select-none"
       aria-hidden="true"
     />
   );

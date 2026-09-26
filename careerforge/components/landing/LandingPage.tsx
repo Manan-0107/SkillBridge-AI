@@ -43,6 +43,14 @@ const UbixCareerGraph = dynamic(
   }
 );
 
+const UbixHeroSceneDynamic = dynamic(
+  () => import("@/components/ubix/UbixHeroScene").then((m) => m.UbixHeroScene),
+  {
+    ssr: false,
+    loading: () => null,
+  }
+);
+
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LandingPageProps {
   onEnter: () => void;
@@ -307,9 +315,27 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
       <section
         id="system-arch"
         aria-labelledby="arch-heading"
-        className="py-24 border-t border-white/[0.06] bg-[#0A0D11]/60"
+        className="relative py-24 border-t border-white/[0.06] bg-[#0A0D11]/35 overflow-hidden"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* Ambient edge glazes */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-[15%] pointer-events-none z-0"
+          style={{
+            background:
+              "radial-gradient(circle at 0% 50%, rgba(var(--accent-rgb), 0.06), transparent 40%)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 w-[15%] pointer-events-none z-0"
+          style={{
+            background:
+              "radial-gradient(circle at 100% 50%, rgba(var(--accent-rgb), 0.06), transparent 40%)",
+          }}
+        />
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs uppercase tracking-widest text-[--accent] font-mono font-semibold">
               The Architecture
@@ -389,9 +415,13 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
       <section
         id="intelligence"
         aria-labelledby="intelligence-heading"
-        className="py-24 border-t border-white/[0.06]"
+        className="relative py-24 border-t border-white/[0.06] overflow-hidden"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="absolute inset-0 z-0 opacity-50 pointer-events-none" aria-hidden="true">
+          <UbixHeroSceneDynamic />
+        </div>
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
 
             <div className="lg:col-span-5 space-y-5">
@@ -476,9 +506,27 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
       <section
         id="accessibility"
         aria-labelledby="a11y-heading"
-        className="py-24 border-t border-white/[0.06] bg-[#0A0D11]/60"
+        className="relative py-24 border-t border-white/[0.06] bg-[#0A0D11]/35 overflow-hidden"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* Ambient edge glazes */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-[15%] pointer-events-none z-0"
+          style={{
+            background:
+              "radial-gradient(circle at 0% 50%, rgba(var(--accent-rgb), 0.06), transparent 40%)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 w-[15%] pointer-events-none z-0"
+          style={{
+            background:
+              "radial-gradient(circle at 100% 50%, rgba(var(--accent-rgb), 0.06), transparent 40%)",
+          }}
+        />
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
 
             <div className="lg:col-span-5 space-y-5">

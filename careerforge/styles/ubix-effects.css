@@ -52,6 +52,7 @@ html.dark,
      Only this line may declare the cyan hex value.
      All other accent aliases below are derived from this one decision.    */
   --accent: #7DE1EA;
+  --accent-rgb: 125, 225, 234; /* same value as --accent, RGB form */
 
   /* Derived representations — do NOT manually set these to another value */
   --ubix-cyan: var(--accent);
