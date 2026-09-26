@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Instrument_Sans } from "next/font/google";
+import { Space_Grotesk, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "../styles/ubix-effects.css";
 import { AppProvider } from "@/lib/store";
@@ -22,6 +22,14 @@ const fontSans = Instrument_Sans({
   variable: "--font-sans",
   display: "swap",
   fallback: ["system-ui", "sans-serif"],
+});
+
+const fontMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "monospace"],
 });
 
 import { TopNav } from "@/components/layout/TopNav";
@@ -53,7 +61,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fontDisplay.variable} ${fontSans.variable} dark`}
+      className={`${fontDisplay.variable} ${fontSans.variable} ${fontMono.variable} dark`}
       data-theme="dark"
       style={{ colorScheme: "dark" }}
     >

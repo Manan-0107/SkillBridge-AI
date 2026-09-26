@@ -141,6 +141,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     lastInteractionTime: Date.now(),
     journeyStage: -1,
     journeyTimer: 0,
+    reducedPulseProgress: 1.0,
   });
 
   // Keep stateRef in sync
@@ -226,6 +227,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       setSelectedNode((prev) => (prev === id ? null : id));
       stateRef.current.lastInteractionTime = Date.now();
       stateRef.current.autoTourActive = false;
+      stateRef.current.reducedPulseProgress = 0.0;
       setAutoTourActive(false);
 
       if (id === "resume" || id === "ai") {
@@ -261,7 +263,12 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     const container = containerRef.current;
     if (!container || typeof window === "undefined") return;
 
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let prefersReducedMotion = motionQuery.matches;
+    const handleMotionChange = (e: MediaQueryListEvent) => {
+      prefersReducedMotion = e.matches;
+    };
+    motionQuery.addEventListener("change", handleMotionChange);
 
     // ── Read primary accent from CSS single source of truth ──
     const rawAccent = getComputedStyle(document.documentElement)
@@ -285,10 +292,24 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       antialias: true,
       powerPreference: "high-performance",
     });
-    renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
+
+    // Aspect ratio check & clamp:
+    // camera.aspect at 2560px exceeds 1.35x value at 1440px (2560/1440 = 1.7778 > 1.35)
+    // Clamping effective width to Math.min(w, 1800) prevents ultrawide stretch
+    const updateAspectAndRenderer = (w: number, h: number) => {
+      const unclampedAspect = w / h;
+      const effectiveWidth = Math.min(w, 1800);
+      camera.aspect = effectiveWidth / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      console.log(`[camera.aspect] width=${w}px, height=${h}px, unclampedAspect=${unclampedAspect.toFixed(4)}, clampedAspect=${camera.aspect.toFixed(4)} (effectiveWidth=${effectiveWidth}px)`);
+    };
+
+    updateAspectAndRenderer(width, height);
 
     // Canvas insertion
     const canvas = renderer.domElement;
@@ -551,13 +572,14 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     });
 
     // Mouse tracking for parallax
+    // Mouse tracking for parallax
     const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
     const handlePointerMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width - 0.5;
-      const y = (e.clientY - rect.top) / rect.height - 0.5;
-      mouse.targetX = x * 1.5;
-      mouse.targetY = -y * 1.5;
+      const x = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+      const y = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+      mouse.targetX = Math.max(-1, Math.min(1, x));
+      mouse.targetY = Math.max(-1, Math.min(1, y));
       stateRef.current.lastInteractionTime = Date.now();
     };
     window.addEventListener("mousemove", handlePointerMove, { passive: true });
@@ -573,34 +595,26 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       const elapsed = clock.getElapsedTime();
       const { selectedNode: activeSelected, hoveredNode: activeHovered, isCoreExpanded: activeExpanded, introStep: currentIntro, autoTourActive: touring } = stateRef.current;
 
-      // Mouse smooth interpolation
-      mouse.x += (mouse.targetX - mouse.x) * 0.05;
-      mouse.y += (mouse.targetY - mouse.y) * 0.05;
-
-      // ── Core Rotation ──
-      coreGroup.rotation.y = elapsed * 0.2 + mouse.x * 0.3;
-      coreGroup.rotation.x = elapsed * 0.1 + mouse.y * 0.2;
+      // ── Step 5: Idle Rotation ──
+      // Idle: 0.05 rad/s, Hover/Select: 0.01 rad/s, Reduced motion: 0 rad/s
+      const isNodeActive = Boolean(activeSelected || activeHovered);
+      const targetRotationSpeed = prefersReducedMotion ? 0 : (isNodeActive ? 0.01 : 0.05);
+      cageMesh.rotation.y += targetRotationSpeed * delta;
+      coreMesh.rotation.y += targetRotationSpeed * delta;
 
       // Core scaling (discovery moment burst)
       const targetCoreScale = activeExpanded ? 1.6 : 1.0;
       coreGroup.scale.lerp(new THREE.Vector3(targetCoreScale, targetCoreScale, targetCoreScale), 0.08);
 
-      // Particle subtle rotation
-      particlePoints.rotation.y = -elapsed * 0.05;
-      particlePoints.rotation.x = elapsed * 0.02;
+      // Particle subtle rotation (0 in reduced motion)
+      if (!prefersReducedMotion) {
+        particlePoints.rotation.y = -elapsed * 0.05;
+        particlePoints.rotation.x = elapsed * 0.02;
+      }
 
       // ── Intro Step Visibility Handling ──
-      // Mapping intro step (1..8) to visible nodes
-      // Step 1: Core only
-      // Step 2: Resume
-      // Step 3: Skill Gap
-      // Step 4: Learning
-      // Step 5: Practice
-      // Step 6: Jobs
-      // Step 7: Roadmap
-      // Step 8: AI Assistant + all
       const isVisibleInIntro = (nodeId: CareerNodeId) => {
-        if (currentIntro === 0) return true; // full view
+        if (currentIntro === 0) return true;
         if (currentIntro >= 2 && nodeId === "resume") return true;
         if (currentIntro >= 3 && nodeId === "skills") return true;
         if (currentIntro >= 4 && nodeId === "learning") return true;
@@ -622,42 +636,52 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
 
         group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
 
-        // Rotation & float
-        group.rotation.y = elapsed * 0.35;
-        group.rotation.x = elapsed * 0.2;
-        group.position.y = nodePositions[node.id].y + Math.sin(elapsed * 1.5 + node.position[0]) * 0.06;
+        if (!prefersReducedMotion) {
+          group.rotation.y = elapsed * 0.35;
+          group.rotation.x = elapsed * 0.2;
+          group.position.y = nodePositions[node.id].y + Math.sin(elapsed * 1.5 + node.position[0]) * 0.06;
+        } else {
+          group.position.y = nodePositions[node.id].y;
+        }
       });
 
       // ── Auto-Tour Logic ──
-      if (touring && currentIntro === 0 && !activeSelected && !activeExpanded) {
+      if (touring && currentIntro === 0 && !activeSelected && !activeExpanded && !prefersReducedMotion) {
         autoTourTimer += delta;
         if (autoTourTimer > 3.8) {
           autoTourTimer = 0;
           autoTourIndex = (autoTourIndex + 1) % CAREER_NODES.length;
-          // Trigger a pulse along the chain
           stateRef.current.hoveredNode = CAREER_NODES[autoTourIndex].id;
         }
       }
 
+      // ── Step 5: Cursor Parallax (Max displacement 15px at viewport edge with 0.05 damping) ──
+      mouse.x += (mouse.targetX - mouse.x) * 0.05;
+      mouse.y += (mouse.targetY - mouse.y) * 0.05;
+
+      const pxToWorld = (2 * camera.position.z * Math.tan((camera.fov * Math.PI) / 360)) / height;
+      const maxDisplacementWorld = prefersReducedMotion ? 0 : 15 * pxToWorld;
+      const parallaxOffsetX = mouse.x * maxDisplacementWorld;
+      const parallaxOffsetY = -mouse.y * maxDisplacementWorld;
+
       // ── Camera Position Lerping ──
       const targetCam = defaultCamPos.clone();
       if (activeExpanded) {
-        // Pulled back overview
         targetCam.set(0, 0, 10.5);
       } else if (activeSelected) {
-        // Focus near the selected node
         const nodePos = nodePositions[activeSelected];
         targetCam.set(nodePos.x * 0.6, nodePos.y * 0.6, 6.2);
       } else if (activeHovered) {
         const nodePos = nodePositions[activeHovered];
-        targetCam.set(nodePos.x * 0.25 + mouse.x * 0.5, nodePos.y * 0.25 + mouse.y * 0.5, 7.6);
+        targetCam.set(nodePos.x * 0.25, nodePos.y * 0.25, 7.6);
       } else {
-        // Normal interactive parallax
-        targetCam.x = mouse.x * 0.8;
-        targetCam.y = mouse.y * 0.8;
-        targetCam.z = 7.8;
+        targetCam.set(0, 0, 7.8);
       }
-      camera.position.lerp(targetCam, 0.04);
+
+      targetCam.x += parallaxOffsetX;
+      targetCam.y += parallaxOffsetY;
+
+      camera.position.lerp(targetCam, 0.05);
       camera.lookAt(0, 0, 0);
 
       // ── Journey Sequence Timer (Resume / AI) ──
@@ -684,13 +708,23 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
         }
       }
 
-      // ── Connection Pulses Animation ──
+      // ── Step 5: Connection Pulses Animation ──
+      // On node hover/selection: animate pulse traveling along connection line to the core, duration 900ms
+      // Reduced motion: pulse plays once on click only (no continuous animation)
+      const activeTargetNodeId = activeHovered || activeSelected;
+      const pulseSpeed900ms = 1.0 / 0.9;
+
       connections.forEach((conn) => {
         const fromVisible = conn.fromId === "core" || isVisibleInIntro(conn.fromId as CareerNodeId);
         const toVisible = isVisibleInIntro(conn.toId as CareerNodeId);
         const canShow = fromVisible && toVisible;
 
-        // Is connection currently part of the active sequential journey?
+        const isCoreToActiveNode = Boolean(
+          activeTargetNodeId &&
+          ((conn.fromId === "core" && conn.toId === activeTargetNodeId) ||
+           (conn.fromId === activeTargetNodeId && conn.toId === "core"))
+        );
+
         const activeLeg = (activeSelected === "resume" || activeSelected === "ai") ? stateRef.current.journeyStage : -1;
         const isCurrentJourneyLeg =
           activeLeg >= 0 &&
@@ -698,8 +732,8 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
           conn.fromId === journeyLegPairs[activeLeg][0] &&
           conn.toId === journeyLegPairs[activeLeg][1];
 
-        // Is connection highlighted?
         const isConnectedToSelected =
+          isCoreToActiveNode ||
           isCurrentJourneyLeg ||
           activeSelected === conn.fromId ||
           activeSelected === conn.toId ||
@@ -715,9 +749,10 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
           return;
         }
 
-        // Line brightness
         const targetLineOpacity = activeExpanded
           ? 0.55
+          : isCoreToActiveNode
+          ? 0.65
           : isCurrentJourneyLeg
           ? 0.75
           : isConnectedToSelected
@@ -727,15 +762,39 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
           : 0.18;
         lineMaterial.opacity = THREE.MathUtils.lerp(lineMaterial.opacity, targetLineOpacity, 0.08);
 
-        // Advance pulse progress
-        const speedMultiplier = isCurrentJourneyLeg ? 1.6 : 1.0;
-        conn.pulseProgress = (conn.pulseProgress + delta * conn.speed * speedMultiplier) % 1.0;
-        const pulsePoint = conn.curve.getPoint(conn.pulseProgress);
-        conn.pulseMesh.position.copy(pulsePoint);
+        let targetPulseOpacity = 0.0;
 
-        const shouldPulse = isCurrentJourneyLeg || isConnectedToSelected || activeExpanded || conn.fromId !== "core";
-        const targetPulseOpacity = isCurrentJourneyLeg ? 1.0 : shouldPulse ? 0.85 : 0.0;
-        pulseMaterial.opacity = THREE.MathUtils.lerp(pulseMaterial.opacity, targetPulseOpacity, 0.1);
+        if (isCoreToActiveNode) {
+          if (!prefersReducedMotion) {
+            conn.pulseProgress = (conn.pulseProgress + delta * pulseSpeed900ms) % 1.0;
+            const pulsePoint = conn.curve.getPoint(conn.pulseProgress);
+            conn.pulseMesh.position.copy(pulsePoint);
+            targetPulseOpacity = 1.0;
+          } else {
+            // Reduced motion: pulse plays once on click only (no continuous animation)
+            if (activeSelected === activeTargetNodeId && stateRef.current.reducedPulseProgress < 1.0) {
+              stateRef.current.reducedPulseProgress += delta * pulseSpeed900ms;
+              conn.pulseProgress = Math.min(1.0, stateRef.current.reducedPulseProgress);
+              const pulsePoint = conn.curve.getPoint(conn.pulseProgress);
+              conn.pulseMesh.position.copy(pulsePoint);
+              targetPulseOpacity = stateRef.current.reducedPulseProgress < 1.0 ? 1.0 : 0.0;
+            } else {
+              targetPulseOpacity = 0.0;
+            }
+          }
+        } else if (isCurrentJourneyLeg && !prefersReducedMotion) {
+          conn.pulseProgress = (conn.pulseProgress + delta * 1.6) % 1.0;
+          const pulsePoint = conn.curve.getPoint(conn.pulseProgress);
+          conn.pulseMesh.position.copy(pulsePoint);
+          targetPulseOpacity = 1.0;
+        } else if (activeExpanded && !prefersReducedMotion) {
+          conn.pulseProgress = (conn.pulseProgress + delta * conn.speed) % 1.0;
+          const pulsePoint = conn.curve.getPoint(conn.pulseProgress);
+          conn.pulseMesh.position.copy(pulsePoint);
+          targetPulseOpacity = 0.85;
+        }
+
+        pulseMaterial.opacity = THREE.MathUtils.lerp(pulseMaterial.opacity, targetPulseOpacity, 0.15);
       });
 
       // ── Project 3D Node Positions to 2D HTML Screen Coordinates ──
@@ -756,7 +815,6 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
         const worldPos = new THREE.Vector3();
         group.getWorldPosition(worldPos);
 
-        // Project into normalized device coords [-1, 1]
         const projected = worldPos.clone().project(camera);
         const screenX = (projected.x * 0.5 + 0.5) * width;
         const screenY = (-projected.y * 0.5 + 0.5) * height;
@@ -775,15 +833,12 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
 
     render();
 
-    // Resize Handler
+    // Step 4 Resize Handler with Aspect Clamping
     const handleResize = () => {
       if (!container) return;
       width = container.clientWidth || 800;
       height = container.clientHeight || 600;
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      updateAspectAndRenderer(width, height);
     };
 
     window.addEventListener("resize", handleResize);
@@ -791,6 +846,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     // Cleanup
     return () => {
       cancelAnimationFrame(animationFrameId);
+      motionQuery.removeEventListener("change", handleMotionChange);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("mousemove", handlePointerMove);
       if (renderer.domElement.parentNode) {
@@ -806,7 +862,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[620px] sm:h-[720px] lg:h-[820px] select-none overflow-hidden rounded-3xl border border-white/[0.07] bg-[#080A0D]"
+      className="relative w-full h-[620px] sm:h-[720px] lg:h-[820px] select-none overflow-hidden bg-[#080A0D]"
       role="region"
       aria-label="Interactive 3D Career System Graph"
     >
@@ -943,7 +999,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
             <span className={isSelected ? "text-[#080A0D]" : "text-[--accent]"}>
               <Icon size={14} aria-hidden="true" />
             </span>
-            <span className="text-xs font-semibold tracking-tight font-display">{node.label}</span>
+            <span className="text-xs font-semibold font-sans">{node.label}</span>
           </button>
         );
       })}

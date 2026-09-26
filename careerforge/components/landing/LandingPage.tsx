@@ -186,9 +186,6 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
             >
               ubix
             </a>
-            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full border border-white/10 bg-[#121518] text-[10px] font-mono text-[#8B9096]">
-              CONNECTED SYSTEM
-            </span>
           </div>
 
           <nav
@@ -238,9 +235,8 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         aria-labelledby="hero-title"
         className="relative pt-8 pb-16 sm:pt-12 sm:pb-24 overflow-hidden"
       >
+        {/* 1. Heading block */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-
-          {/* Core Concept Header */}
           <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-8 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-[#121518] text-xs text-[#8B9096] font-medium font-sans">
               <span
@@ -270,15 +266,17 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
               </p>
             </div>
           </div>
+        </div>
 
-          {/* 3D Career Graph Interactive System */}
-          <div className="relative w-full">
-            <UbixCareerGraph
-              onCtaClick={handleNodeAction}
-            />
-          </div>
+        {/* 2. Full-bleed 3D Career Graph Interactive System */}
+        <div className="relative w-full">
+          <UbixCareerGraph
+            onCtaClick={handleNodeAction}
+          />
+        </div>
 
-          {/* Quick entry action bar */}
+        {/* 3. CTA buttons & keyboard-hint */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
             <button
               id="hero-getstarted-btn"
@@ -299,11 +297,9 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
             </button>
           </div>
 
-          {/* Accessibility & Keyboard Quick Guide */}
           <p className="text-center text-[11px] font-mono text-[#62676D] mt-4">
             Navigation: Press <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">Tab</kbd> to cycle nodes, <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">1-7</kbd> for direct focus, <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-[#121518] text-[#A5ABB2]">Esc</kbd> to reset view.
           </p>
-
         </div>
       </section>
 

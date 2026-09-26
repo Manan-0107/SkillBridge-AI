@@ -36,10 +36,9 @@ const config: Config = {
         "hairline-strong": "rgba(27, 24, 21, 0.22)",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace"],
-        display: ["Inter", "ui-sans-serif"],
-        body: ["Inter", "ui-sans-serif"],
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       fontSize: {
         xs: ["0.75rem", { lineHeight: "1rem" }],
