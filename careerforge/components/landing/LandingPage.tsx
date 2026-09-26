@@ -198,30 +198,34 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
 
           <nav
             aria-label="Landing navigation"
-            className="hidden md:flex items-center gap-7 text-xs font-medium font-mono text-[#8B9096]"
+            className="hidden md:flex items-center gap-8 text-sm font-normal text-[#9AA0A6]"
           >
-            {[
-              { href: "#career-graph",  label: "01 // CAREER GRAPH" },
-              { href: "#system-arch",   label: "02 // ARCHITECTURE" },
-              { href: "#intelligence",  label: "03 // INTELLIGENCE" },
-              { href: "#accessibility", label: "04 // ACCESSIBILITY"},
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm tracking-wider uppercase"
-              >
-                {link.label}
-              </a>
-            ))}
+            <a
+              href="#career-graph"
+              className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
+            >
+              Product
+            </a>
+            <a
+              href="#system-arch"
+              className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
+            >
+              How it works
+            </a>
+            <a
+              href="#accessibility"
+              className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
+            >
+              Accessibility
+            </a>
           </nav>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-5">
             <button
               id="nav-signin-btn"
               type="button"
               onClick={onEnter}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-[#C7CCD1] hover:text-white transition-colors cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+              className="text-sm font-medium text-[#C7CCD1] hover:text-white transition-colors cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
             >
               Sign In
             </button>
@@ -229,7 +233,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
               id="nav-getstarted-btn"
               type="button"
               onClick={onEnter}
-              className="px-4 py-1.5 rounded-lg bg-[--accent] text-[#080A0D] text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+              className="px-4 py-2 rounded-lg bg-[--accent] text-[#080A0D] text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
             >
               Get Started
             </button>
