@@ -12,13 +12,13 @@ export const Connector = React.memo(function Connector({
   isSelectedBranch,
   isDimmed,
 }: ConnectorProps) {
-  let strokeColor = "rgba(255, 255, 255, 0.12)";
+  let strokeColor = "rgba(20, 17, 15, 0.15)";
   let strokeWidth = 1.75;
   let strokeDasharray = "none";
   let opacity = 1;
 
   if (isSelectedBranch) {
-    strokeColor = "#F59E0B"; // Amber vivid accent
+    strokeColor = "var(--color-accent)";
     strokeWidth = 2.5;
   } else if (isDimmed) {
     opacity = 0.25;
@@ -31,7 +31,7 @@ export const Connector = React.memo(function Connector({
         <path
           d={connector.path}
           fill="none"
-          stroke="#F59E0B"
+          stroke="var(--color-accent)"
           strokeWidth={6}
           strokeOpacity={0.25}
           strokeLinecap="round"

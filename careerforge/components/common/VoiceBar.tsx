@@ -26,7 +26,7 @@ export function VoiceBar() {
     : "bg-zinc-300";
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[min(92vw,22rem)] border border-black bg-white shadow-[4px_4px_0_0_#000]">
+    <div className="fixed bottom-4 right-4 z-50 w-[min(92vw,22rem)] border border-ink/20 bg-surface shadow-md">
       <div className="flex items-center justify-between border-b border-black px-4 py-2">
         <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
           <span

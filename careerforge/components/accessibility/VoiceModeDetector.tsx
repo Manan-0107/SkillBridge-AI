@@ -1,178 +1,278 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import {
   startSpeechRecognition,
   SpeechRecognitionController,
-  detectLanguageFromText,
+  detectTextLanguage,
   speakText,
   stopSpeaking,
 } from "@/lib/voice";
 import { useGlobalVoice } from "@/providers/GlobalVoiceProvider";
 
 export function VoiceModeDetector() {
-  const { user } = useApp();
+  const { user, voiceLanguage } = useApp();
   const { retryVoiceMode, switchToTextMode } = useGlobalVoice();
   const [attempt, setAttempt] = useState<number>(1);
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(5);
   const [listening, setListening] = useState(false);
   const [detectedText, setDetectedText] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [checked, setChecked] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognitionController | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const windowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const attemptRef = useRef<number>(1);
 
-  useEffect(() => {
-    // Only run the 3-check voice detection once per user session
-    if (user && !checked) {
-      setModalOpen(true);
-      startVoiceCheckCycle(1);
+  const stopActiveSession = useCallback(() => {
+    stopSpeaking();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
-
-    return () => {
-      stopSpeaking();
-      recognitionRef.current?.stop();
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [user, checked]);
-
-  const startVoiceCheckCycle = (currentAttempt: number) => {
-    if (currentAttempt > 3) {
-      // 3 Attempts completed with no voice -> Default to Text Mode
-      setModalOpen(false);
-      setChecked(true);
-      switchToTextMode();
-      return;
+    if (windowTimeoutRef.current) {
+      clearTimeout(windowTimeoutRef.current);
+      windowTimeoutRef.current = null;
     }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setListening(false);
+  }, []);
 
-    setAttempt(currentAttempt);
-    setListening(true);
+  const handleVoiceSuccess = useCallback((transcript: string) => {
+    stopActiveSession();
+    setDetectedText(transcript);
+    setChecked(true);
+    setModalOpen(false);
 
     try {
-      recognitionRef.current = startSpeechRecognition({
-        onTranscript: (transcript: string) => {
-          if (transcript.trim().length > 0) {
-            // VOICE DETECTED!
-            setDetectedText(transcript);
-            handleVoiceDetected(transcript);
-          }
-        },
-        onListeningChange: (isList: boolean) => setListening(isList),
-        onError: () => {
-          // If silence / error on this attempt, move to next check after brief pause
-          scheduleNextAttempt(currentAttempt + 1);
-        },
-      });
+      localStorage.setItem("careerforge_voice_calibrated", "enabled");
+    } catch {}
 
-      // Set 4-second listening window per attempt
-      timeoutRef.current = setTimeout(() => {
-        recognitionRef.current?.stop();
-        scheduleNextAttempt(currentAttempt + 1);
-      }, 4000);
-    } catch {
-      scheduleNextAttempt(currentAttempt + 1);
-    }
-  };
-
-  const scheduleNextAttempt = (nextAttempt: number) => {
-    if (nextAttempt <= 3) {
-      timeoutRef.current = setTimeout(() => {
-        startVoiceCheckCycle(nextAttempt);
-      }, 800);
-    } else {
-      // Finished 3 checks with no voice
-      setModalOpen(false);
-      setChecked(true);
-      switchToTextMode();
-    }
-  };
-
-  const handleVoiceDetected = (transcript: string) => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    recognitionRef.current?.stop();
-
-    const detectedLang = detectLanguageFromText(transcript);
-    setChecked(true);
-    setModalOpen(false);
     retryVoiceMode();
 
-    // Speak welcome guide in detected language
+    const detectedLang = detectTextLanguage(transcript) || voiceLanguage || "en-US";
     const welcomeMessages: Record<string, string> = {
-      "hi-IN": "वॉयस डिटेक्ट हो गया है। आप अब एआई वॉयस मोड में हैं। मैं आपको हर स्टेप पर गाइड करूंगा।",
-      "gu-IN": "તમારો અવાજ ઓળખાઈ ગયો છે. તમે હવે એઆઈ વોઈસ મોડમાં છો. હું તમને દરેક પગલે મદદ કરીશ.",
-      "en-IN": "Voice detected! Welcome to CareerForge. You are in AI Voice Assistance Mode. I will help you at every stage.",
-      "en-US": "Voice detected! Welcome to CareerForge. You are in AI Voice Assistance Mode. I will help you at every stage.",
+      "hi-IN": "वॉयस एक्सेसिबिलिटी सक्रिय हो गई है। करियरफोर्ज में आपका स्वागत है।",
+      "gu-IN": "વોઈસ એક્સેસિબિલિટી સક્રિય થઈ ગઈ છે. કરિયરફોર્જમાં આપનું સ્વાગત છે.",
+      "en-US": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
+      "en-IN": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
     };
 
-    const msg = welcomeMessages[detectedLang] || welcomeMessages["en-IN"];
+    const msg = welcomeMessages[detectedLang] || welcomeMessages["en-US"];
     speakText(msg, { lang: detectedLang });
-  };
+  }, [retryVoiceMode, stopActiveSession, voiceLanguage]);
 
-  const forceTextMode = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    recognitionRef.current?.stop();
+  const handleFallbackToText = useCallback(() => {
+    stopActiveSession();
     setModalOpen(false);
     setChecked(true);
+
+    try {
+      localStorage.setItem("careerforge_voice_calibrated", "disabled");
+    } catch {}
+
     switchToTextMode();
-  };
+    speakText("Voice detection completed. Continuing in standard text mode.", { lang: "en-US" });
+  }, [stopActiveSession, switchToTextMode]);
 
-  const forceVoiceMode = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    recognitionRef.current?.stop();
-    setModalOpen(false);
-    setChecked(true);
-    retryVoiceMode();
-    speakText("AI Voice Assistance Mode activated.", { lang: "en-IN" });
-  };
+  const runAttempt = useCallback((currentAttempt: number) => {
+    attemptRef.current = currentAttempt;
+    setAttempt(currentAttempt);
+    setSecondsRemaining(5);
+    setListening(true);
+
+    const prompts: Record<number, string> = {
+      1: "Please say something. You can say your name or tell me what you would like to learn.",
+      2: "Attempt two. Please say something.",
+      3: "Attempt three. Please say something.",
+    };
+
+    const promptText = prompts[currentAttempt] || "Please say something.";
+    speakText(promptText, {
+      lang: voiceLanguage && voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      onEnd: () => {
+        // Start listening precisely after audio prompt finishes
+        try {
+          recognitionRef.current = startSpeechRecognition({
+            lang: voiceLanguage && voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+            onTranscript: (transcript: string) => {
+              const clean = transcript.trim();
+              if (clean.length > 0) {
+                handleVoiceSuccess(clean);
+              }
+            },
+            onListeningChange: (isList: boolean) => setListening(isList),
+            onError: () => {
+              // Proceed to next attempt after timeout window expires
+            },
+          });
+        } catch {
+          // If browser speech recognition is completely unavailable
+          handleFallbackToText();
+          return;
+        }
+
+        // 5-second countdown timer for visual/deaf feedback
+        let timeLeft = 5;
+        countdownIntervalRef.current = setInterval(() => {
+          timeLeft -= 1;
+          setSecondsRemaining(Math.max(0, timeLeft));
+        }, 1000);
+
+        // 5-second window per attempt
+        windowTimeoutRef.current = setTimeout(() => {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            recognitionRef.current = null;
+          }
+
+          if (currentAttempt < 3) {
+            runAttempt(currentAttempt + 1);
+          } else {
+            // All 3 attempts exhausted without interpretable speech
+            handleFallbackToText();
+          }
+        }, 5000);
+      },
+    });
+  }, [handleFallbackToText, handleVoiceSuccess, voiceLanguage]);
+
+  useEffect(() => {
+    // Check if voice capability has already been tested
+    let alreadyCalibrated = false;
+    try {
+      alreadyCalibrated = Boolean(localStorage.getItem("careerforge_voice_calibrated"));
+    } catch {}
+
+    if (!alreadyCalibrated && !checked) {
+      setModalOpen(true);
+      const timer = setTimeout(() => {
+        runAttempt(1);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [checked, runAttempt]);
+
+  useEffect(() => {
+    return () => {
+      stopActiveSession();
+    };
+  }, [stopActiveSession]);
 
   if (!modalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="relative w-full max-w-md rounded-2xl border border-indigo-200 bg-white p-6 shadow-2xl text-center">
-        {/* Pulsing AI Mic Indicator */}
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 border-2 border-indigo-400">
-          <span className="text-3xl animate-bounce">🎙️</span>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="voice-check-title"
+      aria-describedby="voice-check-desc"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-xs p-4 animate-in fade-in"
+    >
+      <div className="relative w-full max-w-md rounded-2xl border border-ink/15 bg-surface p-6 shadow-xl text-center text-ink">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between pb-3 border-b border-ink/10 mb-4">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-ink/60">
+            Voice Accessibility Calibration
+          </span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-bg border border-ink/15 text-accent font-semibold">
+            Attempt {attempt} of 3
+          </span>
         </div>
 
-        <h3 className="mt-4 text-lg font-bold text-neutral-900">
-          AI Voice Detection Check ({attempt}/3)
-        </h3>
-        <p className="mt-1 text-xs text-neutral-600">
-          Say anything or speak in your language to activate <strong>Voice Mode</strong>.
-          If no voice is detected, we will stay in <strong>Text Mode</strong>.
+        {/* Visual Pulse Indicator & Timer */}
+        <div className="my-5 flex flex-col items-center justify-center gap-2">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-bg border border-accent/40 shadow-xs">
+            <svg
+              className={`w-7 h-7 text-accent ${listening ? "animate-pulse" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+              />
+            </svg>
+            {listening && (
+              <span className="absolute -inset-1 rounded-full border border-accent/30 animate-ping pointer-events-none" />
+            )}
+          </div>
+          <span className="text-xs font-mono text-ink/60">
+            {listening ? `Listening... (${secondsRemaining}s)` : "Preparing prompt..."}
+          </span>
+        </div>
+
+        <h2 id="voice-check-title" className="text-base font-bold text-ink">
+          Voice Capability Detection
+        </h2>
+        <p id="voice-check-desc" className="mt-1 text-xs text-ink/75 leading-relaxed">
+          Please say something. You can say your name or tell me what you would like to learn.
         </p>
 
-        {/* Live Audio Waves Animation */}
-        <div className="mt-4 flex items-center justify-center gap-1.5 h-6">
-          <span className="h-4 w-1 rounded-full bg-indigo-500 animate-pulse" />
-          <span className="h-6 w-1 rounded-full bg-indigo-600 animate-pulse delay-75" />
-          <span className="h-5 w-1 rounded-full bg-indigo-500 animate-pulse delay-150" />
-          <span className="h-3 w-1 rounded-full bg-indigo-400 animate-pulse" />
+        {/* Live Audio Waves Animation for Deaf Users */}
+        <div
+          aria-hidden="true"
+          className="mt-4 flex items-center justify-center gap-1.5 h-6"
+        >
+          <span
+            className={`w-1 rounded-full bg-accent transition-all ${
+              listening ? "h-5 animate-pulse" : "h-1 opacity-30"
+            }`}
+          />
+          <span
+            className={`w-1 rounded-full bg-accent transition-all ${
+              listening ? "h-6 animate-pulse delay-75" : "h-1 opacity-30"
+            }`}
+          />
+          <span
+            className={`w-1 rounded-full bg-accent transition-all ${
+              listening ? "h-4 animate-pulse delay-150" : "h-1 opacity-30"
+            }`}
+          />
+          <span
+            className={`w-1 rounded-full bg-accent transition-all ${
+              listening ? "h-5 animate-pulse delay-100" : "h-1 opacity-30"
+            }`}
+          />
         </div>
 
-        {detectedText && (
-          <p className="mt-2 text-xs font-semibold text-emerald-700 bg-emerald-50 py-1 px-2.5 rounded-lg">
-            Heard: &quot;{detectedText}&quot;
-          </p>
-        )}
+        {/* Live Transcript Live Region for Deaf Users */}
+        <div aria-live="polite" className="mt-3 min-h-[28px]">
+          {detectedText ? (
+            <p className="text-xs font-medium text-accent bg-bg py-1 px-2.5 rounded-lg border border-accent/20">
+              Heard: &quot;{detectedText}&quot;
+            </p>
+          ) : (
+            <p className="text-[11px] font-mono text-ink/50">
+              {listening ? "Awaiting speech..." : "Checking system audio..."}
+            </p>
+          )}
+        </div>
 
-        {/* Manual Override Action Buttons */}
-        <div className="mt-6 flex items-center justify-center gap-3">
+        {/* Action Controls */}
+        <div className="mt-6 flex items-center justify-center gap-3 pt-3 border-t border-ink/10">
           <button
             type="button"
-            onClick={forceTextMode}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+            onClick={handleFallbackToText}
+            className="flex-1 rounded-xl border border-ink/20 bg-bg px-3 py-2 text-xs font-medium text-ink/80 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
           >
-            ⌨️ Continue in Text Mode
+            Continue in Text Mode
           </button>
           <button
             type="button"
-            onClick={forceVoiceMode}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 shadow-md cursor-pointer"
+            onClick={() => handleVoiceSuccess("Manual voice activation")}
+            className="flex-1 rounded-xl border border-accent/40 bg-surface px-3 py-2 text-xs font-semibold text-accent hover:border-accent hover:shadow-xs transition-all cursor-pointer"
           >
-            🎙️ Enable Voice Mode
+            Enable Voice Mode
           </button>
         </div>
       </div>

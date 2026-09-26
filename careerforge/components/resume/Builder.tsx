@@ -108,16 +108,15 @@ const popularSkills = [
 ];
 
 const colorPalettes = [
-  { id: "black", label: "Monochrome ATS", hex: "#111827", bgLight: "#F3F4F6", text: "#111827" },
-  { id: "navy", label: "Midnight Navy", hex: "#1E3A8A", bgLight: "#EFF6FF", text: "#1E3A8A" },
-  { id: "emerald", label: "Forest Emerald", hex: "#065F46", bgLight: "#ECFDF5", text: "#065F46" },
-  { id: "indigo", label: "Royal Indigo", hex: "#4338CA", bgLight: "#EEF2FF", text: "#4338CA" },
-  { id: "crimson", label: "Classic Crimson", hex: "#991B1B", bgLight: "#FEF2F2", text: "#991B1B" },
+  { id: "black", label: "Monochrome ATS", hex: "var(--color-ink)", bgLight: "var(--color-surface)", text: "var(--color-ink)" },
+  { id: "accent", label: "Warm Terracotta", hex: "var(--color-accent)", bgLight: "var(--color-surface)", text: "var(--color-accent)" },
+  { id: "info", label: "Deep Slate", hex: "var(--color-info)", bgLight: "var(--color-surface)", text: "var(--color-info)" },
+  { id: "success", label: "Muted Forest", hex: "var(--color-success)", bgLight: "var(--color-surface)", text: "var(--color-success)" },
+  { id: "danger", label: "Rust Crimson", hex: "var(--color-danger)", bgLight: "var(--color-surface)", text: "var(--color-danger)" },
 ];
 
 const fontOptions = [
   { id: "sans", label: "Inter (Modern Sans)", className: "font-sans" },
-  { id: "serif", label: "Merriweather (Ivy Serif)", className: "font-serif" },
   { id: "mono", label: "JetBrains Mono (Technical)", className: "font-mono" },
 ];
 

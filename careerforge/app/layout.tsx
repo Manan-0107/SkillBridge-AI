@@ -1,28 +1,22 @@
 import type { Metadata } from "next";
-import { Newsreader, Inter } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
 import { VoiceProvider } from "@/context/VoiceContext";
 
-const display = Newsreader({
+const fontSans = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-display",
-  display: "swap",
-  adjustFontFallback: false,
-});
-
-const body = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-body",
+  display: "swap",
 });
 
-import { FloatingControlBar } from "@/components/accessibility/FloatingControlBar";
+import { TopNav } from "@/components/layout/TopNav";
+import { FloatingControlBar } from "@/components/layout/FloatingControlBar";
 import { AccessibilityProfileModal } from "@/components/accessibility/AccessibilityProfileModal";
+import { VoiceModeDetector } from "@/components/accessibility/VoiceModeDetector";
 
 export const metadata: Metadata = {
   title: "CareerForge — Build the path, not just the resume",
@@ -36,26 +30,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="font-body antialiased bg-charcoal-950 text-charcoal-200 min-h-screen selection:bg-charcoal-700 selection:text-charcoal-100">
+    <html lang="en" className={`${fontSans.variable}`}>
+      <body className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink">
         <AppProvider>
           <GlobalVoiceProvider>
             <VoiceProvider>
               <a
                 href="#main-content"
-                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-black focus:px-4 focus:py-3 focus:text-white"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
               >
                 Skip to main content
               </a>
               <a
                 href="#voice-assistant-controls"
-                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-black focus:px-4 focus:py-3 focus:text-white"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
               >
                 Skip to voice assistant controls
               </a>
-              {children}
+              <TopNav />
+              <div className="pb-6">
+                {children}
+              </div>
               <FloatingControlBar />
               <AccessibilityProfileModal />
+              <VoiceModeDetector />
               <GlobalVoiceDictator />
             </VoiceProvider>
           </GlobalVoiceProvider>

@@ -60,7 +60,7 @@ export default function PracticeTrackPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-charcoal-950 text-charcoal-200 p-6 flex flex-col items-center justify-center gap-6">
+      <main className="min-h-screen bg-bg text-ink p-6 flex flex-col items-center justify-center gap-6">
         <div className="flex flex-col items-center gap-3">
           <Skeleton variant="badge" className="w-48 h-6" />
           <Skeleton variant="text" className="w-64 h-4" />
@@ -75,17 +75,19 @@ export default function PracticeTrackPage() {
 
   if (error || !documentData) {
     return (
-      <main className="min-h-screen bg-charcoal-950 text-charcoal-200 p-8 flex flex-col items-center justify-center text-center">
-        <div className="max-w-md p-8 rounded-2xl bg-charcoal-900 border border-hairline space-y-4">
-          <div className="text-3xl">⚠️</div>
-          <h1 className="text-xl font-bold text-white">Daily Practice Unavailable</h1>
-          <p className="text-sm text-charcoal-400">
+      <main className="min-h-screen bg-bg text-ink p-8 flex flex-col items-center justify-center text-center">
+        <div className="max-w-md p-8 rounded-2xl bg-surface border border-ink/15 space-y-4 shadow-sm">
+          <span className="inline-block text-xs font-mono font-bold uppercase tracking-wider text-accent bg-accent/10 border border-accent/25 px-2.5 py-1 rounded-full">
+            Unavailable
+          </span>
+          <h1 className="text-xl font-bold text-ink">Daily Practice Unavailable</h1>
+          <p className="text-sm text-ink/70">
             {error || "Daily questions for this track are currently being generated."}
           </p>
           <div className="flex justify-center gap-2 pt-2">
             <Link
               href={`/roadmap/${track}`}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-500 hover:bg-accent-600 text-charcoal-950 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent hover:bg-accent-soft text-white transition-colors"
             >
               View {track} Roadmap
             </Link>
@@ -96,43 +98,37 @@ export default function PracticeTrackPage() {
   }
 
   return (
-    <main className="min-h-screen bg-charcoal-950 text-charcoal-200 selection:bg-accent-500 selection:text-charcoal-950 flex flex-col">
-      {/* Top Header Navigation */}
-      <header className="sticky top-0 z-40 border-b border-hairline bg-charcoal-900/90 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-xs font-semibold text-charcoal-400 hover:text-white transition-colors"
-            >
-              <span>←</span>
-              <span className="hidden sm:inline">Workspace</span>
-            </Link>
-            <div className="h-4 w-[1px] bg-charcoal-700 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold text-white tracking-tight capitalize">
-                {track} Daily Practice
-              </h1>
-              <span className="text-xs font-mono text-charcoal-400 hidden sm:inline">
-                · {formatDisplayDate(resolvedDate)}
-              </span>
+    <main className="min-h-screen bg-bg text-ink selection:bg-accent/20 selection:text-ink flex flex-col">
+      {/* Track Title and Meta Bar */}
+      <div className="border-b border-ink/10 py-6 sm:py-8 bg-surface/60 backdrop-blur-md">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-accent mb-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+              <span>Drill</span>
             </div>
+            <h1 className="font-sans text-2xl sm:text-3xl font-bold tracking-tight text-ink capitalize">
+              {track} Daily Practice
+            </h1>
+            <span className="text-xs font-mono text-ink/60 mt-0.5 block">
+              Session: {formatDisplayDate(resolvedDate)}
+            </span>
           </div>
 
           <Link
             href={`/roadmap/${track}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-charcoal-300 hover:text-white border border-hairline hover:bg-charcoal-800 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-accent hover:text-accent-soft border border-accent/25 hover:bg-accent/10 transition-colors shadow-xs self-start sm:self-auto"
           >
             <span>Roadmap Tree</span>
             <span>↗</span>
           </Link>
         </div>
-      </header>
+      </div>
 
       {/* Track Selector Bar */}
-      <section className="border-b border-hairline bg-charcoal-900/40 py-3 px-4 sm:px-6">
+      <section className="border-b border-ink/10 bg-surface/40 py-3 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-charcoal-900 border border-hairline p-1 rounded-xl">
+          <div className="flex items-center gap-1 bg-surface border border-ink/15 p-1 rounded-xl shadow-sm">
             {TRACK_LIST.map((t) => {
               const isActive = track.toLowerCase() === t.id;
               return (
@@ -142,8 +138,8 @@ export default function PracticeTrackPage() {
                   onClick={() => router.push(`/practice/${t.id}`)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     isActive
-                      ? "bg-charcoal-800 text-white font-semibold border border-hairline shadow-xs"
-                      : "text-charcoal-400 hover:text-white"
+                      ? "bg-accent text-white font-semibold shadow-xs"
+                      : "text-ink/70 hover:text-ink"
                   }`}
                 >
                   {t.label}
@@ -153,7 +149,7 @@ export default function PracticeTrackPage() {
           </div>
 
           {isFallback && (
-            <span className="text-xs font-mono text-amber-400/90 bg-amber-950/40 border border-amber-900/60 px-2.5 py-1 rounded-lg">
+            <span className="text-xs font-mono text-accent bg-accent/10 border border-accent/25 px-2.5 py-1 rounded-lg">
               Showing prior day questions (latest available)
             </span>
           )}

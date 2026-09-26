@@ -16,6 +16,8 @@ import {
   normalizeSpokenPassword,
   playAccessibleChime,
   isSpeechRecognitionSupported,
+  speakText,
+  spellForVerification,
 } from "@/lib/voice";
 
 const COUNTRY_CODES = [
@@ -226,6 +228,9 @@ export function AuthGate() {
           if (isFinal) {
             playAccessibleChime("success");
             setDictatingField(null);
+            speakText(`I heard ${spellForVerification("name", val)}. Is that correct?`, {
+              lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+            });
             // Auto advance to email
             setTimeout(() => {
               setActiveSection("email");
@@ -238,6 +243,9 @@ export function AuthGate() {
           if (isFinal) {
             playAccessibleChime("success");
             setDictatingField(null);
+            speakText(`I heard ${spellForVerification("email", val)}. Is that correct?`, {
+              lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+            });
             // Auto advance to password
             setTimeout(() => {
               setActiveSection("password");
@@ -250,6 +258,9 @@ export function AuthGate() {
           if (isFinal) {
             playAccessibleChime("success");
             setDictatingField(null);
+            speakText("Your password has been entered. For security, I won't read it aloud.", {
+              lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+            });
             if (cleanPass.length < 6) {
               setError("Password needs at least 6 characters (e.g. 123456).");
             } else {
@@ -310,6 +321,10 @@ export function AuthGate() {
       }
 
       playAccessibleChime("success");
+      speakText(
+        "You're signed in. Welcome back to CareerForge. You can say open my roadmap or ask me anything.",
+        { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
+      );
       // Persist authenticated user to App Store
       await signIn(data.user.email, data.user.name);
     } catch (err: any) {
@@ -332,6 +347,10 @@ export function AuthGate() {
       const data = await res.json();
       if (data.success && data.user) {
         playAccessibleChime("success");
+        speakText(
+          "You're signed in. Welcome back to CareerForge. You can say open my roadmap or ask me anything.",
+          { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
+        );
         await signIn(data.user.email, data.user.name);
       }
     } catch {
@@ -461,8 +480,8 @@ export function AuthGate() {
           </div>
 
           {/* ─── Multi-Section Step Indicator ─────────────────────────────────── */}
-          <div className="mb-6 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">
+          <div className="mb-6 rounded-xl border border-ink/15 bg-bg p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/60 mb-2 font-mono">
               Step-by-Step Entry:
             </p>
             <div className="flex items-center gap-1.5 text-xs">
@@ -474,18 +493,18 @@ export function AuthGate() {
                       setActiveSection("name");
                       nameInputRef.current?.focus();
                     }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                       activeSection === "name"
-                        ? "bg-neutral-900 text-white shadow-xs"
+                        ? "bg-ink text-bg shadow-xs"
                         : isNameDone
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                        ? "bg-success/15 text-success border border-success/30"
+                        : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
                     }`}
                   >
                     <span>{isNameDone ? "✓" : "1"}</span>
                     <span>Name</span>
                   </button>
-                  <span className="text-neutral-400">→</span>
+                  <span className="text-ink/30">→</span>
                 </>
               )}
 
@@ -495,19 +514,19 @@ export function AuthGate() {
                   setActiveSection("email");
                   emailInputRef.current?.focus();
                 }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                   activeSection === "email"
-                    ? "bg-neutral-900 text-white shadow-xs"
+                    ? "bg-ink text-bg shadow-xs"
                     : isEmailDone
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                    ? "bg-success/15 text-success border border-success/30"
+                    : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
                 }`}
               >
                 <span>{isEmailDone ? "✓" : mode === "signup" ? "2" : "1"}</span>
                 <span>Email</span>
               </button>
 
-              <span className="text-neutral-400">→</span>
+              <span className="text-ink/30">→</span>
 
               <button
                 type="button"
@@ -515,12 +534,12 @@ export function AuthGate() {
                   setActiveSection("password");
                   passwordInputRef.current?.focus();
                 }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                   activeSection === "password"
-                    ? "bg-neutral-900 text-white shadow-xs"
+                    ? "bg-ink text-bg shadow-xs"
                     : isPasswordDone
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                    ? "bg-success/15 text-success border border-success/30"
+                    : "bg-surface text-ink/70 border border-ink/15 hover:bg-bg"
                 }`}
               >
                 <span>{isPasswordDone ? "✓" : mode === "signup" ? "3" : "2"}</span>
@@ -533,27 +552,29 @@ export function AuthGate() {
             {/* ── SECTION 1: Full Name (Signup only) ────────────────────────── */}
             {mode === "signup" && (
               <div
-                className={`rounded-xl border p-3 transition-all ${
+                className={`rounded-xl border p-3.5 transition-all ${
                   activeSection === "name"
-                    ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
-                    : "border-neutral-200 hover:border-neutral-300"
+                    ? "border-accent/40 bg-surface shadow-xs"
+                    : "border-ink/15 bg-surface/50 hover:border-ink/25"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <FieldLabel>
-                    Full Name {isNameDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                    Full Name {isNameDone && <span className="text-success font-bold ml-1">✓</span>}
                   </FieldLabel>
                   <button
                     type="button"
                     onClick={() => toggleFieldDictation("name")}
                     title="Dictate Full Name with Voice"
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                       dictatingField === "name"
-                        ? "bg-red-500 text-white animate-pulse"
-                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                        ? "bg-accent text-bg animate-pulse"
+                        : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
                     }`}
                   >
-                    <span>🎙️</span>
+                    <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
                     <span>{dictatingField === "name" ? "Listening..." : "Speak Name"}</span>
                   </button>
                 </div>
@@ -564,7 +585,7 @@ export function AuthGate() {
                     name="name"
                     type="text"
                     aria-label="Full Name"
-                    className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                    className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
                     value={name}
                     onFocus={() => setActiveSection("name")}
                     onChange={(e) => setName(e.target.value)}
@@ -572,9 +593,9 @@ export function AuthGate() {
                     required
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-neutral-500">
+                <p className="mt-1 text-[11px] text-ink/55 font-mono">
                   {activeSection === "name"
-                    ? "👉 Active Section: Type your name or click 'Speak Name'."
+                    ? "Active Section: Type your name or click 'Speak Name'."
                     : "Your display name across CareerForge."}
                 </p>
               </div>
@@ -582,27 +603,29 @@ export function AuthGate() {
 
             {/* ── SECTION 2: Email Address ──────────────────────────────────── */}
             <div
-              className={`rounded-xl border p-3 transition-all ${
+              className={`rounded-xl border p-3.5 transition-all ${
                 activeSection === "email"
-                  ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
-                  : "border-neutral-200 hover:border-neutral-300"
+                  ? "border-accent/40 bg-surface shadow-xs"
+                  : "border-ink/15 bg-surface/50 hover:border-ink/25"
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
                 <FieldLabel>
-                  Email Address {isEmailDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                  Email Address {isEmailDone && <span className="text-success font-bold ml-1">✓</span>}
                 </FieldLabel>
                 <button
                   type="button"
                   onClick={() => toggleFieldDictation("email")}
                   title="Dictate Email Address with Voice"
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                     dictatingField === "email"
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                      ? "bg-accent text-bg animate-pulse"
+                      : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
                   }`}
                 >
-                  <span>🎙️</span>
+                  <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
                   <span>{dictatingField === "email" ? "Listening..." : "Speak Email"}</span>
                 </button>
               </div>
@@ -613,7 +636,7 @@ export function AuthGate() {
                   name="email"
                   type="email"
                   aria-label="Email Address"
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
                   value={email}
                   onFocus={() => setActiveSection("email")}
                   onChange={(e) => setEmail(e.target.value)}
@@ -621,30 +644,30 @@ export function AuthGate() {
                   required
                 />
               </div>
-              <p className="mt-1 text-[11px] text-neutral-500">
+              <p className="mt-1 text-[11px] text-ink/55 font-mono">
                 {activeSection === "email"
-                  ? "👉 Active Section: Type your email or click 'Speak Email'."
-                  : "We use this for your roadmap alerts and account sign-in."}
+                  ? "Active Section: Type your email or click 'Speak Email'."
+                  : "Used for your roadmap alerts and account sign-in."}
               </p>
             </div>
 
             {/* ── SECTION 3: Password ───────────────────────────────────────── */}
             <div
-              className={`rounded-xl border p-3 transition-all ${
+              className={`rounded-xl border p-3.5 transition-all ${
                 activeSection === "password"
-                  ? "border-neutral-900 bg-neutral-50/50 shadow-xs ring-1 ring-neutral-900/10"
-                  : "border-neutral-200 hover:border-neutral-300"
+                  ? "border-accent/40 bg-surface shadow-xs"
+                  : "border-ink/15 bg-surface/50 hover:border-ink/25"
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
                 <FieldLabel>
-                  Password {isPasswordDone && <span className="text-emerald-600 font-bold ml-1">✓</span>}
+                  Password {isPasswordDone && <span className="text-success font-bold ml-1">✓</span>}
                 </FieldLabel>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 underline"
+                    className="text-[11px] font-semibold text-ink/65 hover:text-ink underline cursor-pointer"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -652,13 +675,15 @@ export function AuthGate() {
                     type="button"
                     onClick={() => toggleFieldDictation("password")}
                     title="Dictate Password with Voice"
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                       dictatingField === "password"
-                        ? "bg-red-500 text-white animate-pulse"
-                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                        ? "bg-accent text-bg animate-pulse"
+                        : "bg-bg text-ink/75 hover:bg-surface border border-ink/15"
                     }`}
                   >
-                    <span>🎙️</span>
+                    <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
                     <span>{dictatingField === "password" ? "Listening..." : "Speak Password"}</span>
                   </button>
                 </div>
@@ -670,7 +695,7 @@ export function AuthGate() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   aria-label="Password"
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-graphite/60 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  className="w-full rounded-lg border border-ink/15 bg-bg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
                   value={password}
                   onFocus={() => setActiveSection("password")}
                   onChange={(e) => setPassword(e.target.value)}
@@ -678,16 +703,16 @@ export function AuthGate() {
                   required
                 />
               </div>
-              <p className="mt-1 text-[11px] text-neutral-500">
+              <p className="mt-1 text-[11px] text-ink/55 font-mono">
                 {activeSection === "password"
-                  ? "👉 Active Section: Type or speak your password (must be at least 6 characters, e.g. 123456)."
+                  ? "Active Section: Type or speak password. For security, it is never read aloud."
                   : "Needs at least 6 characters (e.g. 123456)."}
               </p>
             </div>
 
             {error && !googleModalOpen && !githubModalOpen && !phoneModalOpen && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs font-medium text-red-700">
-                ⚠️ {error}
+              <div className="rounded-xl bg-danger/10 border border-danger/30 p-3 text-xs font-medium text-danger">
+                {error}
               </div>
             )}
 
@@ -1054,11 +1079,11 @@ export function AuthGate() {
 
 function GoogleMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
-      <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.6H24v9h11.8c-.5 2.7-2 5-4.3 6.6v5.5h7C42.3 37 45.1 31.3 45.1 24.5z"/>
-      <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.6-3.9-12.4-9.1h-7.2v5.7C7.9 40.9 15.3 46 24 46z"/>
-      <path fill="#FBBC05" d="M11.6 28.2c-.5-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.9l7.3-5.7z"/>
-      <path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.2-6.2C34.9 4.2 29.9 2 24 2 15.3 2 7.9 7.1 4.3 14.1l7.2 5.7c1.9-5.2 6.7-9.1 12.5-9.1z"/>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0 text-ink">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
     </svg>
   );
 }

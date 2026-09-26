@@ -16,7 +16,7 @@ export const MilestoneCheckpoint: React.FC<MilestoneCheckpointProps> = ({
   title,
   subtitle,
   status = "upcoming",
-  accentColor = "#F59E0B",
+  accentColor = "var(--color-accent)",
 }) => {
   const isCompleted = status === "completed";
   const isCurrent = status === "current";
@@ -28,37 +28,37 @@ export const MilestoneCheckpoint: React.FC<MilestoneCheckpointProps> = ({
         <div
           className={`w-full border-t transition-colors duration-300 ${
             isCompleted
-              ? "border-emerald-800/60"
+              ? "border-success/40"
               : isCurrent
-              ? "border-amber-700/60"
-              : "border-slate-800/80"
+              ? "border-accent/40"
+              : "border-ink/15"
           }`}
         />
       </div>
 
       {/* Central Checkpoint Badge */}
-      <div className="relative flex flex-col items-center bg-[#0d1017] px-4">
+      <div className="relative flex flex-col items-center bg-bg px-4">
         <div
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border shadow-md transition-all duration-300 ${
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border shadow-xs transition-all duration-300 ${
             isCompleted
-              ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
+              ? "bg-success/15 border-success/30 text-success"
               : isCurrent
-              ? "bg-amber-950/40 border-amber-500/80 text-amber-300 ring-1 ring-amber-400/30"
-              : "bg-[#131724] border-slate-700/80 text-slate-300"
+              ? "bg-accent/15 border-accent/30 text-accent ring-1 ring-accent/20"
+              : "bg-surface border-ink/15 text-ink"
           }`}
         >
           <span className="font-mono text-[10px] font-bold uppercase tracking-widest">
-            {isCompleted ? "✓ CHECKPOINT" : isCurrent ? "⚡ CURRENT STAGE" : "STAGE"}{" "}
+            {isCompleted ? "✓ CHECKPOINT" : isCurrent ? "CURRENT STAGE" : "STAGE"}{" "}
             0{stageNumber}
           </span>
-          <span className="text-slate-600">·</span>
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-white">
+          <span className="text-ink/30">·</span>
+          <h3 className="font-semibold text-xs uppercase tracking-wider text-ink">
             {title}
           </h3>
         </div>
 
         {subtitle && (
-          <span className="text-[11px] text-slate-400 mt-1 max-w-sm text-center">
+          <span className="text-[11px] text-ink/65 mt-1 max-w-sm text-center">
             {subtitle}
           </span>
         )}
@@ -80,15 +80,15 @@ export const BranchSvgConnector: React.FC<BranchConnectorProps> = ({
   isOptional = false,
   status = "planned",
   isHighlighted = false,
-  accentColor = "#F59E0B",
+  accentColor = "var(--color-accent)",
 }) => {
   const isCompleted = status === "completed";
 
-  let strokeColor = "#334155";
+  let strokeColor = "rgba(20, 17, 15, 0.25)";
   if (isHighlighted) {
-    strokeColor = accentColor;
+    strokeColor = "var(--color-accent)";
   } else if (isCompleted) {
-    strokeColor = "#10B981";
+    strokeColor = "var(--color-success)";
   }
 
   return (
@@ -127,8 +127,12 @@ export const VerticalTrunkConnector: React.FC<{
   isCompleted?: boolean;
   isHighlighted?: boolean;
   accentColor?: string;
-}> = ({ isCompleted, isHighlighted, accentColor = "#F59E0B" }) => {
-  const stroke = isHighlighted ? accentColor : isCompleted ? "#10B981" : "#334155";
+}> = ({ isCompleted, isHighlighted, accentColor = "var(--color-accent)" }) => {
+  const stroke = isHighlighted
+    ? "var(--color-accent)"
+    : isCompleted
+    ? "var(--color-success)"
+    : "rgba(20, 17, 15, 0.25)";
 
   return (
     <div className="flex justify-center items-center my-3">

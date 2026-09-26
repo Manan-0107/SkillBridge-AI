@@ -98,6 +98,12 @@ class DialogueManager:
                 session["unconfirmed_slot"] = None
                 if action_type == "form_input":
                     session["slots"][field] = val
+                    slots_out = {field: val}
+                    if field in ["target_role", "targetRole"]:
+                        session["slots"]["targetRole"] = val
+                        session["slots"]["target_role"] = val
+                        slots_out["targetRole"] = val
+                        slots_out["target_role"] = val
                     self.save_session(session)
                     return DialogueResponse(
                         intent="form_input",
@@ -106,7 +112,7 @@ class DialogueManager:
                         reply_text=f"Confirmed and saved your {field.replace('_', ' ')} as '{val}'.",
                         requires_followup=False,
                         session_id=session_id,
-                        slots={field: val},
+                        slots=slots_out,
                     )
                 elif action_type == "roadmap_action":
                     self.save_session(session)
@@ -240,35 +246,46 @@ class DialogueManager:
                         slots={"node": node_title},
                     )
 
-            if pending_slot in ["name", "email", "target_role", "skills"]:
+            if pending_slot in ["name", "email", "target_role", "targetRole", "skills"]:
                 slot_val = clean_text.strip(" .")
+                target_field = "targetRole" if pending_slot in ["target_role", "targetRole"] else pending_slot
                 if require_confirmation:
-                    session["unconfirmed_slot"] = {"type": "form_input", "field": pending_slot, "value": slot_val}
+                    session["unconfirmed_slot"] = {"type": "form_input", "field": target_field, "value": slot_val}
                     session["pending_slot"] = "confirm_slot"
                     self.save_session(session)
-                    field_label = pending_slot.replace('_', ' ')
+                    field_label = target_field.replace('_', ' ')
+                    slots_out = {"provisional_field": target_field, "provisional_value": slot_val}
+                    if target_field in ["target_role", "targetRole"]:
+                        slots_out["targetRole"] = slot_val
+                        slots_out["target_role"] = slot_val
                     return DialogueResponse(
                         intent="confirmation",
                         action="await_confirmation",
-                        target=pending_slot,
+                        target=target_field,
                         reply_text=f"I heard: '{slot_val}' for your {field_label}. Is that correct? Say Yes to continue, or No to re-speak.",
                         requires_followup=True,
                         expected_slot="confirmation",
                         session_id=session_id,
-                        slots={"provisional_field": pending_slot, "provisional_value": slot_val},
+                        slots=slots_out,
                     )
                 else:
-                    session["slots"][pending_slot] = slot_val
+                    session["slots"][target_field] = slot_val
+                    slots_out = {target_field: slot_val}
+                    if target_field in ["target_role", "targetRole"]:
+                        session["slots"]["target_role"] = slot_val
+                        session["slots"]["targetRole"] = slot_val
+                        slots_out["targetRole"] = slot_val
+                        slots_out["target_role"] = slot_val
                     session["pending_slot"] = None
                     self.save_session(session)
                     return DialogueResponse(
                         intent="form_input",
                         action="set_field",
-                        target=pending_slot,
-                        reply_text=f"Got it! Saved your {pending_slot.replace('_', ' ')} as {slot_val}.",
+                        target=target_field,
+                        reply_text=f"Got it! Saved your {target_field.replace('_', ' ')} as {slot_val}.",
                         requires_followup=False,
                         session_id=session_id,
-                        slots={pending_slot: slot_val},
+                        slots=slots_out,
                     )
 
         # ─────────────────────────────────────────────────────────────────────
@@ -461,6 +478,37 @@ class DialogueManager:
                     requires_followup=False,
                     session_id=session_id,
                     slots={"email": email},
+                )
+
+        role_match = re.search(r"(?:target role is|my role is|my target role is|role is|target role:?|pursuing role as)\s+([a-zA-Z0-9\s\+\#\.\-]{2,40})", clean_text, re.IGNORECASE)
+        if role_match:
+            role_val = role_match.group(1).strip()
+            if require_confirmation:
+                session["unconfirmed_slot"] = {"type": "form_input", "field": "targetRole", "value": role_val}
+                session["pending_slot"] = "confirm_slot"
+                self.save_session(session)
+                return DialogueResponse(
+                    intent="confirmation",
+                    action="await_confirmation",
+                    target="targetRole",
+                    reply_text=f"I heard: '{role_val}' for your target role. Is that correct? Say Yes to continue, or No to re-speak.",
+                    requires_followup=True,
+                    expected_slot="confirmation",
+                    session_id=session_id,
+                    slots={"field": "targetRole", "targetRole": role_val, "target_role": role_val, "provisional_value": role_val},
+                )
+            else:
+                session["slots"]["targetRole"] = role_val
+                session["slots"]["target_role"] = role_val
+                self.save_session(session)
+                return DialogueResponse(
+                    intent="form_input",
+                    action="set_field",
+                    target="targetRole",
+                    reply_text=f"Got it! Saved your target role as {role_val}.",
+                    requires_followup=False,
+                    session_id=session_id,
+                    slots={"targetRole": role_val, "target_role": role_val},
                 )
 
         # Incomplete profile update

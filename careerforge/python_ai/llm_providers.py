@@ -424,38 +424,106 @@ class DynamicConversationalFallback:
                 suggestions=["Analyze time complexity", "Explain edge cases", "Write unit tests"],
             )
 
-        # ─── 4. Career & Roadmap Guidance ─────────────────────────────────────
-        if any(w in lower for w in ["roadmap", "learn", "study", "skills", "job", "interview", "resume"]):
+        # ─── 4. Interview & Behavioral Methodologies (STAR Method, etc.) ──────
+        if "star method" in lower or "star technique" in lower or ("star" in lower and "interview" in lower):
             reply = (
-                f"Regarding **{clean}**: focused daily practice and clear milestones are the fastest path to mastery. "
-                "Check out the **Career Roadmap** tab to follow step-by-step tracks, or drill into the **Daily Practice Hub** "
-                "for real-world technical and behavioral questions."
+                "The **STAR Method** (Situation, Task, Action, Result) is the gold standard for structuring high-impact answers to behavioral interview questions:\n\n"
+                "1. **Situation (15%)**: Set the context clearly and concisely. Briefly describe the project, company, or team challenge.\n"
+                "   *Example:* *'At my previous role, our checkout API experienced 15% latency spikes during peak sales events.'*\n\n"
+                "2. **Task (15%)**: State your specific ownership and responsibility.\n"
+                "   *Example:* *'I was tasked with identifying the database bottlenecks and lowering p99 response times below 200ms.'*\n\n"
+                "3. **Action (50%)**: Detail the concrete technical and collaborative steps **you** took. This is where you shine.\n"
+                "   *Example:* *'I analyzed query execution plans using EXPLAIN ANALYZE, added composite indexes on user_id and created_at, and introduced a Redis read-through caching layer with TTL eviction.'*\n\n"
+                "4. **Result (20%)**: Quantify your outcome with concrete metrics, business impact, and key takeaways.\n"
+                "   *Example:* *'We dropped p99 latency by 68%, supported 3x higher peak traffic, and had zero dropped orders during Cyber Week.'*\n\n"
+                "**Pro-Tip:** Focus 70% of your time on **Action** and **Result**—interviewers care about what *you* did and the measurable impact."
             )
             if voice_mode:
-                reply = f"Regarding {clean}: I recommend checking the Roadmap tab or doing a quick quiz in the Practice Hub."
+                reply = (
+                    "The STAR method stands for Situation, Task, Action, and Result. "
+                    "Spend most of your time on Action—the specific steps you took—and Result, where you quantify your impact with numbers. "
+                    "Would you like to practice a STAR question right now in the Practice Hub?"
+                )
             return LLMResponse(
                 reply=reply,
-                thinking=["Career guidance intent identified."],
+                thinking=["Identified STAR behavioral interview framework query; providing structured guide with engineering examples."],
+                engine="CareerForge Interview Coach",
+                suggestions=["Practice a STAR question", "How to answer 'Tell me about a failure'", "Go to Practice Hub"],
+            )
+
+        # ─── 5. System Design & Architecture ──────────────────────────────────
+        if any(w in lower for w in ["system design", "microservice", "cap theorem", "load balancer", "message queue", "kafka", "caching", "redis"]):
+            reply = (
+                "When approaching **System Design** interviews, follow this proven 4-step framework:\n\n"
+                "1. **Scope the Problem (3-5 min)**: Clarify functional requirements (e.g. upload video, stream video) and non-functional requirements (high availability, latency < 200ms, consistency vs. availability via CAP theorem, estimated DAU/QPS).\n"
+                "2. **High-Level Architecture (10 min)**: Diagram the end-to-end data flow: DNS $\\rightarrow$ CDN $\\rightarrow$ Load Balancer (ALB/Nginx) $\\rightarrow$ API Gateway $\\rightarrow$ Microservices $\\rightarrow$ Distributed Cache (Redis) $\\rightarrow$ Primary/Replica DB (PostgreSQL).\n"
+                "3. **Deep Dive into Bottlenecks (15 min)**: Discuss horizontal scaling, database sharding/partitioning, async decoupling via Kafka or RabbitMQ, and idempotency keys for transactional consistency.\n"
+                "4. **Reliability & Observability (5 min)**: Circuit breakers (Hystrix), rate limiting (Token Bucket), distributed tracing (OpenTelemetry), and health check probes."
+            )
+            if voice_mode:
+                reply = "In system design, start by scoping functional and non-functional metrics, then establish your high-level data flow from load balancer to database before diving into caching and sharding."
+            return LLMResponse(
+                reply=reply,
+                thinking=["System architecture query detected; synthesizing 4-step engineering blueprint."],
+                engine="CareerForge Architecture Engine",
+                suggestions=["Explain Database Sharding", "REST vs GraphQL vs gRPC", "Open Practice Hub"],
+            )
+
+        # ─── 6. Frontend & Modern Web Architecture ─────────────────────────────
+        if any(w in lower for w in ["react", "next.js", "nextjs", "virtual dom", "reconciliation", "usememo", "usecallback", "web vitals", "lcp"]):
+            reply = (
+                "Here are the core principles for modern frontend engineering in React & Next.js:\n\n"
+                "- **Reconciliation & Fiber Tree**: React uses a virtual DOM tree of Fiber nodes to calculate minimal DOM patches. Keys must be stable and unique to prevent unnecessary component remounts.\n"
+                "- **Memoization Heuristics**: Use `useMemo` for expensive computations and `useCallback` to preserve referential equality of function props passed to memoized children (`React.memo`). Avoid over-memoizing simple primitives.\n"
+                "- **Core Web Vitals**: Optimize **LCP** (Largest Contentful Paint < 2.5s) via image preloading and `fetchpriority='high'`, **INP** (Interaction to Next Paint < 200ms) by keeping the main thread free of long tasks, and **CLS** (Cumulative Layout Shift < 0.1) by reserving explicit container aspect ratios."
+            )
+            return LLMResponse(
+                reply=reply,
+                thinking=["Modern frontend framework and performance inquiry detected."],
+                engine="CareerForge Frontend Intelligence",
+                suggestions=["Explain Event Loop", "Next.js App Router vs Pages", "View Frontend Roadmap"],
+            )
+
+        # ─── 7. Career Roadmap & ATS Guidance ─────────────────────────────────
+        if any(w in lower for w in ["roadmap", "learn", "study", "skills", "job", "interview", "resume", "ats"]):
+            reply = (
+                "To accelerate your technical career, CareerForge provides three integrated pillars:\n\n"
+                "1. **Career Roadmap**: Visual, tier-by-tier learning graphs for Frontend, Backend, Data/AI, DevOps, and Product tracks, complete with curated books, blogs, and GitHub repositories.\n"
+                "2. **Daily Practice Hub**: Interactive concept drills featuring objective standard definitions, speech dictation, and speech synthesis playback.\n"
+                "3. **Resume Studio & ATS Analyzer**: Real-time keyword scoring, formatting auditing, and conversational resume generation.\n\n"
+                "Which track or tool would you like to explore right now?"
+            )
+            if voice_mode:
+                reply = "CareerForge offers full Career Roadmaps, the Daily Practice Hub, and the ATS Resume Studio. Which of these would you like to open?"
+            return LLMResponse(
+                reply=reply,
+                thinking=["Platform capability and career path guidance synthesized."],
                 engine="CareerForge Career Engine",
                 suggestions=["Open Roadmap", "Daily Practice Hub", "ATS Resume Review"],
             )
 
-        # ─── 5. General / Open-Domain Query ───────────────────────────────────
+        # ─── 8. General Open-Domain Query ─────────────────────────────────────
         if voice_mode:
-            reply = f"Here is what you should know about {clean}: it focuses on key fundamentals, practical execution, and structured problem-solving. How can I help you dive deeper?"
+            reply = (
+                f"That is an interesting topic. When tackling {clean}, the priority is understanding "
+                "the foundational mechanics, evaluating practical trade-offs, and applying clear best practices. "
+                "How would you like to proceed?"
+            )
         else:
             reply = (
-                f"**{clean.title()}**\n\n"
-                f"When approaching this topic, the key is understanding the core principles, practical trade-offs, "
-                f"and how it applies to real-world engineering and career growth.\n\n"
-                f"Is there a specific angle or code example you'd like to explore?"
+                f"### Analysis: {clean.title()}\n\n"
+                f"When evaluating this topic in a professional engineering environment, consider these primary dimensions:\n\n"
+                f"1. **Core Fundamentals**: Establish clear mental models and define the foundational concepts before choosing tools or frameworks.\n"
+                f"2. **Trade-offs & Constraints**: Every architectural choice involves trade-offs between simplicity, latency, developer velocity, and maintainability.\n"
+                f"3. **Practical Implementation**: Structure your code with clean boundaries, comprehensive testing, and clear observability.\n\n"
+                f"Would you like to see a concrete code example, discuss common pitfalls, or explore how this connects to your career track?"
             )
 
         return LLMResponse(
             reply=reply,
-            thinking=[f"Deliberating on '{clean[:40]}' without boilerplate templates."],
+            thinking=[f"Deliberating on '{clean[:40]}' with structured engineering principles."],
             engine="CareerForge Conversational Intelligence",
-            suggestions=["Tell me more", "Show practical example", "Back to Roadmap"],
+            suggestions=["Show a code example", "Common interview pitfalls", "Back to Roadmap"],
         )
 
 

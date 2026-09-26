@@ -10,7 +10,8 @@
     "build:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/unit/*.test.mjs",
+    "lint:tokens": "node scripts/lint_design_tokens.mjs",
+    "test": "node scripts/lint_design_tokens.mjs && node --test tests/unit/*.test.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",
     "test:voice-stress": "node test_voice_stress.mjs",
     "test:voice-conversation": "node test_voice_conversation.mjs",
@@ -19,13 +20,14 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
+    "lucide-react": "^1.48.0",
     "mammoth": "^1.12.1",
     "next": "^14.2.35",
     "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

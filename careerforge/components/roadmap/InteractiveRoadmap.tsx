@@ -24,12 +24,12 @@ export interface InteractiveRoadmapProps {
 }
 
 const CATEGORY_ACCENTS: Record<TechCategory, string> = {
-  "data-ai": "#F59E0B",
-  frontend: "#0EA5E9",
-  backend: "#6366F1",
-  devops: "#10B981",
-  "system-design": "#EC4899",
-  fullstack: "#8B5CF6",
+  "data-ai": "var(--color-accent)",
+  frontend: "var(--color-info)",
+  backend: "var(--color-accent)",
+  devops: "var(--color-success)",
+  "system-design": "var(--color-accent)",
+  fullstack: "var(--color-info)",
 };
 
 export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
@@ -42,7 +42,22 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
   const [category, setCategory] = useState<TechCategory>(initialCategory);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<NodeStatus | "all">("all");
+  const [roadmapMode, setRoadmapMode] = useState<"full" | "my-path" | "recommended">("full");
+  const [levelFilter, setLevelFilter] = useState<"all" | "Beginner" | "Intermediate" | "Advanced">("all");
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomScale((z) => Math.min(1.5, +(z + 0.15).toFixed(2)));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomScale((z) => Math.max(0.6, +(z - 0.15).toFixed(2)));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomScale(1.0);
+  }, []);
 
   const [treeData, setTreeData] = useState<RoadmapTreeData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -261,17 +276,17 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
     }
   }, [category]);
 
-  const currentAccent = CATEGORY_ACCENTS[category] || "#F59E0B";
+  const currentAccent = CATEGORY_ACCENTS[category] || "var(--color-accent)";
 
   return (
     <div
-      className={`w-full bg-[#0a0d14] text-slate-100 rounded-2xl border border-slate-800/80 p-4 sm:p-7 shadow-xl relative overflow-hidden ${className}`}
+      className={`w-full bg-surface text-ink rounded-2xl border border-ink/15 p-4 sm:p-7 shadow-xs relative overflow-hidden ${className}`}
     >
       {/* Background Architectural Grid Pattern */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.03]"
+        className="absolute inset-0 pointer-events-none opacity-[0.035]"
         style={{
-          backgroundImage: `radial-gradient(#ffffff 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(rgba(20, 17, 15, 0.25) 1px, transparent 1px)`,
           backgroundSize: "24px 24px",
         }}
       />
@@ -298,6 +313,14 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
             onSearchChange={(q) => setSearchQuery(q)}
             statusFilter={statusFilter}
             onStatusFilterChange={(st) => setStatusFilter(st)}
+            roadmapMode={roadmapMode}
+            onRoadmapModeChange={setRoadmapMode}
+            levelFilter={levelFilter}
+            onLevelFilterChange={setLevelFilter}
+            zoomScale={zoomScale}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetZoom={handleResetZoom}
             viewMode={viewMode}
             onViewModeChange={(mode) => setViewMode(mode)}
             allNodes={treeData.allNodes}
@@ -309,8 +332,8 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
         {/* Loading Spinner */}
         {isLoading && !treeData && (
           <div className="py-20 flex flex-col items-center justify-center space-y-3 max-w-md mx-auto text-center">
-            <div className="h-6 w-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-mono text-slate-400">
+            <div className="h-6 w-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-mono text-ink/70">
               Loading {category} visual roadmap...
             </p>
           </div>
@@ -318,12 +341,12 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
 
         {/* Error Callout */}
         {error && !treeData && (
-          <div className="py-10 text-center max-w-md mx-auto bg-rose-950/20 border border-rose-900/60 rounded-xl p-5">
-            <p className="text-xs font-semibold text-rose-300">{error}</p>
+          <div className="py-10 text-center max-w-md mx-auto bg-danger/10 border border-danger/30 rounded-xl p-5">
+            <p className="text-xs font-semibold text-danger">{error}</p>
             <button
               type="button"
               onClick={fetchRoadmapData}
-              className="mt-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white transition-colors"
+              className="mt-3 px-3 py-1.5 rounded-lg bg-surface hover:bg-bg text-xs font-medium text-ink border border-ink/20 transition-colors"
             >
               Retry Loading
             </button>
@@ -344,6 +367,9 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
                 accentColor={currentAccent}
                 searchQuery={searchQuery}
                 statusFilter={statusFilter}
+                roadmapMode={roadmapMode}
+                levelFilter={levelFilter}
+                zoomScale={zoomScale}
               />
             ) : (
               <RoadmapListView
@@ -356,6 +382,8 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
                 accentColor={currentAccent}
                 searchQuery={searchQuery}
                 statusFilter={statusFilter}
+                roadmapMode={roadmapMode}
+                levelFilter={levelFilter}
               />
             )}
           </div>
