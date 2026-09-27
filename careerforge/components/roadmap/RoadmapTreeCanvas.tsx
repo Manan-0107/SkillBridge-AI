@@ -155,7 +155,7 @@ export const RoadmapTreeCanvas: React.FC<RoadmapTreeCanvasProps> = ({
   }
 
   return (
-    <div className="w-full overflow-x-auto pb-6">
+    <div className="w-full overflow-x-auto pb-6 overscroll-x-contain">
       <div
         className="relative max-w-5xl mx-auto py-2 transition-transform duration-200 ease-out origin-top"
         style={{ transform: `scale(${zoomScale})` }}

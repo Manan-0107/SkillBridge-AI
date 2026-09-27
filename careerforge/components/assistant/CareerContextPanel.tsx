@@ -191,30 +191,63 @@ export function CareerContextPanel({
           </div>
         </div>
 
-        {/* 4. Connected Ecosystem Quick Actions */}
+        {/* 4. Connected Ecosystem Quick Actions (Compact Shortcut Chips) */}
         <div className="space-y-2 pt-3 border-t border-ink/8">
           <h3 className="text-[10px] font-medium text-ink/50 uppercase tracking-wider">
             Workspace Ecosystem
           </h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {[
-              { id: "roadmap", label: "Roadmap", desc: "Skill graph" },
-              { id: "practice", label: "Practice", desc: "Interview drills" },
-              { id: "resume", label: "Resume ATS", desc: "Targeted audit" },
-              { id: "local", label: "Opportunities", desc: "Live matches" },
+              {
+                id: "roadmap",
+                label: "Roadmap",
+                icon: (
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                ),
+              },
+              {
+                id: "practice",
+                label: "Practice",
+                icon: (
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ),
+              },
+              {
+                id: "resume",
+                label: "Resume",
+                icon: (
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                ),
+              },
+              {
+                id: "local",
+                label: "Jobs",
+                icon: (
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                ),
+              },
             ].map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => onNavigate(item.id as any)}
-                className="rounded-xl border border-ink/10 bg-surface/50 p-2.5 text-left hover:border-accent/30 hover:bg-surface transition-all cursor-pointer group"
+                title={item.label}
+                className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border border-ink/10 bg-surface/50 text-ink/75 hover:text-accent hover:border-accent/30 hover:bg-surface transition-all cursor-pointer group"
               >
-                <div className="text-[11px] font-semibold text-ink group-hover:text-accent transition-colors">
+                <span className="text-ink/60 group-hover:text-accent transition-colors">
+                  {item.icon}
+                </span>
+                <span className="text-[10px] font-medium truncate w-full text-center">
                   {item.label}
-                </div>
-                <div className="text-[10px] text-ink/45 mt-0.5">
-                  {item.desc}
-                </div>
+                </span>
               </button>
             ))}
           </div>

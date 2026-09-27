@@ -19,7 +19,10 @@ body {
   font-family: var(--font-sans);
 }
 
-h1, h2, h3, .font-display {
+h1,
+h2,
+h3,
+.font-display {
   font-family: var(--font-display);
 }
 
@@ -52,12 +55,14 @@ html.dark,
      Only this line may declare the cyan hex value.
      All other accent aliases below are derived from this one decision.    */
   --accent: #7DE1EA;
-  --accent-rgb: 125, 225, 234; /* same value as --accent, RGB form */
+  --accent-rgb: 125, 225, 234;
+  /* same value as --accent, RGB form */
 
   /* Derived representations — do NOT manually set these to another value */
   --ubix-cyan: var(--accent);
   --color-accent: var(--accent);
-  --color-accent-soft: #9CE7EE;  /* secondary authored value, distinct shade */
+  --color-accent-soft: #9CE7EE;
+  /* secondary authored value, distinct shade */
 
   --color-bg: #080A0D;
   --color-surface: #121518;
@@ -81,7 +86,8 @@ html.dark body,
 [data-theme="dark"] body,
 body {
   background-color: #080A0D !important;
-  color: #C7CCD1 !important; /* Body text is Soft Silver #C7CCD1 */
+  color: #C7CCD1 !important;
+  /* Body text is Soft Silver #C7CCD1 */
 }
 
 /* Dark mode root & primary surface re-mapping — Transparent to reveal metallic ambient layer */
@@ -109,39 +115,31 @@ html.dark .bg-bg\/98,
 .ubix-metallic-ambient-sheen {
   background-image:
     /* Center Studio Soft Silver Ellipse */
-    radial-gradient(
-      ellipse 72% 54% at 50% 42%,
+    radial-gradient(ellipse 72% 54% at 50% 42%,
       rgba(210, 220, 228, 0.13) 0%,
       rgba(160, 172, 182, 0.085) 20%,
       rgba(110, 122, 132, 0.048) 40%,
       rgba(40, 48, 55, 0.018) 60%,
-      transparent 78%
-    ),
+      transparent 78%),
     /* Elongated brushed metallic horizontal reflection */
-    radial-gradient(
-      ellipse 92% 38% at 50% 48%,
+    radial-gradient(ellipse 92% 38% at 50% 48%,
       rgba(195, 206, 215, 0.075) 0%,
       rgba(140, 152, 162, 0.04) 38%,
-      transparent 75%
-    ),
+      transparent 75%),
     /* Upper ambient soft silver reflection */
-    radial-gradient(
-      ellipse 58% 36% at 50% 18%,
+    radial-gradient(ellipse 58% 36% at 50% 18%,
       rgba(215, 225, 232, 0.055) 0%,
-      transparent 65%
-    );
+      transparent 65%);
   background-repeat: no-repeat;
 }
 
 .ubix-cursor-reflection {
   background-image:
-    radial-gradient(
-      ellipse 620px 460px at var(--ubix-pointer-x, -1000px) var(--ubix-pointer-y, -1000px),
+    radial-gradient(ellipse 620px 460px at var(--ubix-pointer-x, -1000px) var(--ubix-pointer-y, -1000px),
       rgba(210, 220, 228, 0.085) 0%,
       rgba(120, 227, 238, 0.042) 22%,
       rgba(145, 155, 165, 0.02) 48%,
-      transparent 72%
-    );
+      transparent 72%);
   background-repeat: no-repeat;
   transition: opacity 0.25s ease;
 }
@@ -496,6 +494,7 @@ html.dark ::-webkit-scrollbar-thumb,
 [data-theme="dark"] ::-webkit-scrollbar-thumb {
   background: rgba(139, 144, 150, 0.25);
 }
+
 html.dark ::-webkit-scrollbar-thumb:hover,
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(199, 204, 209, 0.4);
@@ -506,6 +505,7 @@ html.dark .prose-cf,
 [data-theme="dark"] .prose-cf {
   color: #F5F7F8;
 }
+
 html.dark .prose-cf h1,
 html.dark .prose-cf h2,
 html.dark .prose-cf h3,
@@ -516,20 +516,24 @@ html.dark .prose-cf h4,
 [data-theme="dark"] .prose-cf h4 {
   color: #F5F7F8;
 }
+
 html.dark .prose-cf a,
 [data-theme="dark"] .prose-cf a {
   color: #7DE1EA;
 }
+
 html.dark .prose-cf code,
 [data-theme="dark"] .prose-cf code {
   background: rgba(139, 144, 150, 0.15);
   color: #7DE1EA;
 }
+
 html.dark .prose-cf pre,
 [data-theme="dark"] .prose-cf pre {
   background: #0D0F12;
   border-color: rgba(139, 144, 150, 0.18);
 }
+
 html.dark .prose-cf blockquote,
 [data-theme="dark"] .prose-cf blockquote {
   border-left-color: #7DE1EA;
@@ -553,13 +557,11 @@ html.dark .prose-cf blockquote,
   inset: 0;
   pointer-events: none;
   z-index: -1 !important;
-  background: radial-gradient(
-    circle 280px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
-    rgba(199, 204, 209, 0.032) 0%,
-    rgba(139, 144, 150, 0.018) 40%,
-    rgba(125, 225, 234, 0.012) 65%,
-    transparent 100%
-  );
+  background: radial-gradient(circle 280px at var(--cursor-x, -1000px) var(--cursor-y, -1000px),
+      rgba(199, 204, 209, 0.032) 0%,
+      rgba(139, 144, 150, 0.018) 40%,
+      rgba(125, 225, 234, 0.012) 65%,
+      transparent 100%);
   transform: translateZ(0);
 }
 
@@ -593,14 +595,12 @@ html.dark .prose-cf blockquote,
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    transparent 290deg,
-    rgba(139, 144, 150, 0.25) 325deg,
-    rgba(125, 225, 234, 0.45) 350deg,
-    rgba(245, 247, 248, 0.75) 360deg
-  );
+  background: conic-gradient(from 0deg,
+      transparent 0deg,
+      transparent 290deg,
+      rgba(139, 144, 150, 0.25) 325deg,
+      rgba(125, 225, 234, 0.45) 350deg,
+      rgba(245, 247, 248, 0.75) 360deg);
   animation: ubix-beam-rotate 8s linear infinite;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -613,6 +613,7 @@ html.dark .prose-cf blockquote,
   0% {
     transform: translate(-50%, -50%) rotate(0deg);
   }
+
   100% {
     transform: translate(-50%, -50%) rotate(360deg);
   }
@@ -623,6 +624,7 @@ html.dark .prose-cf blockquote,
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -637,10 +639,13 @@ html.dark .prose-cf blockquote,
 }
 
 @keyframes ubix-constellation-breathe {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.7;
     transform: scale(0.96);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.04);
@@ -656,10 +661,12 @@ html.dark .prose-cf blockquote,
     transform: scale(0.9);
     opacity: 0.5;
   }
+
   50% {
     transform: scale(1.15);
     opacity: 1;
   }
+
   100% {
     transform: scale(1);
     opacity: 0.9;
@@ -689,11 +696,13 @@ html.dark aside .bg-surface,
 
 /* ─── Accessibility & Reduced Motion Handling (Section 11) ──────────────── */
 @media (prefers-reduced-motion: reduce) {
+
   .ubix-cursor-glow-layer,
   .ubix-border-beam-ray {
     display: none !important;
     animation: none !important;
   }
+
   .ubix-constellation-spin,
   .ubix-constellation-slow,
   .ubix-orb-listening,
@@ -701,6 +710,7 @@ html.dark aside .bg-surface,
     animation: none !important;
     transform: none !important;
   }
+
   .ubix-glow-border {
     transition: none !important;
   }
@@ -711,6 +721,7 @@ html.reduced-motion .ubix-border-beam-ray {
   display: none !important;
   animation: none !important;
 }
+
 html.reduced-motion .ubix-constellation-spin,
 html.reduced-motion .ubix-constellation-slow,
 html.reduced-motion .ubix-orb-listening,
@@ -723,6 +734,7 @@ html.reduced-motion .ubix-orb-success {
 .ubix-flex {
   display: flex;
 }
+
 .ubix-min-h-screen {
   min-height: 100vh;
 }
@@ -772,6 +784,7 @@ html.dark textarea:disabled,
 
 /* ─── Screen Preview for Printable Resume Document ───────────────────────── */
 @media screen {
+
   html.dark #printable-resume,
   [data-theme="dark"] #printable-resume {
     background-color: #121518 !important;
@@ -779,6 +792,7 @@ html.dark textarea:disabled,
     color: #F5F7F8 !important;
     box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.6) !important;
   }
+
   html.dark #printable-resume h1,
   html.dark #printable-resume h2,
   html.dark #printable-resume h3,
@@ -789,6 +803,7 @@ html.dark textarea:disabled,
   [data-theme="dark"] #printable-resume h4 {
     color: #F5F7F8 !important;
   }
+
   html.dark #printable-resume p,
   html.dark #printable-resume li,
   html.dark #printable-resume span,
@@ -797,6 +812,7 @@ html.dark textarea:disabled,
   [data-theme="dark"] #printable-resume span {
     color: #C7CCD1 !important;
   }
+
   html.dark #printable-resume .border-neutral-900,
   html.dark #printable-resume .border-neutral-800,
   html.dark #printable-resume .border-neutral-700,
@@ -816,9 +832,11 @@ html.dark textarea:disabled,
   align-items: center !important;
   line-height: 0 !important;
 }
-.goog-te-gadget > span {
+
+.goog-te-gadget>span {
   display: none !important;
 }
+
 .goog-te-combo {
   font-family: inherit !important;
   font-size: 11px !important;
@@ -830,10 +848,12 @@ html.dark textarea:disabled,
   outline: none !important;
   cursor: pointer !important;
 }
+
 .goog-te-combo:hover {
   border-color: rgba(255, 255, 255, 0.25) !important;
   background-color: #121518 !important;
 }
+
 .goog-te-gadget-simple {
   background-color: #0D0F12 !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -849,10 +869,12 @@ html.dark textarea:disabled,
   white-space: nowrap !important;
   text-decoration: none !important;
 }
+
 .goog-te-gadget-simple:hover {
   background-color: #121518 !important;
   border-color: rgba(255, 255, 255, 0.25) !important;
 }
+
 .goog-te-gadget-simple .goog-te-menu-value {
   color: #F4F7F8 !important;
   font-family: inherit !important;
@@ -863,6 +885,7 @@ html.dark textarea:disabled,
   white-space: nowrap !important;
   text-decoration: none !important;
 }
+
 .goog-te-gadget-simple .goog-te-menu-value span {
   border-left: none !important;
   color: #F4F7F8 !important;
@@ -871,14 +894,17 @@ html.dark textarea:disabled,
   white-space: nowrap !important;
   text-decoration: none !important;
 }
+
 .goog-te-gadget-simple .goog-te-menu-value span:last-child {
   font-size: 8px !important;
   margin-left: 5px !important;
   color: #A8B0B7 !important;
 }
+
 .goog-te-gadget-icon {
   display: none !important;
 }
+
 .skiptranslate iframe,
 .goog-te-banner-frame {
   display: none !important;
@@ -910,6 +936,7 @@ html.dark textarea:disabled,
 .ubix-chat-btn-idle {
   color: #737C84 !important;
 }
+
 .ubix-chat-btn-idle:hover {
   background-color: #111418 !important;
   color: #F4F7F8 !important;
@@ -926,6 +953,7 @@ html.dark textarea:disabled,
   background-color: #111418 !important;
   color: #C8CED3 !important;
 }
+
 .ubix-voice-btn-idle:hover {
   border-color: rgba(255, 255, 255, 0.2) !important;
   color: #F4F7F8 !important;
@@ -960,24 +988,30 @@ html.dark textarea:disabled,
   filter: blur(4px);
   opacity: 0.6;
 }
+
 .ubix-orb-glow-idle {
   background: radial-gradient(circle, rgba(191, 197, 202, 0.4) 0%, transparent 70%);
 }
+
 .ubix-orb-glow-listening {
   background: radial-gradient(circle, rgba(125, 225, 234, 0.65) 0%, transparent 75%);
   animation: orbPulse 1.8s ease-in-out infinite;
 }
+
 .ubix-orb-glow-thinking {
   background: radial-gradient(circle, rgba(125, 225, 234, 0.45) 0%, rgba(191, 197, 202, 0.3) 40%, transparent 75%);
   animation: orbSpin 3s linear infinite;
 }
+
 .ubix-orb-glow-processing {
   background: radial-gradient(circle, rgba(191, 197, 202, 0.5) 0%, transparent 70%);
   animation: orbPulse 3s ease-in-out infinite;
 }
+
 .ubix-orb-glow-success {
   background: radial-gradient(circle, rgba(125, 225, 234, 0.7) 0%, transparent 75%);
 }
+
 .ubix-orb-glow-error {
   background: radial-gradient(circle, rgba(239, 68, 68, 0.6) 0%, transparent 75%);
 }
@@ -987,24 +1021,29 @@ html.dark textarea:disabled,
   border: 1px solid rgba(255, 255, 255, 0.25);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
+
 .ubix-orb-core-listening {
   background: radial-gradient(circle at 35% 35%, #F1F4F5 0%, #7DE1EA 40%, #15454C 100%);
   border: 1px solid rgba(125, 225, 234, 0.6);
   box-shadow: 0 0 10px rgba(125, 225, 234, 0.45);
 }
+
 .ubix-orb-core-thinking {
   background: radial-gradient(circle at 40% 30%, #F1F4F5 0%, #BFC5CA 35%, #2B575D 85%, #0F1316 100%);
   border: 1px solid rgba(125, 225, 234, 0.4);
   animation: orbBreathing 2.2s ease-in-out infinite;
 }
+
 .ubix-orb-core-processing {
   background: radial-gradient(circle at 35% 35%, #E1E6EB 0%, #858B91 50%, #202428 100%);
   border: 1px solid rgba(191, 197, 202, 0.3);
 }
+
 .ubix-orb-core-success {
   background: radial-gradient(circle at 35% 35%, #FFFFFF 0%, #7DE1EA 55%, #153C42 100%);
   border: 1px solid rgba(125, 225, 234, 0.7);
 }
+
 .ubix-orb-core-error {
   background: radial-gradient(circle at 35% 35%, #FCA5A5 0%, #EF4444 60%, #450A0A 100%);
   border: 1px solid rgba(239, 68, 68, 0.6);
@@ -1015,18 +1054,39 @@ html.dark textarea:disabled,
 }
 
 @keyframes orbPulse {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.15); opacity: 0.9; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 0.9;
+  }
 }
 
 @keyframes orbSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes orbBreathing {
-  0%, 100% { transform: scale(0.96); }
-  50% { transform: scale(1.04); }
+
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
 }
 
 /* ─── UBIX Metallic Surfaces & Glow Borders (§24) ────────────────────────── */
@@ -1036,6 +1096,7 @@ html.dark textarea:disabled,
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+
 .ubix-metallic-surface:hover {
   border-color: rgba(255, 255, 255, 0.16);
   background: linear-gradient(145deg, rgba(25, 30, 35, 0.9) 0%, rgba(13, 17, 21, 0.95) 100%);
@@ -1049,6 +1110,7 @@ html.dark textarea:disabled,
 .ubix-glow-border-idle {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
 .ubix-glow-border-idle:hover {
   border-color: rgba(255, 255, 255, 0.18);
 }
@@ -1060,6 +1122,7 @@ html.dark textarea:disabled,
 
 /* Accessibility: Disable orb motion under prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
+
   .ubix-orb-glow,
   .ubix-orb-core {
     animation: none !important;
@@ -1067,6 +1130,70 @@ html.dark textarea:disabled,
   }
 }
 
+/* ==========================================================================
+   Google Translate Widget Dark Theme Overrides
+   ========================================================================== */
 
+/* Prevent Google Translate banner from pushing down body / top bar */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+}
 
+body {
+  top: 0 !important;
+  position: static !important;
+}
 
+/* Hide Google branding / logos and tooltip balloons */
+.goog-logo-link,
+.goog-te-gadget span,
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+/* Container styling */
+.goog-te-gadget {
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* Styled dark dropdown combo */
+.goog-te-gadget .goog-te-combo {
+  background-color: #121518 !important;
+  color: #F5F7F8 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+  outline: none !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  height: 28px !important;
+}
+
+.goog-te-gadget .goog-te-combo:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  background-color: #161b20 !important;
+}
+
+.goog-te-gadget .goog-te-combo:focus {
+  border-color: rgba(125, 225, 234, 0.45) !important;
+  box-shadow: 0 0 8px rgba(125, 225, 234, 0.2) !important;
+}
+
+.goog-te-gadget .goog-te-combo option {
+  background-color: #121518 !important;
+  color: #F5F7F8 !important;
+}
+

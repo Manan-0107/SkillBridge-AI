@@ -25,7 +25,21 @@ const LEGACY_COOKIE = "cf_uid";
 export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
   const cookieStore = cookies();
 
-  // 1. Try Supabase Auth server session
+  // 1. Try cryptographically signed HMAC session token (`cf_session` or signed `cf_uid`) FIRST (fast, zero network latency)
+  const tokenCandidate = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(LEGACY_COOKIE)?.value;
+  if (tokenCandidate) {
+    const payload = verifySessionToken(tokenCandidate);
+    if (payload) {
+      return {
+        id: payload.userId,
+        email: payload.email,
+        name: payload.name ?? null,
+        isGuest: Boolean(payload.isGuest),
+      };
+    }
+  }
+
+  // 2. Fall back to Supabase Auth server session (`getUser()`) with timeout for Supabase-only sessions without cf_session
   try {
     const supabaseServer = createSupabaseServerClient();
     const authPromise = supabaseServer.auth.getUser();
@@ -46,21 +60,7 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
       };
     }
   } catch {
-    // Proceed to session token validation
-  }
-
-  // 2. Try cryptographically signed HMAC session token (`cf_session` or signed `cf_uid`)
-  const tokenCandidate = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(LEGACY_COOKIE)?.value;
-  if (tokenCandidate) {
-    const payload = verifySessionToken(tokenCandidate);
-    if (payload) {
-      return {
-        id: payload.userId,
-        email: payload.email,
-        name: payload.name ?? null,
-        isGuest: Boolean(payload.isGuest),
-      };
-    }
+    // Proceed to rejection
   }
 
   // 3. Security Contract: Plain, unsigned email cookies (e.g. raw cf_uid=email@example.com)

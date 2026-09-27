@@ -258,12 +258,6 @@ export async function POST(req: NextRequest) {
         if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...groqResponse,
-            thinking: (groqResponse as any).thinking || [
-              `🧠 1. Intent Analysis: Deeply analyzing the query and conversational context for ${userName}.`,
-              `🔍 2. Frontier Reasoning: Generating nuanced insight via Llama 3.3 70B cognitive architecture.`,
-              `💡 3. Conceptual & Empathy Alignment: Framing with intuitive analogies and empathetic warmth.`,
-              `✨ 4. Structured Synthesis: Formatting reply with clarity, warmth, and depth.`,
-            ],
             engine: "Groq (Llama 3.3 70B)",
           });
         }
@@ -289,12 +283,6 @@ export async function POST(req: NextRequest) {
         if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...geminiResponse,
-            thinking: (geminiResponse as any).thinking || [
-              `🧠 1. Intent Analysis: Deconstructing curiosity and underlying goals for ${userName}.`,
-              `🔍 2. Multimodal Knowledge Grounding: Verifying factual principles via Gemini 1.5 Flash.`,
-              `💡 3. Empathy & Analogy Synthesis: Infusing warmth, intuitive metaphors, and feeling.`,
-              `✨ 4. Refined Output: Delivering clear, empowering, and actionable response.`,
-            ],
             engine: "Google Gemini 1.5 Flash",
           });
         }
@@ -320,12 +308,6 @@ export async function POST(req: NextRequest) {
         if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...openaiResponse,
-            thinking: (openaiResponse as any).thinking || [
-              `🧠 1. Cognitive Framing: Analyzing intent and emotional nuance for ${userName}.`,
-              `🔍 2. Model Reasoning: Deliberating across knowledge domains with GPT-4o-mini.`,
-              `💡 3. Empathy & Tone Calibration: Formulating intuitive real-world analogies with human feeling.`,
-              `✨ 4. Output Crafting: Polishing tone for maximum clarity, encouragement, and warmth.`,
-            ],
             engine: "OpenAI GPT-4o-mini",
           });
         }
@@ -351,12 +333,6 @@ export async function POST(req: NextRequest) {
         if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...orResponse,
-            thinking: (orResponse as any).thinking || [
-              `🧠 1. Query Analysis: Dissecting user intention and conversational background.`,
-              `🔍 2. OpenRouter Reasoning: Synthesizing deep perspective via frontier open models.`,
-              `💡 3. Intuitive Clarity: Enriching response with relatable examples and empathetic warmth.`,
-              `✨ 4. Delivery: Assembling polished, engaging Markdown response.`,
-            ],
             engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)",
           });
         }
@@ -367,7 +343,7 @@ export async function POST(req: NextRequest) {
 
 
 
-    // ─── 6. Autonomous Dynamic Cognitive Reasoner ─────────────────────────────
+    // ─── 6. Autonomous Dynamic Cognitive Reasoner (Fallback Path) ─────────────
     const dynamicResponse = generateCognitiveAgentResponse(
       lastMessage,
       messages,
@@ -380,16 +356,11 @@ export async function POST(req: NextRequest) {
       accessibilityPrefs,
       resumeDraftState
     );
-    const defaultCognitiveThinking = [
-      `🧠 1. Deconstructing Intent & Nuance: Analyzing '${lastMessage.slice(0, 45)}' to address both factual and human curiosity.`,
-      `🔍 2. Knowledge Grounding: Verifying core mechanisms and practical relevance for role '${role}'.`,
-      `💡 3. Intuitive Metaphor & Empathy: Calibrating warm, empathetic delivery with relatable real-world framing.`,
-      `✨ 4. Calibrating Narrative Arc: Formatting structured, engaging answer with feeling, warmth, and depth.`,
-    ];
     return NextResponse.json({
       ...dynamicResponse,
-      thinking: (dynamicResponse as any).thinking || defaultCognitiveThinking,
-      engine: "ubix Assistant",
+      engine: "Fallback (limited)",
+      isFallback: true,
+      note: "Running in limited mode",
     });
   } catch (error) {
     console.error("[Assistant API] Fatal error:", error);

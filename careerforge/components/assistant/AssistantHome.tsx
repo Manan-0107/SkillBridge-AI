@@ -37,6 +37,8 @@ export type Msg = {
   intent?: ParsedIntent;
   redirecting?: boolean;
   engine?: string;
+  isFallback?: boolean;
+  note?: string;
   thinking?: string[];
 };
 
@@ -999,7 +1001,9 @@ export function AssistantHome({
           text: replyText,
           intent,
           redirecting: hasFeature,
-          engine: data.engine || "CareerForge AI",
+          engine: data.engine || (data.isFallback ? "Fallback (limited)" : "CareerForge AI"),
+          isFallback: Boolean(data.isFallback),
+          note: data.note || (data.isFallback ? "Running in limited mode" : undefined),
           thinking: Array.isArray(data.thinking) ? data.thinking : undefined,
         },
       ];
@@ -1437,34 +1441,34 @@ export function AssistantHome({
                   </button>
                 </div>
 
-                {/* 3 suggestion cards */}
+                {/* 3 curated conversational suggestion cards (distinct from ecosystem shortcuts) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => runPrompt("Help me audit my resume for ATS compliance")}
+                    onClick={() => runPrompt("Help me frame my most complex project using the STAR method for senior interviews.")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Resume</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">ATS Resume Audit</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Score and fix keywords for your role</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Interview Prep</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">STAR Story Framing</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Turn complex projects into compelling interview narratives</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => runPrompt("Show me my complete career roadmap")}
+                    onClick={() => runPrompt("Based on 2026 industry demand for my target role, what are the top 3 highest-leverage skills I should learn next?")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Roadmap</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Career Path</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Visual skill milestones to mastery</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Skill Strategy</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">High-Leverage Gaps</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Identify what to prioritize based on market demand</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => runPrompt("I want to practice interview questions")}
+                    onClick={() => runPrompt("Walk me through how to design a high-throughput, low-latency rate limiter with Redis and Token Bucket.")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Practice</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Mock Interview</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Drills with instant feedback</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Architecture</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">System Design Prep</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Analyze trade-offs and distributed systems patterns</div>
                   </button>
                 </div>
               </div>
@@ -1488,8 +1492,8 @@ export function AssistantHome({
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-medium ubix-chat-meta-bar px-1">
                       <span>{isUser ? userDisplayName : "ubix Assistant"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] ubix-chat-subtext">
-                          {m.engine}
+                        <span className={`text-[10px] ${m.isFallback ? "text-amber-400/90 font-mono" : "ubix-chat-subtext"}`}>
+                          {m.engine}{m.note ? ` · ${m.note}` : ""}
                         </span>
                       )}
                       {!isUser && (
