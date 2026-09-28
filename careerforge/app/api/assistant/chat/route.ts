@@ -12,7 +12,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
 import path from "path";
 import crypto from "crypto";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
@@ -126,18 +125,22 @@ interface RequestBody {
 }
 
 /**
- * Call Python AI Assistant Engine:
- * 1. Queries running FastAPI server on http://127.0.0.1:8000/api/chat
- * 2. Falls back to direct Python CLI execution via run_cli.py
+ * Call Python AI Assistant Engine (optional microservice):
+ * Only queries if PYTHON_AI_SERVICE_URL is explicitly configured with a strict 1.5s timeout.
+ * No child_process spawn in Next.js serverless execution.
  */
 async function callPythonAIEngine(body: RequestBody): Promise<any> {
-  // Step 1: Fast HTTP call to Python FastAPI backend
+  const pythonUrl = process.env.PYTHON_AI_SERVICE_URL;
+  if (!pythonUrl) {
+    return null;
+  }
+
   try {
-    const res = await fetch("http://127.0.0.1:8000/api/chat", {
+    const res = await fetch(`${pythonUrl.replace(/\/$/, "")}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(1500),
     });
     if (res.ok) {
       const data = await res.json();
@@ -146,39 +149,10 @@ async function callPythonAIEngine(body: RequestBody): Promise<any> {
       }
     }
   } catch (httpErr) {
-    // FastAPI server not listening or starting up; proceed to CLI fallback
+    // Microservice offline or not answering; proceed directly to TypeScript AI cascade
   }
 
-  // Step 2: Direct Python CLI Subprocess Execution
-  return new Promise((resolve) => {
-    try {
-      const scriptPath = path.join(process.cwd(), "python_ai", "run_cli.py");
-      const py = spawn("python", [scriptPath]);
-      let stdout = "";
-
-      py.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-      });
-
-      py.on("close", (code) => {
-        if (code === 0 && stdout.trim()) {
-          try {
-            const parsed = JSON.parse(stdout);
-            resolve(parsed);
-            return;
-          } catch (e) {}
-        }
-        resolve(null);
-      });
-
-      py.on("error", () => resolve(null));
-
-      py.stdin.write(JSON.stringify(body));
-      py.stdin.end();
-    } catch {
-      resolve(null);
-    }
-  });
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -284,12 +258,6 @@ export async function POST(req: NextRequest) {
         if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...groqResponse,
-            thinking: (groqResponse as any).thinking || [
-              `🧠 1. Intent Analysis: Deeply analyzing the query and conversational context for ${userName}.`,
-              `🔍 2. Frontier Reasoning: Generating nuanced insight via Llama 3.3 70B cognitive architecture.`,
-              `💡 3. Conceptual & Empathy Alignment: Framing with intuitive analogies and empathetic warmth.`,
-              `✨ 4. Structured Synthesis: Formatting reply with clarity, warmth, and depth.`,
-            ],
             engine: "Groq (Llama 3.3 70B)",
           });
         }
@@ -315,12 +283,6 @@ export async function POST(req: NextRequest) {
         if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...geminiResponse,
-            thinking: (geminiResponse as any).thinking || [
-              `🧠 1. Intent Analysis: Deconstructing curiosity and underlying goals for ${userName}.`,
-              `🔍 2. Multimodal Knowledge Grounding: Verifying factual principles via Gemini 1.5 Flash.`,
-              `💡 3. Empathy & Analogy Synthesis: Infusing warmth, intuitive metaphors, and feeling.`,
-              `✨ 4. Refined Output: Delivering clear, empowering, and actionable response.`,
-            ],
             engine: "Google Gemini 1.5 Flash",
           });
         }
@@ -346,12 +308,6 @@ export async function POST(req: NextRequest) {
         if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...openaiResponse,
-            thinking: (openaiResponse as any).thinking || [
-              `🧠 1. Cognitive Framing: Analyzing intent and emotional nuance for ${userName}.`,
-              `🔍 2. Model Reasoning: Deliberating across knowledge domains with GPT-4o-mini.`,
-              `💡 3. Empathy & Tone Calibration: Formulating intuitive real-world analogies with human feeling.`,
-              `✨ 4. Output Crafting: Polishing tone for maximum clarity, encouragement, and warmth.`,
-            ],
             engine: "OpenAI GPT-4o-mini",
           });
         }
@@ -377,12 +333,6 @@ export async function POST(req: NextRequest) {
         if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
           return NextResponse.json({
             ...orResponse,
-            thinking: (orResponse as any).thinking || [
-              `🧠 1. Query Analysis: Dissecting user intention and conversational background.`,
-              `🔍 2. OpenRouter Reasoning: Synthesizing deep perspective via frontier open models.`,
-              `💡 3. Intuitive Clarity: Enriching response with relatable examples and empathetic warmth.`,
-              `✨ 4. Delivery: Assembling polished, engaging Markdown response.`,
-            ],
             engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)",
           });
         }
@@ -391,38 +341,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 5. Try GitHub Models API (Azure AI Inference - GPT-4o) ───────────────
-    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-    if (githubToken && githubToken.trim().length > 5) {
-      try {
-        const ghResponse = await callGithubModelsLLM(
-          githubToken,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...ghResponse,
-            thinking: (ghResponse as any).thinking || [
-              `🧠 1. Intent Sensing: Examining user inquiry and technical or conceptual context.`,
-              `🔍 2. Inference Architecture: Reasoning with GitHub Models (GPT-4o).`,
-              `💡 3. Metaphor & Empathy: Crafting accessible explanations with authentic human touch.`,
-              `✨ 4. Final Polish: Structuring response with genuine warmth and depth.`,
-            ],
-            engine: "GitHub Models (GPT-4o)",
-          });
-        }
-      } catch (ghErr) {
-        console.warn("[Assistant API] GitHub Models error:", ghErr);
-      }
-    }
 
-    // ─── 6. Autonomous Dynamic Cognitive Reasoner ─────────────────────────────
+
+    // ─── 6. Autonomous Dynamic Cognitive Reasoner (Fallback Path) ─────────────
     const dynamicResponse = generateCognitiveAgentResponse(
       lastMessage,
       messages,
@@ -435,25 +356,20 @@ export async function POST(req: NextRequest) {
       accessibilityPrefs,
       resumeDraftState
     );
-    const defaultCognitiveThinking = [
-      `🧠 1. Deconstructing Intent & Nuance: Analyzing '${lastMessage.slice(0, 45)}' to address both factual and human curiosity.`,
-      `🔍 2. Knowledge Grounding: Verifying core mechanisms and practical relevance for role '${role}'.`,
-      `💡 3. Intuitive Metaphor & Empathy: Calibrating warm, empathetic delivery with relatable real-world framing.`,
-      `✨ 4. Calibrating Narrative Arc: Formatting structured, engaging answer with feeling, warmth, and depth.`,
-    ];
     return NextResponse.json({
       ...dynamicResponse,
-      thinking: (dynamicResponse as any).thinking || defaultCognitiveThinking,
-      engine: "CareerForge Autonomous AI Brain",
+      engine: "Fallback (limited)",
+      isFallback: true,
+      note: "Running in limited mode",
     });
   } catch (error) {
-    console.error("[Assistant API] Error:", error);
-    return NextResponse.json(
-      {
-        reply: "I am actively listening and ready to assist you. What would you like to explore next?",
-        engine: "Autonomous Fallback",
-      },
-      { status: 200 }
+    console.error("[Assistant API] Fatal error:", error);
+    const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+    return createApiErrorResponse(
+      "AI_PROVIDER_UNAVAILABLE",
+      "The AI assistant is temporarily unavailable. Please try again shortly.",
+      requestId,
+      { statusCode: 503, retryable: true }
     );
   }
 }
@@ -467,14 +383,14 @@ function getSystemPrompt(
   currentEntity?: any,
   accessibilityPrefs?: any
 ) {
-  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
+  return `You are ubix Assistant, the central Career Assistant + Accessibility Assistant + Workspace Assistant for ubix.
 You are collaborating with ${userName}, whose target role is "${role}".
 Current Active Page: "${currentPage}".
 ${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
 ${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
 
 Core Directives & Behavioral Guidelines:
-1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
+1. VERSATILE AI CO-PILOT: You are a versatile frontier AI. You naturally answer ANY question with depth, warmth, and clarity (e.g., world leaders like PM Modi, science topics like photosynthesis, programming concepts like polymorphism, algorithms like binary search in Python). When the user asks general or conceptual questions, answer them directly and comprehensively—do NOT force general inquiries into career actions. Connect to CareerForge platform tools (Resume, Roadmap, Courses, Practice, Jobs) ONLY when the user specifically requests platform actions.
 2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
 3. NATURAL ACCESSIBILITY DISCOVERY:
    - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
@@ -664,46 +580,7 @@ async function callOpenRouterLLM(
   return parseActionFromReply(rawReply);
 }
 
-// ─── 5. GitHub Models API Provider ────────────────────────────────────────────
-async function callGithubModelsLLM(
-  token: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
 
-  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
 
 // ─── Action Parser Helper ─────────────────────────────────────────────────────
 function parseActionFromReply(rawReply: string) {
@@ -718,16 +595,37 @@ function parseActionFromReply(rawReply: string) {
     cleanReply = rawReply.replace(/\[ACTION:[\s\S]*?\]/g, "").trim();
     try {
       const parsed = JSON.parse(actionMatch[1]);
-      if (parsed.tool) {
+      const ALLOWED_TOOL_NAMES = new Set<string>([
+        "navigateTo",
+        "openResume",
+        "openSkillAnalysis",
+        "searchJobs",
+        "searchCourses",
+        "searchProjects",
+        "searchGithub",
+        "openJob",
+        "configureJobAlerts",
+        "updateAccessibilityPreferences",
+        "conversationalResumeBuilder",
+        "updateUserProfile",
+        "readPage",
+      ]);
+
+      if (parsed.tool && ALLOWED_TOOL_NAMES.has(parsed.tool)) {
         toolCall = parsed;
         if (parsed.tool === "navigateTo" || parsed.tool === "openResume") {
-          feature = sanitizeNavPage(parsed.page);
-          resumeTab = sanitizeTab(parsed.tab);
-          toolCall.page = feature;
-          toolCall.tab = resumeTab;
-          if (toolCall.parameters) {
-            toolCall.parameters.page = feature;
-            toolCall.parameters.tab = resumeTab;
+          feature = sanitizeNavPage(parsed.page || parsed.parameters?.page);
+          resumeTab = sanitizeTab(parsed.tab || parsed.parameters?.tab);
+          if (!feature) {
+            // Unsafe or invalid navigation destination; discard toolCall
+            toolCall = null;
+          } else {
+            toolCall.page = feature;
+            toolCall.tab = resumeTab;
+            if (toolCall.parameters) {
+              toolCall.parameters.page = feature;
+              toolCall.parameters.tab = resumeTab;
+            }
           }
         } else if (parsed.tool === "searchJobs") {
           feature = "local";
@@ -1394,28 +1292,362 @@ function generateCognitiveAgentResponse(
     return { reply };
   }
 
+  // ─── Multi-Turn Context Recognition ─────────────────────────────────────────
+  const previousHistory = messages.slice(0, -1).map((m) => m.text).join(" ").toLowerCase();
+
+  // Follow-up context ("give me a simple example", "show an example", "can you show an example")
+  if (
+    lower.includes("example") ||
+    lower.includes("simple example") ||
+    lower.includes("code sample") ||
+    lower.includes("code example") ||
+    lower === "example please" ||
+    lower === "can you give an example" ||
+    lower === "give me an example"
+  ) {
+    if (previousHistory.includes("polymorphism") || previousHistory.includes("java")) {
+      return {
+        reply: `Here is a clear, real-world Java example of **Runtime Polymorphism (Method Overriding)**:
+
+\`\`\`java
+// 1. Superclass
+class Animal {
+    void makeSound() {
+        System.out.println("The animal makes a sound");
+    }
+}
+
+// 2. Subclasses overriding the makeSound() method
+class Dog extends Animal {
+    @Override
+    void makeSound() {
+        System.out.println("The dog barks: Woof! Woof!");
+    }
+}
+
+class Cat extends Animal {
+    @Override
+    void makeSound() {
+        System.out.println("The cat meows: Meow!");
+    }
+}
+
+// 3. Polymorphic Execution
+public class Main {
+    public static void main(String[] args) {
+        // A single superclass reference can refer to any subclass object
+        Animal myPet;
+
+        myPet = new Dog();
+        myPet.makeSound(); // Output: The dog barks: Woof! Woof!
+
+        myPet = new Cat();
+        myPet.makeSound(); // Output: The cat meows: Meow!
+    }
+}
+\`\`\`
+
+### Why this demonstrates Polymorphism:
+At compile-time, the variable \`myPet\` is simply of type \`Animal\`. But at runtime, the JVM uses **Dynamic Method Dispatch** to execute the method belonging to the actual instance (\`Dog\` or \`Cat\`). You can add new animals without ever changing existing client code!`,
+      };
+    }
+
+    if (previousHistory.includes("binary search") || previousHistory.includes("python")) {
+      return {
+        reply: `Here is a step-by-step trace of **Binary Search in Python** searching for \`23\` in sorted array \`[2, 5, 8, 12, 16, 23, 38, 56, 72, 91]\`:
+
+\`\`\`python
+# Target = 23
+# Step 1: low = 0 (val: 2), high = 9 (val: 91)
+#         mid = (0 + 9) // 2 = 4 (val: 16)
+#         16 < 23 -> Target is in right half. low becomes mid + 1 = 5
+
+# Step 2: low = 5 (val: 23), high = 9 (val: 91)
+#         mid = (5 + 9) // 2 = 7 (val: 56)
+#         56 > 23 -> Target is in left half. high becomes mid - 1 = 6
+
+# Step 3: low = 5 (val: 23), high = 6 (val: 38)
+#         mid = (5 + 6) // 2 = 5 (val: 23)
+#         23 == 23 -> Match found at index 5!
+\`\`\`
+
+Total comparisons: **3 steps** instead of 6 linear checks. That is $O(\\log n)$ efficiency!`,
+      };
+    }
+
+    if (previousHistory.includes("recursion")) {
+      return {
+        reply: `Here is the canonical example of **Recursion**: Calculating Factorial ($n! = n \\times (n-1)!$):
+
+\`\`\`python
+def factorial(n: int) -> int:
+    # 1. Base Case: stops the infinite descent
+    if n <= 1:
+        return 1
+    # 2. Recursive Step: breaks down problem into smaller subproblem
+    return n * factorial(n - 1)
+
+print(factorial(4)) # Output: 24 (4 * 3 * 2 * 1)
+\`\`\`
+
+### Execution Stack:
+\`\`\`text
+factorial(4) -> 4 * factorial(3)
+                    3 * factorial(2)
+                        2 * factorial(1) -> returns 1
+                    returns 2 * 1 = 2
+                returns 3 * 2 = 6
+            returns 4 * 6 = 24
+\`\`\``,
+      };
+    }
+  }
+
+  // ─── General AI Knowledge: World Leaders & Current Events ───────────────────
+  if (
+    lower.includes("pm modi") ||
+    lower.includes("narendra modi") ||
+    lower.includes("prime minister modi") ||
+    lower.includes("modi ji") ||
+    lower === "modi"
+  ) {
+    return {
+      reply: `**Narendra Modi** (born September 17, 1950) is an Indian politician who has been serving as the **14th Prime Minister of India** since May 2014, representing the Varanasi constituency in Uttar Pradesh.
+
+### Key Milestones & Background:
+• **Early Career**: Rose through the Rashtriya Swayamsevak Sangh (RSS) and the Bharatiya Janata Party (BJP).
+• **Chief Minister of Gujarat (2001–2014)**: Led Gujarat for four consecutive terms, emphasizing industrial growth, infrastructure development, and economic deregulation.
+• **National Leadership (2014–Present)**: Led the BJP-led National Democratic Alliance (NDA) to consecutive general election victories in 2014, 2019, and 2024.
+
+### Flagship National Initiatives:
+1. **Digital India & UPI**: Pioneered open public digital infrastructure, leading to global leadership in real-time digital payments.
+2. **Make in India**: Focused on manufacturing, defense indigenization, and electronics assembly expansion.
+3. **Financial Inclusion**: Rolled out the *Jan Dhan Yojana*, bringing over 500 million unbanked citizens into the formal banking system.
+4. **Infrastructure & Energy**: Expansion of high-speed rail (*Vande Bharat*), highway corridors, and solar renewable energy capacity.
+5. **Foreign Policy**: Championed the *Global South*, expanded India's footprint in the Quad, BRICS, and G20 (hosting the 2023 New Delhi Summit).`,
+    };
+  }
+
+  // ─── General AI Knowledge: Natural Sciences & Biology ────────────────────────
+  if (
+    lower.includes("photosynthesis") ||
+    lower.includes("प्रकाश संश्लेषण") ||
+    lower.includes("પ્રકાશસંશ્લેષણ")
+  ) {
+    return {
+      reply: `**Photosynthesis** is the fundamental biochemical process by which green plants, algae, and certain cyanobacteria harness light energy from the sun to convert water and carbon dioxide into oxygen and energy-rich chemical sugars (glucose).
+
+### The Chemical Equation:
+$$\\mathbf{6CO_2 + 6H_2O + \\text{Light Energy} \\longrightarrow C_6H_{12}O_6 + 6O_2}$$
+
+### The Two Interconnected Stages:
+1. **Light-Dependent Reactions (in the Thylakoid Membranes)**:
+   • Chlorophyll absorbs solar photons.
+   • Water molecules ($\\text{H}_2\\text{O}$) are split (*photolysis*), releasing oxygen ($\\text{O}_2$) as a vital byproduct.
+   • Generates high-energy chemical carriers: **ATP** and **NADPH**.
+
+2. **The Calvin Cycle / Light-Independent Reactions (in the Stroma)**:
+   • Driven by the enzyme **RuBisCO**, atmospheric carbon dioxide ($\\text{CO}_2$) is "fixed" into organic molecules.
+   • Utilizing ATP and NADPH from the light reactions, carbon is synthesized into **G3P**, which forms glucose and plant biomass.
+
+### Why It Matters:
+Photosynthesis produces virtually all the atmospheric oxygen we breathe and forms the base of the global biological food web!`,
+    };
+  }
+
+  // ─── General AI Knowledge: Computer Science & Software Engineering ───────────
+  if (
+    lower.includes("polymorphism") ||
+    (lower.includes("poly") && lower.includes("morph"))
+  ) {
+    return {
+      reply: `In Object-Oriented Programming (OOP), **Polymorphism** (originating from the Greek words *poly* meaning "many" and *morph* meaning "form") is the principle that allows objects of different classes to be treated as objects of a common superclass, enabling a single interface to control different underlying implementations.
+
+### 1. Compile-Time (Static) Polymorphism
+Achieved via **Method Overloading**: Defining multiple methods in the same class with identical names but differing parameter types, counts, or order. The compiler determines which method to invoke at build time.
+
+### 2. Runtime (Dynamic) Polymorphism
+Achieved via **Method Overriding**: When a subclass provides its own specific implementation of a method already declared in its superclass or interface.
+• The exact method executed is resolved at runtime using **Dynamic Method Dispatch** (Virtual Method Table / vtable).
+• Declared using the \`@Override\` annotation in Java.
+
+### Core Benefits:
+• **Extensibility**: You can add new classes without modifying existing caller logic.
+• **Maintainability**: Decouples the client from concrete classes, adhering to the Open/Closed Principle (SOLID).
+
+*Tip: Ask "Give me a simple example" to see a working Java code implementation!*`,
+    };
+  }
+
+  if (
+    lower.includes("binary search") ||
+    lower.includes("binary search in python")
+  ) {
+    return {
+      reply: `**Binary Search** is an optimal search algorithm that finds the position of a target value within a **sorted array**. It operates by repeatedly dividing the search interval in half.
+
+### Time & Space Complexity:
+• **Time Complexity**: $\\mathbf{O(\\log n)}$ (halves the search space every step)
+• **Space Complexity**: $\\mathbf{O(1)}$ for the iterative approach
+
+### Python Implementation:
+\`\`\`python
+def binary_search(arr: list[int], target: int) -> int:
+    """
+    Returns the index of target in sorted arr, or -1 if not found.
+    """
+    low = 0
+    high = len(arr) - 1
+
+    while low <= high:
+        # Avoid potential integer overflow with: low + (high - low) // 2
+        mid = (low + high) // 2
+        
+        if arr[mid] == target:
+            return mid  # Found target!
+        elif arr[mid] < target:
+            low = mid + 1  # Target is in the right half
+        else:
+            high = mid - 1 # Target is in the left half
+
+    return -1  # Target not found
+
+# Verification
+numbers = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+result = binary_search(numbers, 23)
+print(f"Element 23 found at index: {result}") # Output: 5
+\`\`\`
+
+### Key Invariant:
+The array **must be sorted** prior to searching. If the array is unsorted, linear search ($O(n)$) or sorting first ($O(n \\log n)$) is required.`,
+    };
+  }
+
+  if (
+    lower.includes("quantum computing") ||
+    lower.includes("what is quantum computing")
+  ) {
+    return {
+      reply: `**Quantum Computing** is an emerging computing paradigm that leverages the fundamental principles of quantum mechanics to solve complex computational problems exponentially faster than classical supercomputers.
+
+### Classical Bits vs. Quantum Qubits:
+• **Classical Bits**: Represent binary states—strictly **0** or **1**.
+• **Qubits (Quantum Bits)**: Exist in a continuous continuum of states, capable of existing as 0, 1, or any linear combination of both simultaneously.
+
+### The Three Foundational Quantum Principles:
+1. **Superposition**:
+   A qubit exists in multiple states at once until measured: $|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$. This allows a quantum processor to evaluate vast numbers of possibilities in parallel.
+2. **Entanglement**:
+   Qubits can become fundamentally linked such that the state of one instantly dictates the state of another, regardless of physical separation.
+3. **Quantum Interference**:
+   Quantum algorithms orchestrate constructive interference to amplify correct answers and destructive interference to cancel out incorrect possibilities.
+
+### Real-World Applications:
+• **Cryptography**: Threatens RSA while enabling unbreakable Quantum Key Distribution (QKD).
+• **Molecular Simulation & Medicine**: Modeling complex protein folding and drug interactions.
+• **Logistics Optimization**: Solving vehicle routing, supply chain, and portfolio balancing problems.`,
+    };
+  }
+
+  if (
+    lower.includes("sql join") ||
+    lower.includes("sql joins") ||
+    lower.includes("explain sql joins")
+  ) {
+    return {
+      reply: `In relational databases (PostgreSQL, MySQL, SQLite), an **SQL JOIN** clause is used to combine rows from two or more tables based on a related common column (foreign key relationship).
+
+### The Four Primary JOIN Types:
+
+1. **INNER JOIN**:
+   Returns only the records that have matching values in **both** tables.
+   \`\`\`sql
+   SELECT users.name, orders.amount 
+   FROM users 
+   INNER JOIN orders ON users.id = orders.user_id;
+   \`\`\`
+
+2. **LEFT (OUTER) JOIN**:
+   Returns **all** records from the left table, plus matched records from the right table. Unmatched right rows return \`NULL\`.
+   \`\`\`sql
+   SELECT users.name, orders.amount 
+   FROM users 
+   LEFT JOIN orders ON users.id = orders.user_id;
+   \`\`\`
+
+3. **RIGHT (OUTER) JOIN**:
+   Returns **all** records from the right table, plus matched records from the left table. Unmatched left rows return \`NULL\`.
+
+4. **FULL (OUTER) JOIN**:
+   Returns all records when there is a match in **either** left or right table. Unmatched records on either side return \`NULL\`.
+
+### Quick Decision Matrix:
+• Only interested in connected data? $\\rightarrow$ **INNER JOIN**
+• Want all users even if they haven't placed an order? $\\rightarrow$ **LEFT JOIN**`,
+    };
+  }
+
+  if (
+    lower.includes("recursion") ||
+    lower.includes("what is recursion") ||
+    lower.includes("explain recursion")
+  ) {
+    return {
+      reply: `**Recursion** is a programming technique where a function solves a problem by calling itself with smaller instances of the same problem, until it reaches a designated stopping condition.
+
+### The Two Essential Parts of Every Recursive Function:
+1. **The Base Case**:
+   The terminating condition that returns a direct value without making another recursive call. Without a base case, the function loops infinitely, triggering a **Stack Overflow Error**.
+2. **The Recursive Step**:
+   The logic where the function calls itself with modified arguments that progressively move closer toward the base case.
+
+### Real-World Analogy:
+Think of a set of **Russian nesting dolls (Matryoshka)**:
+To find the smallest figurine in the center, you open each outer doll (recursive step) until you reach the solid wooden doll that cannot be opened (base case). Once found, you close them back up (stack unwinding).`,
+    };
+  }
+
   // ─── J. Greetings & General Inquiries
+  const isGreeting =
+    /^(hi|hello|hey|greetings|hola|bonjour|salut|namaste|kem cho|नमस्ते|કેમ છો)\b/i.test(query) ||
+    lower === "hi" ||
+    lower === "hello" ||
+    lower === "hey" ||
+    lower === "namaste";
+
   if (isFrench) {
     return {
-      reply: `Bonjour ${userName} ! 👋 Je suis votre assistant de carrière et d'accessibilité CareerForge. Je peux vous aider à rédiger ou analyser votre CV, trouver des cours, des projets open-source et des emplois en direct. Comment souhaitez-vous continuer ?`,
+      reply: isGreeting
+        ? `Bonjour ${userName} ! 👋 Je suis votre assistant ubix. Je peux vous aider à rédiger ou analyser votre CV, explorer votre feuille de route, trouver des cours et des projets. Comment puis-je vous aider ?`
+        : `Concernant "${query}" : je peux vous fournir des explications détaillées ou vous aider à relier cela à votre feuille de route, vos compétences ou votre CV sur ubix. Que souhaitez-vous approfondir ?`,
     };
   }
 
   if (isGujarati) {
     return {
-      reply: `નમસ્તે ${userName}! 👋 હું કરિયરફોર્જ AI સહાયક છું. હું તમારા રેઝ્યૂમે નિર્માણ, સ્કિલ ગેપ એનાલિસિસ, કોર્સ, પ્રોજેક્ટ્સ અને જોબ્સ શોધવામાં મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`,
+      reply: isGreeting
+        ? `નમસ્તે ${userName}! 👋 હું ubix સહાયક છું. હું તમારા રેઝ્યૂમે, સ્કિલ ગેપ રોડમેપ, કોર્સ અને જોબ્સ માટે મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`
+        : `તમારા પ્રશ્ન "${query}" સંદર્ભે: હું તમને આ વિષય સમજાવી શકું છું અથવા તમારા કરિયર રોડમેપ અને કૌશલ્યો સાથે જોડી શકું છું. તમે આગળ શું જાણવા માંગો છો?`,
     };
   }
 
   if (isHindi) {
     return {
-      reply: `नमस्ते ${userName}! 👋 मैं करियरफोर्ज AI सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, कोर्स, प्रोजेक्ट और लाइव नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`,
+      reply: isGreeting
+        ? `नमस्ते ${userName}! 👋 मैं ubix सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, रोडमैप और नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+        : `"${query}" के बारे में: मैं इस पर विस्तृत जानकारी दे सकता हूँ या इसे आपके ubix रोडमैप और कौशल विकास से जोड़ सकता हूँ। आप क्या जानना चाहेंगे?`,
+    };
+  }
+
+  if (isGreeting) {
+    return {
+      reply: voiceMode
+        ? `Hello ${userName}! I'm your ubix assistant. How can I assist you with your career roadmap, interview practice, or resume today?`
+        : `Hello ${userName}! 👋 I'm your **ubix Assistant**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Roadmaps**: Tier-by-tier learning milestones and project blueprints\n• **Interview Practice**: Instant interactive drills with targeted feedback\n• **Accessible Voice Guidance**: Hands-free navigation across the entire workspace\n\nWhat would you like to explore today?`,
     };
   }
 
   return {
-    reply: voiceMode
-      ? `Hello ${userName}! I'm your CareerForge assistant. I can guide you through resume audits, skill gap roadmaps, curated courses, projects, or local jobs. Where shall we begin?`
-      : `Hello ${userName}! 👋 I'm your **CareerForge AI Career & Accessibility Co-Pilot**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Learning**: High-impact courses and portfolio project blueprints\n• **Verified Job Opportunities**: Matching positions and automated email alerts\n• **Accessible Voice Guidance**: Hands-free navigation across the entire platform\n\nWhat would you like to explore today?`,
+    reply: `Regarding **"${query}"**:\n\nI can provide insights on this topic or help you connect it to your **${role}** roadmap, skill verification, practice questions, or resume highlights in ubix.\n\nWould you like an in-depth breakdown, code example, or roadmap alignment?`,
   };
 }

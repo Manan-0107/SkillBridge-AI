@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "npm run --prefix careerforge dev",
+    "build": "npm run --prefix careerforge build",
+    "start": "npm run --prefix careerforge start",
+    "test": "npm run --prefix careerforge test",
+    "lint": "npm run --prefix careerforge lint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

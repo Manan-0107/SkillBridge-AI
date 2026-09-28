@@ -45,7 +45,7 @@ export function FilterBar({
   return (
     <div className={`flex flex-wrap items-center justify-between gap-3 ${className}`}>
       {/* Track Selector Tabs */}
-      <div className="flex items-center gap-1 bg-charcoal-900 border border-hairline p-1 rounded-xl">
+      <div className="flex items-center gap-1 bg-surface/50 border border-ink/10 p-1 rounded-xl">
         {TRACK_OPTIONS.map((t) => {
           const isActive = currentTrack.toLowerCase() === t.id;
           return (
@@ -53,10 +53,10 @@ export function FilterBar({
               key={t.id}
               type="button"
               onClick={() => handleTrackChange(t.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 isActive
-                  ? "bg-charcoal-800 text-charcoal-100 font-semibold border border-hairline shadow-xs"
-                  : "text-charcoal-400 hover:text-charcoal-200"
+                  ? "bg-bg text-ink font-semibold border border-ink/12 shadow-xs"
+                  : "text-ink/60 hover:text-ink hover:bg-bg/50"
               }`}
             >
               {t.label}
@@ -67,7 +67,7 @@ export function FilterBar({
 
       {/* Status Filter Toggles */}
       <div className="flex items-center gap-1.5" role="group" aria-label="Filter by status">
-        <span className="text-xs font-mono text-charcoal-500 mr-1 hidden sm:inline">
+        <span className="text-xs font-mono text-ink/50 mr-1 hidden sm:inline">
           Filter:
         </span>
         {ALL_STATUSES.map((statusItem) => {
@@ -78,10 +78,10 @@ export function FilterBar({
               type="button"
               onClick={() => onStatusToggle(statusItem.id)}
               aria-pressed={isSelected}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-all ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-all cursor-pointer ${
                 isSelected
-                  ? "bg-charcoal-800 text-charcoal-100 border-charcoal-600 shadow-xs"
-                  : "bg-charcoal-900/60 text-charcoal-500 border-hairline-subtle opacity-75 hover:opacity-100"
+                  ? "bg-bg text-ink border-ink/20 shadow-xs font-semibold"
+                  : "bg-surface/40 text-ink/50 border-ink/8 hover:text-ink hover:bg-surface"
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${statusItem.dotClass}`} />

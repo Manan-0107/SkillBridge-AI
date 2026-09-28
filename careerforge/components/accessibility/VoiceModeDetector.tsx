@@ -57,10 +57,10 @@ export function VoiceModeDetector() {
 
     const detectedLang = detectTextLanguage(transcript) || voiceLanguage || "en-US";
     const welcomeMessages: Record<string, string> = {
-      "hi-IN": "वॉयस एक्सेसिबिलिटी सक्रिय हो गई है। करियरफोर्ज में आपका स्वागत है।",
-      "gu-IN": "વોઈસ એક્સેસિબિલિટી સક્રિય થઈ ગઈ છે. કરિયરફોર્જમાં આપનું સ્વાગત છે.",
-      "en-US": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
-      "en-IN": "Voice accessibility enabled. Welcome to CareerForge. You can ask me anything or say open my roadmap.",
+      "hi-IN": "वॉयस एक्सेसिबिलिटी सक्रिय हो गई है। ubix में आपका स्वागत है।",
+      "gu-IN": "વોઈસ એક્સેસિબિલિટી સક્રિય થઈ ગઈ છે. ubix માં આપનું સ્વાગત છે.",
+      "en-US": "Voice accessibility enabled. Welcome to ubix. You can ask me anything or say open my roadmap.",
+      "en-IN": "Voice accessibility enabled. Welcome to ubix. You can ask me anything or say open my roadmap.",
     };
 
     const msg = welcomeMessages[detectedLang] || welcomeMessages["en-US"];
@@ -144,20 +144,17 @@ export function VoiceModeDetector() {
   }, [handleFallbackToText, handleVoiceSuccess, voiceLanguage]);
 
   useEffect(() => {
-    // Check if voice capability has already been tested
-    let alreadyCalibrated = false;
-    try {
-      alreadyCalibrated = Boolean(localStorage.getItem("careerforge_voice_calibrated"));
-    } catch {}
-
-    if (!alreadyCalibrated && !checked) {
+    const handleCalibrate = () => {
       setModalOpen(true);
       const timer = setTimeout(() => {
         runAttempt(1);
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
-    }
-  }, [checked, runAttempt]);
+    };
+
+    window.addEventListener("careerforge:calibrate-voice" as any, handleCalibrate);
+    return () => window.removeEventListener("careerforge:calibrate-voice" as any, handleCalibrate);
+  }, [runAttempt]);
 
   useEffect(() => {
     return () => {

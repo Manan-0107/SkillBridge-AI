@@ -4,14 +4,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.cache = {
-        type: "memory",
-      };
-    }
-    return config;
-  },
   async headers() {
     return [
       {

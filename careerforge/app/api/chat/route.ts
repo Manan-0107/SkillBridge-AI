@@ -134,65 +134,35 @@ export async function POST(req: NextRequest) {
       messages[messages.length - 1]?.content ||
       "";
 
-    // ─── 1. Google Gemini 1.5 Flash API ──────────────────────────────────────
-    const geminiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_AI_KEY;
+    // ─── Central AI Provider Cascade (Gemini -> Groq -> OpenAI) ───────────
+    try {
+      const { generateAIResponse } = await import("@/lib/ai/centralProvider");
+      const formattedMessages = messages.map((m) => ({
+        role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        content: m.text || m.content || "",
+      }));
 
-    if (geminiKey && geminiKey.trim().length > 5) {
-      try {
-        const geminiReply = await callGemini15Flash(geminiKey, messages, userName);
-        if (geminiReply && geminiReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: geminiReply,
-            engine: "Google Gemini 1.5 Flash",
-            model: "gemini-1.5-flash",
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Gemini API failed, falling back:", err);
+      const aiResult = await generateAIResponse({
+        messages: formattedMessages,
+        systemPrompt: GENERAL_ASSISTANT_SYSTEM_PROMPT,
+        temperature: body.temperature ?? 0.35,
+        maxTokens: 1200,
+        timeoutMs: 8000,
+      });
+
+      if (aiResult && aiResult.text) {
+        return NextResponse.json({
+          reply: aiResult.text,
+          engine: `${aiResult.provider.toUpperCase()} (${aiResult.model})`,
+          model: aiResult.model,
+          fallbacks: OPEN_SOURCE_FALLBACKS,
+        });
       }
+    } catch (aiErr) {
+      console.warn("[/api/chat] Central AI cascade note:", aiErr);
     }
 
-    // ─── 2. Groq Cloud Llama 3 Fallback ──────────────────────────────────────
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey && groqKey.trim().length > 5) {
-      try {
-        const groqReply = await callGroqLlama3(groqKey, messages, userName);
-        if (groqReply && groqReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: groqReply,
-            engine: "Meta Llama 3 (Groq LPU)",
-            model: "llama-3.3-70b-versatile",
-            fallbackLink: OPEN_SOURCE_FALLBACKS.llama3.link,
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Groq Llama 3 failed:", err);
-      }
-    }
-
-    // ─── 3. Hugging Face Serverless Fallback (Gemma 2 / Sarvam AI / Llama 3) ──
-    const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
-    if (hfToken && hfToken.trim().length > 5) {
-      try {
-        const hfReply = await callHuggingFaceInference(hfToken, messages);
-        if (hfReply && hfReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: hfReply,
-            engine: "Hugging Face Inference (Gemma 2 / Llama 3)",
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Hugging Face inference failed:", err);
-      }
-    }
-
-    // ─── 4. High-Precision Autonomous General Engine (Zero-Key Fallback) ──────
+    // ─── Autonomous General Engine (Zero-Key Local Fallback) ──────
     const autonomousReply = generateAutonomousGeneralReply(lastMessage, userName);
     return NextResponse.json({
       reply: autonomousReply,
@@ -201,16 +171,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error(`[/api/chat] General Chat Error (${requestId}):`, err);
-    return NextResponse.json(
-      {
-        code: "INTERNAL_ERROR",
-        message: "An error occurred while processing the chat message.",
-        reply: "Hello! I am ready to help you with any questions in English, Hindi (हिन्दी), or Gujarati (ગુજરાતી). Please ask away!",
-        fallbacks: OPEN_SOURCE_FALLBACKS,
-        retryable: true,
-        requestId,
-      },
-      { status: 500 }
+    const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+    return createApiErrorResponse(
+      "AI_PROVIDER_UNAVAILABLE",
+      "The chat assistant is temporarily unavailable. Please try again shortly.",
+      requestId,
+      { statusCode: 503, retryable: true }
     );
   }
 }

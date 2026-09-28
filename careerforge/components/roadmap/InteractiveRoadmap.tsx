@@ -280,11 +280,11 @@ export const InteractiveRoadmap: React.FC<InteractiveRoadmapProps> = ({
 
   return (
     <div
-      className={`w-full bg-surface text-ink rounded-2xl border border-ink/15 p-4 sm:p-7 shadow-xs relative overflow-hidden ${className}`}
+      className={`w-full bg-surface text-ink rounded-2xl border border-ink/15 p-4 sm:p-7 shadow-xs relative overflow-visible ${className}`}
     >
       {/* Background Architectural Grid Pattern */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.035]"
+        className="absolute inset-0 pointer-events-none opacity-[0.035] rounded-2xl overflow-hidden"
         style={{
           backgroundImage: `radial-gradient(rgba(20, 17, 15, 0.25) 1px, transparent 1px)`,
           backgroundSize: "24px 24px",

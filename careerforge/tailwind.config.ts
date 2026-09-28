@@ -2,11 +2,13 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}",
-    "./providers/**/*.{ts,tsx}",
-    "./hooks/**/*.{ts,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./providers/**/*.{js,ts,jsx,tsx,mdx}",
+    "./context/**/*.{js,ts,jsx,tsx,mdx}",
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
@@ -22,6 +24,11 @@ const config: Config = {
         info: "#2F4858",
         success: "#5C6B44",
         danger: "#99341F",
+        // ─── Legacy aliases (used in AuthGate) ──────────────────────────────
+        paper: "#FAF6F1",       // = bg
+        graphite: "#6B6560",    // ≈ ink/60
+        line: "rgba(20,17,15,0.12)", // hairline border
+        muted: "#A09890",       // ≈ ink/40
       },
       borderColor: {
         hairline: "rgba(27, 24, 21, 0.12)",
@@ -29,10 +36,9 @@ const config: Config = {
         "hairline-strong": "rgba(27, 24, 21, 0.22)",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace"],
-        display: ["Inter", "ui-sans-serif"],
-        body: ["Inter", "ui-sans-serif"],
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       fontSize: {
         xs: ["0.75rem", { lineHeight: "1rem" }],

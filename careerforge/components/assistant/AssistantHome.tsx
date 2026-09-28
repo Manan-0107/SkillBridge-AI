@@ -25,6 +25,8 @@ import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
+import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
+import { UbixBorderBeam } from "@/components/ubix/UbixBorderBeam";
 
 export type Msg = {
   id: string;
@@ -35,6 +37,8 @@ export type Msg = {
   intent?: ParsedIntent;
   redirecting?: boolean;
   engine?: string;
+  isFallback?: boolean;
+  note?: string;
   thinking?: string[];
 };
 
@@ -642,6 +646,24 @@ export function AssistantHome({
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
+
+    const featureFeedback: Record<FeatureId, string> = {
+      roadmap: "Your career roadmap is now open. You can review your next learning steps.",
+      practice: "Your technical practice hub is now open. You can drill questions with instant feedback.",
+      resume: "Your resume workspace is now open. You can analyze, tailor, or build your resume.",
+      local: "Job discovery is now open. You can explore live opportunities and real-time alerts.",
+      courses: "Your curated course catalog is now open. You can explore learning resources.",
+    };
+
+    const announcement = featureFeedback[feature] || `Your ${feature} workspace is now open.`;
+    showToast(announcement);
+
+    if (voiceMode || isAISpeakingRef.current) {
+      speakText(announcement, {
+        lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      });
+    }
+
     onRedirect(feature, tab);
   };
 
@@ -906,7 +928,16 @@ export function AssistantHome({
         }),
       });
 
-      if (!res.ok) throw new Error("Chat request failed");
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => null);
+        const errorMsg =
+          errorJson?.error?.message ||
+          errorJson?.message ||
+          (res.status === 401
+            ? "Please sign in to interact with the assistant."
+            : `AI Assistant request failed (${res.status})`);
+        throw new Error(errorMsg);
+      }
       const data = await res.json();
 
       if (data.resumeDraftState) {
@@ -970,7 +1001,9 @@ export function AssistantHome({
           text: replyText,
           intent,
           redirecting: hasFeature,
-          engine: data.engine || "CareerForge AI",
+          engine: data.engine || (data.isFallback ? "Fallback (limited)" : "CareerForge AI"),
+          isFallback: Boolean(data.isFallback),
+          note: data.note || (data.isFallback ? "Running in limited mode" : undefined),
           thinking: Array.isArray(data.thinking) ? data.thinking : undefined,
         },
       ];
@@ -1024,15 +1057,19 @@ export function AssistantHome({
         }, 3200);
         setActiveTimer(timer);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[AssistantHome] LLM call error:", err);
+      const errorMessageText =
+        err?.message && err.message !== "Chat request failed"
+          ? err.message
+          : "I encountered an issue connecting to the AI assistant service. Please check your connection and try again.";
       const fallbackMessages: Msg[] = [
         ...nextMessages,
         {
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          text: "I am right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+          text: `⚠️ ${errorMessageText}`,
         },
       ];
       saveConversations(
@@ -1339,14 +1376,8 @@ export function AssistantHome({
               <div className="mb-12 max-w-xl animate-slideUp">
                 {/* Welcome mark */}
                 <div className="mb-6">
-                  <div
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white text-sm font-bold shadow-sm mb-4"
-                    aria-hidden="true"
-                  >
-                    CF
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "CareerForge Assistant"}
+                  <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-ink">
+                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "ubix Assistant"}
                   </h1>
                   <p className="mt-1.5 text-sm text-ink/55 leading-relaxed max-w-md">
                     General AI assistant with career superpowers — ask anything.
@@ -1410,34 +1441,34 @@ export function AssistantHome({
                   </button>
                 </div>
 
-                {/* 3 suggestion cards */}
+                {/* 3 curated conversational suggestion cards (distinct from ecosystem shortcuts) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => runPrompt("Help me audit my resume for ATS compliance")}
+                    onClick={() => runPrompt("Help me frame my most complex project using the STAR method for senior interviews.")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Resume</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">ATS Resume Audit</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Score and fix keywords for your role</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Interview Prep</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">STAR Story Framing</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Turn complex projects into compelling interview narratives</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => runPrompt("Show me my complete career roadmap")}
+                    onClick={() => runPrompt("Based on 2026 industry demand for my target role, what are the top 3 highest-leverage skills I should learn next?")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Roadmap</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Career Path</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Visual skill milestones to mastery</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Skill Strategy</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">High-Leverage Gaps</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Identify what to prioritize based on market demand</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => runPrompt("I want to practice interview questions")}
+                    onClick={() => runPrompt("Walk me through how to design a high-throughput, low-latency rate limiter with Redis and Token Bucket.")}
                     className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
                   >
-                    <div className="text-[11px] font-bold text-ink/40 uppercase tracking-widest mb-1">Practice</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">Mock Interview</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Drills with instant feedback</div>
+                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Architecture</div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">System Design Prep</div>
+                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Analyze trade-offs and distributed systems patterns</div>
                   </button>
                 </div>
               </div>
@@ -1449,7 +1480,7 @@ export function AssistantHome({
               role="log"
               aria-live="polite"
               aria-relevant="additions text"
-              aria-label="CareerForge conversation"
+              aria-label="ubix conversation"
             >
               {messages.map((m) => {
                 const isUser = m.role === "user";
@@ -1458,11 +1489,11 @@ export function AssistantHome({
                     key={m.id}
                     className={`flex flex-col animate-messageIn ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-ink/60 px-1">
-                      <span>{isUser ? userDisplayName : "CareerForge Assistant"}</span>
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium ubix-chat-meta-bar px-1">
+                      <span>{isUser ? userDisplayName : "ubix Assistant"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] text-ink/40">
-                          {m.engine}
+                        <span className={`text-[10px] ${m.isFallback ? "text-amber-400/90 font-mono" : "ubix-chat-subtext"}`}>
+                          {m.engine}{m.note ? ` · ${m.note}` : ""}
                         </span>
                       )}
                       {!isUser && (
@@ -1472,19 +1503,19 @@ export function AssistantHome({
                             onClick={() => toggleSpeech(m.id, m.text)}
                             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
                               speakingMsgId === m.id
-                                ? "bg-surface text-accent border border-accent/30"
-                                : "text-ink/60 hover:bg-surface hover:text-ink"
+                                ? "ubix-chat-btn-active"
+                                : "ubix-chat-btn-idle"
                             }`}
                             title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
                           >
                             {speakingMsgId === m.id ? (
                               <>
-                                <StopIcon className="w-2.5 h-2.5 text-accent" />
+                                <StopIcon className="w-2.5 h-2.5 ubix-voice-icon-active" />
                                 <span>Stop</span>
                               </>
                             ) : (
                               <>
-                                <SpeakerIcon className="w-2.5 h-2.5 text-ink/60" />
+                                <SpeakerIcon className="w-2.5 h-2.5 ubix-voice-icon-idle" />
                                 <span>Listen</span>
                               </>
                             )}
@@ -1499,7 +1530,7 @@ export function AssistantHome({
                                 setTimeout(() => setToastMessage(null), 2500);
                               }
                             }}
-                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-ink/60 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ubix-chat-btn-idle transition-colors cursor-pointer"
                             title="Copy response to clipboard"
                             aria-label="Copy response to clipboard"
                           >
@@ -1511,7 +1542,7 @@ export function AssistantHome({
                           </button>
                         </>
                       )}
-                      {m.time && <span className="text-ink/40">{m.time}</span>}
+                      {m.time && <span className="ubix-chat-subtext">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
@@ -1525,8 +1556,8 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink/[0.06] border border-ink/10 text-ink font-medium"
-                            : "bg-surface text-ink border border-ink/10"
+                            ? "ubix-chat-msg-user font-medium"
+                            : "ubix-chat-msg-assistant"
                         }`}
                       >
                         {isUser ? (
@@ -1585,8 +1616,9 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start animate-messageIn">
-                  <div className="mb-1 text-[11px] font-medium text-ink/50 px-1">
-                    CareerForge is thinking
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink/50 px-1">
+                    <UbixThinkingOrb state="thinking" size="sm" />
+                    <span>ubix is thinking</span>
                   </div>
                   <div className="rounded-2xl border border-ink/10 bg-surface px-4 py-3">
                     <div className="flex items-center gap-1" aria-label="Assistant is thinking" role="status">
@@ -1614,11 +1646,12 @@ export function AssistantHome({
               id="ai-doc-upload"
             />
 
-            {/* AI Rounded Card Box */}
+            {/* AI Composer Slab (Section 14: Dark graphite, thin metallic border, subtle internal depth) */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/30 transition-all"
+              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent/40 transition-all overflow-hidden"
             >
+              <UbixBorderBeam active={listening || busy} duration={6} />
               {/* Attached Document Preview Badge */}
               {attachedFile && (
                 <div className="mb-2 flex items-center justify-between rounded-xl border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink shadow-2xs">
@@ -1640,7 +1673,7 @@ export function AssistantHome({
 
               {/* Textarea Input with Instant Enter Submission */}
               <label htmlFor="assistant-composer" className="sr-only">
-                Message CareerForge Assistant
+                Message ubix Assistant
               </label>
               <textarea
                 id="assistant-composer"
@@ -1689,40 +1722,22 @@ export function AssistantHome({
                     <span className="hidden sm:inline">Attach</span>
                   </button>
 
-                  {/* Collapsed Voice Indicator & Toggle Button (§4 & §5) */}
+                  {/* Integrated Physical Voice Control Hub (§14) */}
                   <button
                     type="button"
                     onClick={toggleListening}
                     aria-pressed={listening}
-                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle`}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-accent text-white shadow-xs font-bold"
+                        ? "ubix-voice-btn-listening"
                         : busy
-                        ? "bg-surface text-ink border border-ink/30 font-bold"
-                        : "border border-ink/15 bg-bg text-ink hover:bg-surface"
+                        ? "ubix-voice-btn-busy"
+                        : "ubix-voice-btn-idle"
                     }`}
                     title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
                   >
-                    {/* Decorative thinking-orbs for processing */}
-                    {busy && (
-                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
-                        <span className="absolute h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-                        <span className="relative h-1 w-1 rounded-full bg-accent" />
-                      </span>
-                    )}
-
-                    {/* Decorative Voice glow for listening */}
-                    {listening && (
-                      <span className="relative flex h-2 w-2 items-center justify-center motion-reduce:hidden" aria-hidden="true">
-                        <span className="absolute rounded-full bg-white animate-pulse" style={{ width: "8px", height: "8px" }} />
-                        <span className="relative h-1 w-1 rounded-full bg-white" />
-                      </span>
-                    )}
-
-                    {!busy && !listening && (
-                      <MicIcon className="w-3 h-3 text-accent" />
-                    )}
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "ubix-voice-icon-active animate-pulse" : "ubix-voice-icon-idle"}`} />
 
                     <span>
                       {listening

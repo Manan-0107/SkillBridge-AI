@@ -13,7 +13,7 @@ import {
   FileText,
   Settings,
   LogOut,
-  FolderOpen,
+  Briefcase,
   ChevronDown,
   Menu,
   X,
@@ -76,6 +76,12 @@ export function TopNav() {
 
   const avatarChar = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
+  // Section 3 & 19: Do NOT show main application navigation on auth / sign-in pages
+  const isAuthPage = (!user && pathname === "/") || pathname.startsWith("/auth") || pathname.startsWith("/login") || pathname.startsWith("/signup");
+  if (isAuthPage) {
+    return null;
+  }
+
   return (
     <header
       className="sticky top-0 z-40 w-full"
@@ -85,21 +91,15 @@ export function TopNav() {
       <div className="border-b border-ink/8 bg-bg/95 backdrop-blur-md">
         <div className="app-shell flex items-center justify-between h-12 gap-4">
 
-          {/* Left: Brand */}
+          {/* Left: Brand Wordmark (Section 3: No AI logo, lowercase ubix in Space Grotesk, no icon) */}
           <Link
             href="/"
             onClick={() => handleNavClick("assistant")}
-            className="flex items-center gap-2 shrink-0 group"
-            aria-label="CareerForge — home"
+            className="flex items-center shrink-0 group focus-visible:outline-offset-4"
+            aria-label="ubix — home"
           >
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white text-[11px] font-bold tracking-tight shadow-sm group-hover:bg-accent-soft transition-colors"
-              aria-hidden="true"
-            >
-              CF
-            </span>
-            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-ink group-hover:text-accent transition-colors">
-              CareerForge
+            <span className="font-display text-lg font-semibold tracking-[-0.03em] text-ink select-none">
+              ubix
             </span>
           </Link>
 
@@ -128,7 +128,7 @@ export function TopNav() {
                     title={link.label}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
                       isActive
-                        ? "bg-bg text-ink shadow-sm border border-ink/12 font-semibold"
+                        ? "bg-bg text-ink shadow-sm border border-accent/40 shadow-[0_0_12px_rgba(120,227,238,0.15)] font-semibold"
                         : "text-ink/55 hover:text-ink hover:bg-bg/60"
                     }`}
                   >
@@ -141,94 +141,105 @@ export function TopNav() {
           </nav>
 
           {/* Right: Language + Profile */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
+
             {/* Language widget — small */}
             <div className="hidden sm:block scale-90 origin-right opacity-80 hover:opacity-100 transition-opacity">
               <GoogleTranslateWidget />
             </div>
 
-            {/* Profile dropdown */}
-            <div className="relative" ref={profileRef}>
+            {/* Profile or Sign In */}
+            {user ? (
+              <div className="relative" ref={profileRef}>
+                <button
+                  type="button"
+                  id="profile-menu-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={profileOpen}
+                  aria-controls="profile-menu"
+                  onClick={() => setProfileOpen((o) => !o)}
+                  className="flex items-center gap-1.5 rounded-full border border-ink/12 bg-surface/80 px-2 py-1 hover:border-ink/25 hover:bg-surface transition-all duration-150 cursor-pointer"
+                >
+                  {user?.picture ? (
+                    <img
+                      src={user.picture}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="h-6 w-6 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold">
+                      {avatarChar}
+                    </span>
+                  )}
+                  <span className="hidden sm:inline text-xs font-medium text-ink/75 max-w-[90px] truncate">
+                    {user?.name?.split(" ")[0] ?? "Account"}
+                  </span>
+                  <ChevronDown
+                    size={12}
+                    strokeWidth={2.5}
+                    className={`text-ink/40 transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {/* Dropdown menu */}
+                {profileOpen && (
+                  <div
+                    id="profile-menu"
+                    role="menu"
+                    aria-label="Account menu"
+                    className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-ink/12 bg-bg/98 shadow-lg shadow-ink/8 backdrop-blur-md py-1.5 animate-fadeIn"
+                  >
+                    {/* User info */}
+                    <div className="px-3 py-2 border-b border-ink/8 mb-1">
+                      <p className="text-xs font-semibold text-ink truncate">{user?.name}</p>
+                      <p className="text-[11px] text-ink/50 truncate">{user?.email}</p>
+                    </div>
+
+                    <Link
+                      href="/local"
+                      role="menuitem"
+                      onClick={() => { handleNavClick("local" as FeatureId); setProfileOpen(false); }}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
+                    >
+                      <Briefcase size={13} strokeWidth={2} aria-hidden="true" />
+                      Job Discovery
+                    </Link>
+
+                    <Link
+                      href="#settings"
+                      role="menuitem"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
+                    >
+                      <Settings size={13} strokeWidth={2} aria-hidden="true" />
+                      Settings
+                    </Link>
+
+                    <div className="border-t border-ink/8 mt-1 pt-1">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { signOut(); setProfileOpen(false); }}
+                        className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-danger/80 hover:text-danger hover:bg-danger/8 transition-colors rounded-lg mx-1 cursor-pointer"
+                      >
+                        <LogOut size={13} strokeWidth={2} aria-hidden="true" />
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
               <button
                 type="button"
-                id="profile-menu-trigger"
-                aria-haspopup="true"
-                aria-expanded={profileOpen}
-                aria-controls="profile-menu"
-                onClick={() => setProfileOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-full border border-ink/12 bg-surface/80 px-2 py-1 hover:border-ink/25 hover:bg-surface transition-all duration-150 cursor-pointer"
+                onClick={() => handleNavClick("assistant")}
+                className="flex items-center gap-1.5 rounded-full bg-accent text-white px-3.5 py-1.5 text-xs font-semibold hover:bg-accent-soft transition-all shadow-sm cursor-pointer"
               >
-                {user?.picture ? (
-                  <img
-                    src={user.picture}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    className="h-6 w-6 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold">
-                    {avatarChar}
-                  </span>
-                )}
-                <span className="hidden sm:inline text-xs font-medium text-ink/75 max-w-[90px] truncate">
-                  {user?.name?.split(" ")[0] ?? "Account"}
-                </span>
-                <ChevronDown
-                  size={12}
-                  strokeWidth={2.5}
-                  className={`text-ink/40 transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
-                  aria-hidden="true"
-                />
+                Sign In
               </button>
-
-              {/* Dropdown menu */}
-              {profileOpen && (
-                <div
-                  id="profile-menu"
-                  role="menu"
-                  aria-label="Account menu"
-                  className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-ink/12 bg-bg/98 shadow-lg shadow-ink/8 backdrop-blur-md py-1.5 animate-fadeIn"
-                >
-                  {/* User info */}
-                  <div className="px-3 py-2 border-b border-ink/8 mb-1">
-                    <p className="text-xs font-semibold text-ink truncate">{user?.name}</p>
-                    <p className="text-[11px] text-ink/50 truncate">{user?.email}</p>
-                  </div>
-
-                  <Link
-                    href="/local"
-                    role="menuitem"
-                    onClick={() => { handleNavClick("local" as FeatureId); setProfileOpen(false); }}
-                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
-                  >
-                    <FolderOpen size={13} strokeWidth={2} aria-hidden="true" />
-                    Local Files
-                  </Link>
-
-                  <Link
-                    href="#settings"
-                    role="menuitem"
-                    onClick={() => setProfileOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
-                  >
-                    <Settings size={13} strokeWidth={2} aria-hidden="true" />
-                    Settings
-                  </Link>
-
-                  <div className="border-t border-ink/8 mt-1 pt-1">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => { signOut(); setProfileOpen(false); }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-danger/80 hover:text-danger hover:bg-danger/8 transition-colors rounded-lg mx-1 cursor-pointer"
-                    >
-                      <LogOut size={13} strokeWidth={2} aria-hidden="true" />
-                      Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Mobile hamburger */}
             <button

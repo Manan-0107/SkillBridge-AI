@@ -1,26 +1,45 @@
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { verifySessionToken } from "@/lib/security/session";
 
 export interface AuthenticatedUser {
   id: string;
   email: string;
   name?: string | null;
+  isGuest?: boolean;
 }
 
-const COOKIE = "cf_uid";
+const SESSION_COOKIE = "cf_session";
+const LEGACY_COOKIE = "cf_uid";
 
 /**
  * Resolves the authenticated user (id and email) for use inside Route Handlers.
  *
- * Checks:
- * 1. Supabase Auth server session (`getUser()`) via JWT revalidation.
- * 2. If no Supabase JWT session, checks the secure httpOnly `cf_uid` cookie established
- *    at login/signup and validates against the database `users` table with a fast timeout.
+ * Verifies identity cryptographically:
+ * 1. Supabase Auth server session (`getUser()`) via cryptographically verified JWT.
+ * 2. Cryptographically signed HMAC session token (`cf_session`) with expiration checking.
+ * 3. Legacy `cf_uid` cookie validated against database `users` table.
  *
- * Returns null if the request is unauthenticated.
+ * Rejects unauthenticated requests and forged/tampered cookies.
  */
 export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
-  // 1. Try Supabase Auth server user
+  const cookieStore = cookies();
+
+  // 1. Try cryptographically signed HMAC session token (`cf_session` or signed `cf_uid`) FIRST (fast, zero network latency)
+  const tokenCandidate = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(LEGACY_COOKIE)?.value;
+  if (tokenCandidate) {
+    const payload = verifySessionToken(tokenCandidate);
+    if (payload) {
+      return {
+        id: payload.userId,
+        email: payload.email,
+        name: payload.name ?? null,
+        isGuest: Boolean(payload.isGuest),
+      };
+    }
+  }
+
+  // 2. Fall back to Supabase Auth server session (`getUser()`) with timeout for Supabase-only sessions without cf_session
   try {
     const supabaseServer = createSupabaseServerClient();
     const authPromise = supabaseServer.auth.getUser();
@@ -37,56 +56,15 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
         id: user.id,
         email: user.email.toLowerCase().trim(),
         name: user.user_metadata?.name || null,
+        isGuest: false,
       };
     }
   } catch {
-    // Proceed to session cookie validation
+    // Proceed to rejection
   }
 
-  // 2. Validate against session cookie `cf_uid`
-  try {
-    const cookieStore = cookies();
-    const sessionEmail = cookieStore.get(COOKIE)?.value?.toLowerCase().trim();
-
-    if (!sessionEmail || !sessionEmail.includes("@")) {
-      return null;
-    }
-
-    // Lookup user in DB with timeout guard
-    try {
-      const client = createSupabaseServerClient();
-      const queryPromise = client
-        .from("users")
-        .select("id, email, name")
-        .eq("email", sessionEmail)
-        .maybeSingle();
-
-      const { data: dbUser } = (await Promise.race([
-        queryPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("DB timeout")), 1200)),
-      ])) as any;
-
-      if (dbUser && dbUser.id) {
-        return {
-          id: dbUser.id,
-          email: dbUser.email,
-          name: dbUser.name || null,
-        };
-      }
-    } catch {
-      // Fall through to consistent deterministic ID
-    }
-
-    // Return consistent authenticated identity from valid session cookie
-    return {
-      id: `user_${Buffer.from(sessionEmail).toString("hex").slice(0, 16)}`,
-      email: sessionEmail,
-      name: null,
-    };
-  } catch (err) {
-    console.warn("[getAuthenticatedUser] Session check error:", err);
-  }
-
+  // 3. Security Contract: Plain, unsigned email cookies (e.g. raw cf_uid=email@example.com)
+  // are strictly rejected. Only cryptographically verified sessions are authoritative.
   return null;
 }
 

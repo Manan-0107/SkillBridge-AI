@@ -16,6 +16,19 @@ const MAX_TEXT_LENGTH = 64 * 1024; // 64 KB
 
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
+  const { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } = await import("@/lib/security/rateLimit");
+  const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+
+  const clientIp = getClientIp(req);
+  const rl = checkRateLimit(`synthesize:${clientIp}`, RATE_LIMIT_PRESETS.audioSynthesize);
+  if (rl.isLimited) {
+    return createApiErrorResponse(
+      "RATE_LIMITED",
+      "Too many voice synthesis requests. Please wait a moment.",
+      requestId,
+      { statusCode: 429, retryable: true }
+    );
+  }
 
   try {
     let body: any;

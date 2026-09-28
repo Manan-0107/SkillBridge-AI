@@ -9,7 +9,7 @@ import { PracticeHub } from "@/components/practice/PracticeHub";
 import { LocalOpportunities } from "@/components/local/LocalOpportunities";
 import { roleOptions } from "@/lib/data";
 import { useApp } from "@/lib/store";
-import { Bot, Map, Code2, FileText, FolderOpen, BookOpen, ChevronDown } from "lucide-react";
+import { Bot, Map, Code2, FileText, Briefcase, BookOpen, ChevronDown } from "lucide-react";
 
 const featureMeta: Record<FeatureId, {
   icon: React.ReactNode;
@@ -18,28 +18,28 @@ const featureMeta: Record<FeatureId, {
 }> = {
   resume: {
     icon: <FileText size={16} strokeWidth={2} />,
-    label: "Resume",
+    label: "Resume Suite",
     description: "Build, analyze, and tailor your resume for any role",
   },
   roadmap: {
     icon: <Map size={16} strokeWidth={2} />,
-    label: "Roadmap",
+    label: "Career Roadmap",
     description: "Phased skill milestones from beginner to role-ready",
   },
   courses: {
     icon: <BookOpen size={16} strokeWidth={2} />,
-    label: "Learning",
-    description: "Curated courses and certifications for your track",
+    label: "Curated Learning",
+    description: "Curated courses, books, and certifications for your track",
   },
   practice: {
     icon: <Code2 size={16} strokeWidth={2} />,
-    label: "Practice",
+    label: "Technical Practice",
     description: "Interactive coding drills and mock interview prep",
   },
   local: {
-    icon: <FolderOpen size={16} strokeWidth={2} />,
-    label: "Local Opportunities",
-    description: "Jobs, internships, and meetups near you",
+    icon: <Briefcase size={16} strokeWidth={2} />,
+    label: "Job Discovery",
+    description: "Live openings, remote positions, and real-time alerts",
   },
 };
 

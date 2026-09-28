@@ -1,16 +1,35 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Space_Grotesk, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import "../styles/ubix-effects.css";
 import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
 import { VoiceProvider } from "@/context/VoiceContext";
+import { UbixAmbientBackground } from "@/components/ubix/UbixAmbientBackground";
 
-const fontSans = Inter({
+const fontDisplay = Space_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-body",
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
   display: "swap",
+  fallback: ["system-ui", "sans-serif"],
+});
+
+const fontSans = Instrument_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
+});
+
+const fontMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "monospace"],
 });
 
 import { TopNav } from "@/components/layout/TopNav";
@@ -19,9 +38,19 @@ import { AccessibilityProfileModal } from "@/components/accessibility/Accessibil
 import { VoiceModeDetector } from "@/components/accessibility/VoiceModeDetector";
 
 export const metadata: Metadata = {
-  title: "CareerForge — Build the path, not just the resume",
+  title: "ubix — workspace",
   description:
     "Resume tooling, dynamic career roadmaps, curated courses, and local opportunities in one quiet workspace.",
+  openGraph: {
+    title: "ubix — workspace",
+    description:
+      "Resume tooling, dynamic career roadmaps, curated courses, and local opportunities in one quiet workspace.",
+    siteName: "ubix",
+  },
+  icons: {
+    icon: "/favicon.svg",
+  },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
@@ -30,35 +59,59 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${fontSans.variable}`}>
-      <body className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink">
-        <AppProvider>
-          <GlobalVoiceProvider>
-            <VoiceProvider>
-              <a
-                href="#main-content"
-                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
-              >
-                Skip to main content
-              </a>
-              <a
-                href="#voice-assistant-controls"
-                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
-              >
-                Skip to voice assistant controls
-              </a>
-              <TopNav />
-              <div className="pb-6">
+    <html
+      lang="en"
+      className={`${fontDisplay.variable} ${fontSans.variable} ${fontMono.variable} dark`}
+      data-theme="dark"
+      style={{ colorScheme: "dark" }}
+    >
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="dark" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                localStorage.removeItem('ubix_theme');
+                document.documentElement.classList.add('dark');
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.style.colorScheme = 'dark';
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink relative overflow-x-hidden">
+        <UbixAmbientBackground />
+        <div className="relative z-10 flex min-h-screen flex-col">
+          <AppProvider>
+            <GlobalVoiceProvider>
+              <VoiceProvider>
+                <a
+                  href="#main-content"
+                  className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
+                >
+                  Skip to main content
+                </a>
+                <a
+                  href="#voice-assistant-controls"
+                  className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
+                >
+                  Skip to voice assistant controls
+                </a>
+                <TopNav />
                 {children}
-              </div>
-              <FloatingControlBar />
-              <AccessibilityProfileModal />
-              <VoiceModeDetector />
-              <GlobalVoiceDictator />
-            </VoiceProvider>
-          </GlobalVoiceProvider>
-        </AppProvider>
+                <FloatingControlBar />
+                <AccessibilityProfileModal />
+                <VoiceModeDetector />
+                <GlobalVoiceDictator />
+              </VoiceProvider>
+            </GlobalVoiceProvider>
+          </AppProvider>
+        </div>
       </body>
     </html>
   );
 }
+

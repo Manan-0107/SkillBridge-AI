@@ -984,7 +984,8 @@ export function normalizeSpokenEmail(raw: string): string {
   text = text
     .replace(/\s*(?:dot|dott|period|point|punto|ડૉટ|ડોટ|डॉट)\s*/gi, ".")
     .replace(/\s*(?:underscore|under\s+score|અંડરસ્કોર|अंडरस्कोर)\s*/gi, "_")
-    .replace(/\s*(?:dash|hyphen|minus|માઈનસ|माइनस|tiret)\s*/gi, "-");
+    .replace(/\s*(?:dash|hyphen|minus|માઈનસ|माइनस|tiret)\s*/gi, "-")
+    .replace(/\s*(?:plus|add|વત્તા|प्लस)\s*/gi, "+");
 
   // 6. If missing @ but mentions a common email domain, insert @ before the domain
   const commonDomains = [

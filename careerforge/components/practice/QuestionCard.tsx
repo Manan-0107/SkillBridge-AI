@@ -24,9 +24,9 @@ export const QuestionCard = React.memo(function QuestionCard({
   const [showExplanation, setShowExplanation] = useState<boolean>(Boolean(userAnswer));
 
   const difficultyColors = {
-    easy: "text-emerald-400 bg-emerald-950/60 border-emerald-900/60",
-    medium: "text-amber-400 bg-amber-950/60 border-amber-900/60",
-    hard: "text-rose-400 bg-rose-950/60 border-rose-900/60",
+    easy: "text-success bg-success/10 border-success/30",
+    medium: "text-accent bg-accent/10 border-accent/30",
+    hard: "text-danger bg-danger/10 border-danger/30",
   };
 
   const handleMcqSelect = (option: string) => {
@@ -54,22 +54,22 @@ export const QuestionCard = React.memo(function QuestionCard({
 
   return (
     <div
-      className={`rounded-2xl border p-5 sm:p-6 bg-charcoal-900 transition-all ${
+      className={`rounded-2xl border p-5 sm:p-6 bg-surface/40 transition-all ${
         hasSubmitted
           ? isCorrect
-            ? "border-emerald-500/40 bg-charcoal-900"
-            : "border-rose-500/40 bg-charcoal-900"
-          : "border-hairline"
+            ? "border-success/40 bg-success/5"
+            : "border-danger/40 bg-danger/5"
+          : "border-ink/10"
       }`}
     >
       {/* Question Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-bold text-accent-400">
+          <span className="text-xs font-mono font-bold text-accent">
             Q{questionNumber} of 10
           </span>
           <span
-            className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-md border ${
+            className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-md border font-semibold ${
               difficultyColors[question.difficulty]
             }`}
           >
@@ -81,7 +81,7 @@ export const QuestionCard = React.memo(function QuestionCard({
           {question.tags.map((tag) => (
             <span
               key={tag}
-              className="text-[10px] font-mono text-charcoal-400 bg-charcoal-800/80 px-2 py-0.5 rounded"
+              className="text-[10px] font-mono text-ink/50 bg-bg px-2 py-0.5 rounded border border-ink/8"
             >
               #{tag}
             </span>
@@ -90,7 +90,7 @@ export const QuestionCard = React.memo(function QuestionCard({
       </div>
 
       {/* Question Prompt */}
-      <h3 className="text-base sm:text-lg font-medium text-charcoal-100 leading-snug mb-5">
+      <h3 className="text-base sm:text-lg font-semibold text-ink leading-snug mb-5">
         {question.question}
       </h3>
 
@@ -102,17 +102,17 @@ export const QuestionCard = React.memo(function QuestionCard({
             const isTheAnswer = opt.trim().toLowerCase() === question.answer.trim().toLowerCase();
 
             let optionClasses =
-              "border-hairline bg-charcoal-850 hover:bg-charcoal-800 text-charcoal-200";
+              "border-ink/12 bg-bg hover:bg-surface text-ink/80 hover:text-ink";
 
             if (hasSubmitted) {
               if (isTheAnswer) {
                 optionClasses =
-                  "border-emerald-500 bg-emerald-950/40 text-emerald-300 font-semibold";
+                  "border-success/50 bg-success/15 text-success font-semibold";
               } else if (isSelected && !isTheAnswer) {
                 optionClasses =
-                  "border-rose-500 bg-rose-950/40 text-rose-300 line-through";
+                  "border-danger/50 bg-danger/15 text-danger line-through";
               } else {
-                optionClasses = "border-hairline-subtle bg-charcoal-900/60 text-charcoal-500 opacity-60";
+                optionClasses = "border-ink/8 bg-bg/50 text-ink/35 opacity-50";
               }
             }
 
@@ -124,7 +124,7 @@ export const QuestionCard = React.memo(function QuestionCard({
                 onClick={() => handleMcqSelect(opt)}
                 className={`w-full text-left p-3.5 sm:p-4 rounded-xl border text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${optionClasses}`}
               >
-                <span className="font-mono text-xs text-charcoal-500 mt-0.5">
+                <span className="font-mono text-xs text-ink/40 mt-0.5 font-bold">
                   {String.fromCharCode(65 + idx)}.
                 </span>
                 <span className="leading-relaxed flex-1">{opt}</span>
@@ -143,12 +143,12 @@ export const QuestionCard = React.memo(function QuestionCard({
             value={shortAnswerInput}
             onChange={(e) => setShortAnswerInput(e.target.value)}
             placeholder="Type your answer..."
-            className="w-full h-11 px-4 rounded-xl bg-charcoal-850 border border-hairline text-sm text-charcoal-100 placeholder-charcoal-500 focus:outline-hidden focus:border-accent-400"
+            className="w-full h-11 px-4 rounded-xl bg-bg border border-ink/15 text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent"
           />
           {!hasSubmitted && !isReadOnly && (
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-charcoal-950 font-semibold text-xs transition-colors"
+              className="px-4 py-2 rounded-xl bg-accent hover:opacity-90 text-white font-semibold text-xs transition-opacity cursor-pointer shadow-xs"
             >
               Submit Answer
             </button>
@@ -158,18 +158,18 @@ export const QuestionCard = React.memo(function QuestionCard({
 
       {/* Explanation Reveal */}
       {showExplanation && (
-        <div className="mt-5 p-4 rounded-xl bg-charcoal-850 border border-hairline-subtle text-xs space-y-1.5 animate-in fade-in duration-200">
+        <div className="mt-5 p-4 rounded-xl bg-bg border border-ink/10 text-xs space-y-1.5 animate-fadeIn">
           <div className="flex items-center gap-1.5 font-bold font-mono">
             {isCorrect ? (
-              <span className="text-emerald-400">✓ Correct</span>
+              <span className="text-success font-semibold">✓ Correct</span>
             ) : (
-              <span className="text-rose-400">✕ Incorrect</span>
+              <span className="text-danger font-semibold">✕ Incorrect</span>
             )}
-            <span className="text-charcoal-400 font-normal ml-2">
-              Correct Answer: <strong className="text-charcoal-200">{question.answer}</strong>
+            <span className="text-ink/50 font-normal ml-2">
+              Correct Answer: <strong className="text-ink font-semibold">{question.answer}</strong>
             </span>
           </div>
-          <p className="text-charcoal-300 leading-relaxed pt-1">
+          <p className="text-ink/75 leading-relaxed pt-1">
             {question.explanation}
           </p>
         </div>

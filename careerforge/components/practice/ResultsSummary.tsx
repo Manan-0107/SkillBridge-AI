@@ -63,31 +63,31 @@ export function ResultsSummary({
 
   const scoreBadgeColor =
     metrics.scorePercentage >= 80
-      ? "text-emerald-400 border-emerald-500/40 bg-emerald-950/30"
+      ? "text-success border-success/30 bg-success/10"
       : metrics.scorePercentage >= 50
-      ? "text-amber-400 border-amber-500/40 bg-amber-950/30"
-      : "text-rose-400 border-rose-500/40 bg-rose-950/30";
+      ? "text-accent border-accent/30 bg-accent/10"
+      : "text-danger border-danger/30 bg-danger/10";
 
   return (
     <div
-      className={`rounded-2xl border border-hairline bg-charcoal-900 p-6 sm:p-8 space-y-8 animate-in fade-in duration-300 ${className}`}
+      className={`rounded-2xl border border-ink/10 bg-surface/50 p-6 sm:p-8 space-y-8 animate-fadeIn ${className}`}
     >
       {/* Top Banner Score */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-b border-hairline pb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-b border-ink/10 pb-6">
         <div>
-          <span className="text-xs font-mono uppercase tracking-wider text-charcoal-400">
+          <span className="text-xs font-mono uppercase tracking-wider text-ink/50">
             Daily Practice Summary · {quizState.track.toUpperCase()}
           </span>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mt-1">
+          <h2 className="text-2xl sm:text-3xl font-bold text-ink mt-1">
             Session Completed!
           </h2>
-          <p className="text-sm text-charcoal-300 mt-1">
+          <p className="text-sm text-ink/60 mt-1">
             You solved {metrics.correctCount} out of {metrics.totalQuestions} questions correctly.
           </p>
         </div>
 
         <div
-          className={`flex flex-col items-center justify-center w-28 h-28 rounded-2xl border ${scoreBadgeColor}`}
+          className={`flex flex-col items-center justify-center w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border ${scoreBadgeColor}`}
         >
           <span className="text-3xl font-bold font-mono tracking-tight">
             {metrics.scorePercentage}%
@@ -100,7 +100,7 @@ export function ResultsSummary({
 
       {/* Difficulty Breakdown */}
       <div className="space-y-3">
-        <h3 className="text-xs font-mono uppercase tracking-wider text-charcoal-400">
+        <h3 className="text-xs font-mono uppercase tracking-wider text-ink/50">
           Difficulty Breakdown
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -110,17 +110,17 @@ export function ResultsSummary({
             return (
               <div
                 key={diff}
-                className="p-4 rounded-xl border border-hairline bg-charcoal-850 flex flex-col justify-between gap-2"
+                className="p-4 rounded-xl border border-ink/10 bg-bg flex flex-col justify-between gap-2"
               >
                 <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="capitalize text-charcoal-300">{diff}</span>
-                  <span className="text-charcoal-400 font-bold">
+                  <span className="capitalize text-ink/80 font-medium">{diff}</span>
+                  <span className="text-ink/60 font-bold">
                     {stat.correct}/{stat.total} ({pct}%)
                   </span>
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-charcoal-700 overflow-hidden">
+                <div className="w-full h-1.5 rounded-full bg-ink/10 overflow-hidden">
                   <div
-                    className="h-full bg-accent-500 rounded-full"
+                    className="h-full bg-accent rounded-full"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -132,7 +132,7 @@ export function ResultsSummary({
 
       {/* Topic Tag Breakdown */}
       <div className="space-y-3">
-        <h3 className="text-xs font-mono uppercase tracking-wider text-charcoal-400">
+        <h3 className="text-xs font-mono uppercase tracking-wider text-ink/50">
           Skill / Topic Competencies
         </h3>
         <div className="flex flex-wrap gap-2">
@@ -143,8 +143,8 @@ export function ResultsSummary({
                 key={tag}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono ${
                   isFull
-                    ? "bg-emerald-950/40 border-emerald-900/60 text-emerald-300"
-                    : "bg-charcoal-850 border-hairline text-charcoal-300"
+                    ? "bg-success/10 border-success/30 text-success"
+                    : "bg-bg border-ink/10 text-ink/70"
                 }`}
               >
                 <span>#{tag}</span>
@@ -158,15 +158,15 @@ export function ResultsSummary({
       </div>
 
       {/* Footer Controls */}
-      <div className="flex items-center justify-between border-t border-hairline pt-6">
-        <span className="text-xs text-charcoal-500 font-mono">
+      <div className="flex items-center justify-between border-t border-ink/10 pt-6">
+        <span className="text-xs text-ink/40 font-mono">
           Completed sets are saved locally and viewable in review mode.
         </span>
         {onReviewClick && (
           <button
             type="button"
             onClick={onReviewClick}
-            className="px-4 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 border border-hairline text-xs font-semibold text-white transition-colors"
+            className="px-4 py-2 rounded-xl bg-ink hover:opacity-90 border border-ink/15 text-xs font-semibold text-bg transition-opacity cursor-pointer shadow-xs"
           >
             Review Questions
           </button>

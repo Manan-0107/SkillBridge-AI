@@ -88,7 +88,7 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
   }
 }
 
-// ─── Multi-Model AI Engine (GitHub Models / Gemini / Free Open-Source LLM) ───
+// ─── Multi-Model AI Engine (Gemini / Groq / OpenAI via Central AI Provider) ───
 async function runMultiModelAiEngine(
   resumeText: string,
   role: string
@@ -130,90 +130,21 @@ Resume to analyze:
 ${resumeText.slice(0, 5000)}
 ---`;
 
-  // 1. Try Gemini API
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey && geminiKey.trim().length > 5) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 1500 },
-          }),
-          signal: AbortSignal.timeout(10000),
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawText: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-        const parsed = parseJsonSafe(rawText);
-        if (parsed && validateAiSchema(parsed)) {
-          return formatAiResult(parsed, "Gemini AI Analysis");
-        }
-      }
-    } catch (err) {
-      console.warn("[analyze] Gemini error, trying fallback engine:", err);
-    }
-  }
-
-  // 2. Try GitHub Models API
-  const ghToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-  if (ghToken && ghToken.trim().length > 5) {
-    try {
-      const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${ghToken}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: prompt }],
-          model: "gpt-4o-mini",
-          temperature: 0.2,
-          max_tokens: 1200,
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content || "";
-        const parsed = parseJsonSafe(raw);
-        if (parsed && validateAiSchema(parsed)) {
-          return formatAiResult(parsed, "GitHub Models AI Analysis");
-        }
-      }
-    } catch (err) {
-      console.warn("[analyze] GitHub Models error:", err);
-    }
-  }
-
-  // 3. Try Free Open-Source LLM (Pollinations AI)
   try {
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        model: "openai",
-        seed: 42,
-      }),
-      signal: AbortSignal.timeout(8000),
+    const { generateAIResponse } = await import("@/lib/ai/centralProvider");
+    const aiResult = await generateAIResponse({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      maxTokens: 1500,
+      timeoutMs: 10000,
     });
 
-    if (res.ok) {
-      const rawText = await res.text();
-      const parsed = parseJsonSafe(rawText);
-      if (parsed && validateAiSchema(parsed)) {
-        return formatAiResult(parsed, "Open-Source AI Analysis");
-      }
+    const parsed = parseJsonSafe(aiResult.text);
+    if (parsed && validateAiSchema(parsed)) {
+      return formatAiResult(parsed, `${aiResult.provider.toUpperCase()} AI Analysis`);
     }
   } catch (err) {
-    console.warn("[analyze] Free LLM fallback error:", err);
+    console.warn("[analyze] Central AI provider cascade note:", err);
   }
 
   return base;

@@ -6,11 +6,12 @@ import { RoleId } from "@/lib/types";
 import { Analyzer } from "./Analyzer";
 import { Personalizer } from "./Personalizer";
 import { Builder } from "./Builder";
+import { ScanText, Wand2, FileEdit } from "lucide-react";
 
 const tabs = [
-  { id: "analyzer", label: "Analyzer" },
-  { id: "personalizer", label: "Personalizer" },
-  { id: "builder", label: "Builder" },
+  { id: "analyzer", label: "Analyzer", icon: <ScanText size={13} strokeWidth={2} />, desc: "ATS score & gaps" },
+  { id: "personalizer", label: "Personalizer", icon: <Wand2 size={13} strokeWidth={2} />, desc: "Tailor to role" },
+  { id: "builder", label: "Builder", icon: <FileEdit size={13} strokeWidth={2} />, desc: "Build from scratch" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -39,18 +40,33 @@ export function ResumeSuite({
       id="resume"
       eyebrow="Resume Suite"
       title="Get your resume market-ready"
-      description="Analyze it against live market skills, tailor it to your target role, or build and edit with intermediate data overrides."
+      description="Analyze against live market skills, tailor to your target role, or build from scratch."
     >
-      <div className="mb-8 flex gap-1 rounded-md border border-line p-1 sm:inline-flex">
+      {/* Tab bar */}
+      <div
+        className="mb-6 flex gap-1 rounded-xl border border-ink/10 bg-surface/50 p-1 sm:inline-flex"
+        role="tablist"
+        aria-label="Resume suite tabs"
+      >
         {tabs.map((t) => (
           <button
             key={t.id}
+            role="tab"
+            aria-selected={active === t.id}
             onClick={() => setActive(t.id)}
-            className={`flex-1 rounded px-4 py-2 text-sm font-medium transition-colors sm:flex-none cursor-pointer ${
-              active === t.id ? "bg-ink text-paper" : "text-graphite hover:text-ink"
+            className={`flex items-center gap-2 flex-1 sm:flex-none rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              active === t.id
+                ? "bg-bg text-ink shadow-sm border border-ink/10"
+                : "text-ink/55 hover:text-ink hover:bg-bg/50"
             }`}
           >
-            {t.label}
+            <span aria-hidden="true" className={active === t.id ? "text-accent" : "text-ink/40"}>
+              {t.icon}
+            </span>
+            <span>{t.label}</span>
+            <span className={`hidden sm:inline text-[10px] font-normal ${active === t.id ? "text-ink/50" : "text-ink/35"}`}>
+              {t.desc}
+            </span>
           </button>
         ))}
       </div>

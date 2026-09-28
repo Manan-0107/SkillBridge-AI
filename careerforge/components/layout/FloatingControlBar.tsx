@@ -29,16 +29,17 @@ export function FloatingControlBar() {
     setAccessibilityProfile,
     voiceConsentStatus,
     setVoiceConsentStatus,
+    user,
   } = useApp();
 
   const [voiceState, setVoiceState] = useState<AssistantVoiceState>("idle");
   const [liveCaption, setLiveCaption] = useState<string>("");
-  const [speakerLabel, setSpeakerLabel] = useState<string>("CareerForge");
+  const [speakerLabel, setSpeakerLabel] = useState<string>("ubix");
   const [amplitude, setAmplitude] = useState<number>(0);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<AccessibilitySettings>(DEFAULT_SETTINGS);
   const [permissionBlockedNotice, setPermissionBlockedNotice] = useState<boolean>(false);
-  const [minimized, setMinimized] = useState<boolean>(false);
+  const [minimized, setMinimized] = useState<boolean>(true);
   const [captionVisible, setCaptionVisible] = useState<boolean>(false);
 
   const micButtonRef = useRef<HTMLButtonElement>(null);
@@ -200,6 +201,20 @@ export function FloatingControlBar() {
     error: "bg-danger/10 border-danger/30",
   }[voiceState];
 
+  // Step 10: Do not display persistent floating voice widget on authentication screen
+  if (!user) {
+    return (
+      <div
+        id="voice-assistant-announcer"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {liveCaption ? `${speakerLabel}: ${liveCaption}` : `Voice assistant is currently ${voiceState}.`}
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Offscreen ARIA Live Region */}
@@ -258,18 +273,19 @@ export function FloatingControlBar() {
         </div>
       )}
 
-      {/* ─── Main floating pill ─────────────────────────────── */}
+      {/* ─── Non-intrusive voice indicator (Section 14: Voice belongs inside composer, no giant persistent bar) ─── */}
       {minimized ? (
         <aside
+          id="voice-assistant-controls"
           role="region"
-          aria-label="Voice Assistant Controls (minimized)"
-          className="fixed bottom-5 right-5 z-50"
+          aria-label="Voice Assistant Controls"
+          className="fixed bottom-3 right-3 z-30 opacity-70 hover:opacity-100 transition-opacity"
         >
           <button
             type="button"
-            onClick={() => setMinimized(false)}
-            aria-label="Expand voice assistant controls"
-            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm transition-all cursor-pointer ${voiceStateBg}`}
+            onClick={toggleAssistant}
+            aria-label={`Voice assistant: ${voiceState}. Shortcut: Alt+V`}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium backdrop-blur-md transition-all cursor-pointer ${voiceStateBg}`}
           >
             {!isDeafProfile && (
               <span

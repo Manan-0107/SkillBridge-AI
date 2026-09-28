@@ -12,6 +12,7 @@ import { AzureSpeechProvider } from "@/lib/speech/providers/azureSpeechProvider"
 import { GoogleSpeechProvider } from "@/lib/speech/providers/googleSpeechProvider";
 import { SpeechProviderType } from "@/lib/speech/types";
 import { detectLanguageFromText } from "@/lib/speech/languages";
+import { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -24,6 +25,25 @@ const googleProvider = new GoogleSpeechProvider();
 
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
+  const clientIp = getClientIp(req);
+
+  const rateLimitResult = checkRateLimit(clientIp, RATE_LIMIT_PRESETS.AUDIO_TRANSCRIBE);
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json(
+      {
+        code: "RATE_LIMITED",
+        message: "Audio transcription rate limit exceeded. Please wait a moment before trying again.",
+        retryable: true,
+        requestId,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(rateLimitResult.resetInMs / 1000)),
+        },
+      }
+    );
+  }
 
   try {
     const contentType = req.headers.get("content-type") || "";

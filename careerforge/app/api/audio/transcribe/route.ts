@@ -16,6 +16,19 @@ const MAX_AUDIO_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
+  const { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } = await import("@/lib/security/rateLimit");
+  const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+
+  const clientIp = getClientIp(req);
+  const rl = checkRateLimit(`transcribe:${clientIp}`, RATE_LIMIT_PRESETS.audioTranscribe);
+  if (rl.isLimited) {
+    return createApiErrorResponse(
+      "RATE_LIMITED",
+      "Too many voice transcription requests. Please wait a moment.",
+      requestId,
+      { statusCode: 429, retryable: true }
+    );
+  }
 
   try {
     let formData: FormData;

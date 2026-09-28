@@ -443,7 +443,7 @@ export const RoadmapDrawer: React.FC<RoadmapDrawerProps> = ({
               ) : (
                 <div className="rounded-xl bg-bg border border-ink/15 p-4 text-center">
                   <p className="text-xs text-ink/60">
-                    Apply this topic by building end-to-end applications or integrating with the CareerForge workspace assistant.
+                    Apply this topic by building end-to-end applications or integrating with the ubix workspace assistant.
                   </p>
                 </div>
               )}
