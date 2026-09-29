@@ -21,7 +21,7 @@ export type RoadmapSubTab = "roadmap" | "journey" | "learning" | "progress";
 
 export default function RoadmapPage() {
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as RoadmapSubTab) || "roadmap";
+  const initialTab = (searchParams.get("tab") as RoadmapSubTab) || "journey";
   const [activeTab, setActiveTab] = useState<RoadmapSubTab>(initialTab);
   const { user, setTargetRole } = useApp();
 
@@ -38,8 +38,8 @@ export default function RoadmapPage() {
   }, [searchParams]);
 
   const navItems = [
-    { id: "roadmap", label: "Roadmap", icon: <Map size={13} strokeWidth={2} /> },
-    { id: "journey", label: "Spatial Journey", icon: <Compass size={13} strokeWidth={2} /> },
+    { id: "journey", label: "Spatial Constellation", icon: <Compass size={13} strokeWidth={2} /> },
+    { id: "roadmap", label: "Phased Milestones", icon: <Map size={13} strokeWidth={2} /> },
     { id: "learning", label: "Curated Learning", icon: <BookOpen size={13} strokeWidth={2} /> },
     { id: "progress", label: "Progress Telemetry", icon: <TrendingUp size={13} strokeWidth={2} /> },
   ];

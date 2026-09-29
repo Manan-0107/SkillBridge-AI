@@ -5,7 +5,6 @@ import "../styles/ubix-effects.css";
 import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
-import { VoiceProvider } from "@/context/VoiceContext";
 import { UbixAmbientBackground } from "@/components/ubix/UbixAmbientBackground";
 
 const fontDisplay = Space_Grotesk({
@@ -86,25 +85,23 @@ export default function RootLayout({
         <div className="relative z-10 flex min-h-screen flex-col">
           <AppProvider>
             <GlobalVoiceProvider>
-              <VoiceProvider>
-                <a
-                  href="#main-content"
-                  className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
-                >
-                  Skip to main content
-                </a>
-                <a
-                  href="#voice-assistant-controls"
-                  className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
-                >
-                  Skip to voice assistant controls
-                </a>
-                <TopNav />
-                {children}
-                <AccessibilityProfileModal />
-                <VoiceModeDetector />
-                <GlobalVoiceDictator />
-              </VoiceProvider>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
+              >
+                Skip to main content
+              </a>
+              <a
+                href="#voice-assistant-controls"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[100] focus:rounded-md focus:bg-ink focus:px-4 focus:py-3 focus:text-bg"
+              >
+                Skip to voice assistant controls
+              </a>
+              <TopNav />
+              {children}
+              <AccessibilityProfileModal />
+              <VoiceModeDetector />
+              <GlobalVoiceDictator />
             </GlobalVoiceProvider>
           </AppProvider>
         </div>

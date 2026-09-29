@@ -377,12 +377,35 @@ const externalPracticeTools = [
 
 const STORAGE_SCORE_KEY = "careerforge.practice_scorecard";
 
+export type PracticeTrack = "Technical Interview" | "DSA" | "Communication" | "System Design";
+
 export function PracticeHub() {
   const { user } = useApp();
   const role = user?.targetRole || "frontend";
-  const questions = PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend;
+  const allRoleQuestions = PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend;
 
+  const [selectedTrack, setSelectedTrack] = useState<PracticeTrack | null>(null);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+
+  // Filter questions based on selectedTrack
+  const questions = selectedTrack
+    ? allRoleQuestions.filter((q) => {
+        if (selectedTrack === "Technical Interview") return q.type === "Technical";
+        if (selectedTrack === "System Design") return q.type === "System Design";
+        if (selectedTrack === "Communication") return q.type === "Behavioral";
+        if (selectedTrack === "DSA") return q.type === "Technical";
+        return true;
+      }).length > 0
+      ? allRoleQuestions.filter((q) => {
+          if (selectedTrack === "Technical Interview") return q.type === "Technical";
+          if (selectedTrack === "System Design") return q.type === "System Design";
+          if (selectedTrack === "Communication") return q.type === "Behavioral";
+          if (selectedTrack === "DSA") return q.type === "Technical";
+          return true;
+        })
+      : allRoleQuestions
+    : allRoleQuestions;
+
   const [userAnswer, setUserAnswer] = useState("");
   const [listening, setListening] = useState(false);
   const [speakingQuestion, setSpeakingQuestion] = useState(false);
@@ -611,13 +634,79 @@ export function PracticeHub() {
     questions.some((q) => q.id === id)
   ).length;
 
+  if (!selectedTrack) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center animate-slideUp">
+        <div className="space-y-3">
+          <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+            ubix
+          </span>
+          <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
+            Practice
+          </h1>
+          <p className="text-sm text-ink/60 max-w-sm mx-auto">
+            Choose what you want to improve.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-10">
+          {(
+            [
+              { id: "Technical Interview", label: "Technical Interview", desc: "Core language & framework concepts" },
+              { id: "DSA", label: "DSA", desc: "Algorithms & data structure patterns" },
+              { id: "Communication", label: "Communication", desc: "Behavioral & architectural discussions" },
+              { id: "System Design", label: "System Design", desc: "Distributed scale & performance" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setSelectedTrack(item.id);
+                setActiveQuestionIdx(0);
+                setUserAnswer("");
+                setExplanationOutput(null);
+              }}
+              className="group relative flex flex-col items-start p-5 rounded-2xl border border-white/[0.08] bg-surface/60 hover:bg-surface/90 hover:border-accent/40 hover:shadow-[0_4px_24px_rgba(120,227,238,0.08)] transition-all cursor-pointer text-left"
+            >
+              <span className="text-sm font-semibold text-white group-hover:text-accent transition-colors">
+                {item.label}
+              </span>
+              <span className="text-xs text-ink/50 mt-1">
+                {item.desc}
+              </span>
+              <span className="mt-4 text-[11px] font-mono text-accent group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 font-semibold">
+                Start drill →
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Section
-      id="practice"
-      eyebrow="Interview Simulator"
-      title="Standard Concept Practice &amp; Knowledge Verification"
-      description="Practice core technical, behavioral, and system design concepts with speech recognition, audio synthesis, and standardized definitions."
-    >
+    <div className="max-w-3xl mx-auto py-8 px-4 animate-slideUp">
+      {/* Slim Top Drill Bar */}
+      <div className="flex items-center justify-between pb-4 mb-6 border-b border-ink/8">
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedTrack(null);
+            setUserAnswer("");
+            setExplanationOutput(null);
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink/60 hover:text-white transition-colors cursor-pointer"
+        >
+          <span>←</span>
+          <span>Back to Practice</span>
+        </button>
+
+        <span className="text-xs font-mono text-accent uppercase tracking-wider font-semibold">
+          {selectedTrack}
+        </span>
+      </div>
+
       {/* ─── QUIZ COMPLETION GLOBAL SUMMARY VIEW ─────────────────────────── */}
       {isQuizCompleted ? (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
@@ -886,42 +975,6 @@ export function PracticeHub() {
           </div>
         </div>
       )}
-
-      {/* Gamified Coding Environments & Reference Sandboxes */}
-      <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-accent" />
-        <span>Curated Practice Environments &amp; Reference Sandboxes</span>
-      </h4>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {externalPracticeTools.map((tool) => (
-          <a
-            key={tool.name}
-            href={tool.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block border border-ink/15 rounded-2xl bg-surface p-6 transition-all hover:border-accent/40 hover:scale-[1.01] text-ink group shadow-sm cursor-pointer"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/25 bg-accent/10 px-2.5 py-0.5 rounded-full">
-                {tool.role}
-              </span>
-              <span className="text-ink/50 group-hover:text-accent transition-colors text-sm">
-                ↗
-              </span>
-            </div>
-            <p className="mt-3 text-lg font-bold text-ink group-hover:text-accent transition-colors">
-              {tool.name}
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-ink/75">
-              {tool.description}
-            </p>
-            <div className="mt-4 flex items-center gap-1 text-xs font-bold text-accent group-hover:translate-x-1 transition-transform">
-              <span>Launch Sandbox</span>
-              <span>→</span>
-            </div>
-          </a>
-        ))}
-      </div>
-    </Section>
+    </div>
   );
 }

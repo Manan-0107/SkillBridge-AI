@@ -280,12 +280,18 @@ export function LocalOpportunities() {
     "w-full rounded-xl border border-ink/15 bg-bg px-4 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors";
 
   return (
-    <Section
-      id="local"
-      eyebrow="Real-Time Job Tracker"
-      title="Live Tech Opportunities & Real-Time Alerts"
-      description="Directly connected to real-time job feeds with live geolocation tracking, explicit Remote/On-Site classification, and direct application forms."
-    >
+    <div className="max-w-4xl mx-auto py-10 px-4 animate-slideUp">
+      <div className="mb-8 space-y-2">
+        <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+          ubix
+        </span>
+        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
+          Jobs
+        </h1>
+        <p className="text-sm text-ink/60">
+          Discover opportunities aligned with your career trajectory and skills.
+        </p>
+      </div>
       {/* Search & Location Bar */}
       <form onSubmit={handleSearch} className="mb-6 rounded-2xl border border-ink/10 bg-surface/40 p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -434,64 +440,67 @@ export function LocalOpportunities() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {jobs.map((job) => (
             <div
               key={job.id}
-              className="rounded-xl border border-ink/10 bg-surface/40 p-4 sm:p-5 transition-all hover:border-ink/25 hover:bg-surface/60"
+              className="rounded-2xl border border-white/[0.08] bg-surface/50 p-5 sm:p-6 transition-all hover:border-accent/30 hover:bg-surface/80 hover:shadow-[0_4px_24px_rgba(120,227,238,0.06)] group"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-sans text-base font-bold text-ink">{job.title}</h3>
-                <span className="rounded-md border border-ink/12 bg-bg px-2 py-0.5 text-[11px] font-medium text-ink/60">
+                <h3 className="font-display text-base sm:text-lg font-bold text-white group-hover:text-accent transition-colors">
+                  {job.title}
+                </h3>
+                <span className="rounded-full border border-white/10 bg-bg px-2.5 py-0.5 text-[10px] font-mono text-ink/70">
                   {job.workArrangementLabel || job.workArrangement}
                 </span>
               </div>
 
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/60">
-                <span className="font-semibold text-ink">{job.company}</span>
+                <span className="font-semibold text-white/90">{job.company}</span>
                 <span>·</span>
                 <span>{job.location}</span>
-                {job.distanceKm && (
-                  <>
-                    <span>·</span>
-                    <span>{job.distanceKm} km away</span>
-                  </>
-                )}
                 {job.salary?.formatted && (
                   <>
                     <span>·</span>
-                    <span className="font-medium text-success">{job.salary.formatted}</span>
+                    <span className="font-mono text-accent/90">{job.salary.formatted}</span>
                   </>
                 )}
               </div>
 
-              <p className="mt-2.5 text-xs leading-relaxed text-ink/70 line-clamp-3">
-                {job.descriptionSnippet}
-              </p>
+              <div className="my-3 border-t border-white/[0.06]" />
 
-              <div className="mt-4 flex flex-wrap items-center gap-2.5 pt-3 border-t border-ink/8 text-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-semibold">
+                  Why it matches
+                </span>
+                <p className="text-xs leading-relaxed text-ink/70 line-clamp-2">
+                  {job.descriptionSnippet}
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3 pt-3 border-t border-white/[0.06] text-xs">
                 <button
                   type="button"
                   onClick={() => handleSpeakJob(job)}
-                  className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-bg px-2.5 py-1 text-xs font-medium text-ink/75 hover:border-accent hover:text-accent transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-bg/80 px-2.5 py-1 text-xs font-medium text-ink/70 hover:border-accent/40 hover:text-white transition-colors cursor-pointer"
                   aria-label={`${playingJobId === job.id ? "Stop reading" : "Read aloud"} details for ${job.title}`}
                 >
-                  <span>{playingJobId === job.id ? "⏹ Stop Audio" : "🔊 Listen"}</span>
+                  <span>{playingJobId === job.id ? "⏹ Stop" : "🔊 Listen"}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleEmailJob(job)}
-                  className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-bg px-2.5 py-1 text-xs font-medium text-ink/75 hover:border-accent hover:text-accent transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-bg/80 px-2.5 py-1 text-xs font-medium text-ink/70 hover:border-accent/40 hover:text-white transition-colors cursor-pointer"
                 >
-                  <span>{emailSentJobIds[job.id] ? "✓ Form Emailed" : "✉ Email Form Link"}</span>
+                  <span>{emailSentJobIds[job.id] ? "✓ Emailed" : "✉ Email link"}</span>
                 </button>
                 <a
                   href={job.applyUrl || job.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-auto inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-surface border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-white hover:border-accent/50 hover:text-accent transition-all"
                 >
-                  <span>Apply Now</span>
+                  <span>View opportunity</span>
                   <span>→</span>
                 </a>
               </div>
@@ -501,9 +510,9 @@ export function LocalOpportunities() {
       )}
 
       {/* Attribution footer */}
-      <p className="mt-6 text-[11px] text-ink/40 text-center">
-        Live aggregation &amp; reverse geolocation from verified job feeds. Explicit Remote/On-Site classification · Direct application links · No fees.
+      <p className="mt-8 text-[11px] text-ink/40 text-center font-mono">
+        Live aggregation &amp; reverse geolocation from verified job feeds.
       </p>
-    </Section>
+    </div>
   );
 }
