@@ -25,8 +25,17 @@ import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
+import dynamic from "next/dynamic";
 import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
 import { UbixBorderBeam } from "@/components/ubix/UbixBorderBeam";
+
+const UbixAssistantAtmosphere = dynamic(
+  () =>
+    import("@/components/ubix/UbixAssistantAtmosphere").then(
+      (mod) => mod.UbixAssistantAtmosphere
+    ),
+  { ssr: false }
+);
 
 export type Msg = {
   id: string;
@@ -130,6 +139,7 @@ export function AssistantHome({
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   const [activeQuestion, setActiveQuestion] = useState<QuestionState | null>(null);
   const [textFallbackActive, setTextFallbackActive] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   // Share & Toast State
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -589,7 +599,7 @@ function generateChatTitle(prompt: string): string {
       id: "intro-1",
       role: "assistant",
       time: now,
-      text: `Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type. How would you like to continue?`,
+      text: "How can I help you today?",
     };
   };
 
@@ -1214,10 +1224,10 @@ function generateChatTitle(prompt: string): string {
   const renderComposer = (isCentered: boolean) => (
     <form
       onSubmit={onSubmit}
-      className={`relative flex flex-col rounded-2xl border transition-all overflow-hidden ${
+      className={`relative flex flex-col rounded-2xl border transition-all duration-200 overflow-hidden ${
         isCentered
-          ? "border-white/10 bg-surface/80 p-3 shadow-lg focus-within:border-accent/50 focus-within:shadow-[0_0_28px_rgba(120,227,238,0.12)]"
-          : "border-white/[0.08] bg-surface/90 p-3 shadow-xs focus-within:border-accent/40"
+          ? "border-white/10 bg-surface/85 p-3.5 shadow-lg focus-within:border-accent/50 focus-within:shadow-[0_0_32px_rgba(120,227,238,0.12)] focus-within:bg-surface/95"
+          : "border-white/[0.08] bg-surface/90 p-3 shadow-xs focus-within:border-accent/40 focus-within:shadow-[0_0_24px_rgba(120,227,238,0.08)]"
       }`}
     >
       <UbixBorderBeam active={listening || busy} duration={6} />
@@ -1248,6 +1258,8 @@ function generateChatTitle(prompt: string): string {
         id={isCentered ? "assistant-composer-centered" : "assistant-composer"}
         ref={isCentered ? undefined : textareaRef}
         value={input}
+        onFocus={() => setComposerFocused(true)}
+        onBlur={() => setComposerFocused(false)}
         onChange={(e) => {
           setInput(e.target.value);
           inputRef.current = e.target.value;
@@ -1267,7 +1279,7 @@ function generateChatTitle(prompt: string): string {
         placeholder={
           attachedFile
             ? `Ask anything about ${attachedFile.name}...`
-            : "Ask technical questions, design architectures, or plan your next milestone..."
+            : "Ask anything about your work, career, or what you're learning..."
         }
         className="max-h-36 min-h-[44px] w-full resize-none bg-transparent px-2 py-1 text-sm text-white placeholder:text-ink/40 focus:outline-none"
       />
@@ -1543,10 +1555,15 @@ function generateChatTitle(prompt: string): string {
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink relative">
+        {/* Subtle Three.js Atmosphere (GPU-friendly, felt before noticed) */}
+        <UbixAssistantAtmosphere
+          composerFocused={composerFocused}
+          voiceStatus={voiceStatus}
+        />
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
+        <div className="relative z-10 flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
@@ -1610,14 +1627,14 @@ function generateChatTitle(prompt: string): string {
         </div>
 
         {/* Scrollable Conversation Stream */}
-        <div ref={listRef} className="flex-1 overflow-y-auto">
+        <div ref={listRef} className="relative z-10 flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="my-auto max-w-xl w-full mx-auto py-12 md:py-16 animate-slideUp">
+              <div className="my-auto max-w-xl w-full mx-auto py-10 md:py-14 animate-slideUp">
                 {/* Minimal atmospheric greeting */}
                 <div className="flex flex-col items-center justify-center text-center space-y-6">
-                  <div className="space-y-3">
-                    <span className="font-display text-xs uppercase tracking-[0.2em] text-ink/60 font-semibold select-none">
+                  <div className="space-y-2">
+                    <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
                       ubix
                     </span>
                     <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
@@ -1630,26 +1647,39 @@ function generateChatTitle(prompt: string): string {
                     {renderComposer(true)}
                   </div>
 
-                  {/* Contextual Single Next Step (Requirement 4) */}
-                  <div className="w-full p-4 rounded-xl bg-surface/60 border border-white/[0.06] flex items-center justify-between gap-4 text-left group hover:border-accent/30 transition-all">
-                    <div className="min-w-0">
+                  {/* Contextual Single Next Step (Section 27: Interactive, responsive) */}
+                  <div
+                    onClick={() => onRedirect("roadmap")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onRedirect("roadmap");
+                      }
+                    }}
+                    className="w-full p-4 rounded-xl bg-surface/60 border border-white/[0.06] flex items-center justify-between gap-4 text-left group hover:border-accent/30 hover:bg-surface/80 hover:shadow-[0_4px_24px_rgba(120,227,238,0.06)] transition-all cursor-pointer select-none"
+                  >
+                    <div className="min-w-0 flex-1">
                       <div className="text-[10px] font-mono text-accent uppercase tracking-wider font-semibold">
                         Continue your journey
                       </div>
-                      <div className="text-sm font-semibold text-white mt-0.5 truncate">
+                      <div className="text-sm font-semibold text-white mt-0.5 truncate group-hover:text-accent transition-colors">
                         {user?.targetRole ? `${user.targetRole.charAt(0).toUpperCase() + user.targetRole.slice(1)} Architecture` : "Frontend Architecture"}
                       </div>
-                      <div className="text-[11px] text-ink/60 mt-0.5">
-                        68% milestone complete · 2 skill gaps remaining
+                      <div className="text-[11px] text-ink/60 mt-0.5 flex items-center gap-2">
+                        <span>68% milestone complete</span>
+                        <span>·</span>
+                        <span>2 skill gaps remaining</span>
+                      </div>
+                      <div className="w-full bg-white/10 h-1 rounded-full mt-2.5 overflow-hidden">
+                        <div className="bg-accent h-full rounded-full w-[68%] transition-all duration-300 group-hover:brightness-110" />
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onRedirect("roadmap")}
-                      className="shrink-0 px-3.5 py-1.5 rounded-lg bg-surface border border-white/10 text-xs font-semibold text-white hover:border-accent/40 hover:text-accent transition-all cursor-pointer"
-                    >
-                      Resume →
-                    </button>
+                    <div className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface border border-white/10 text-xs font-semibold text-white group-hover:border-accent/40 group-hover:text-accent transition-all">
+                      <span>Resume</span>
+                      <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
+                    </div>
                   </div>
                 </div>
               </div>

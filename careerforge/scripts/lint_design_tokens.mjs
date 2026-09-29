@@ -13,6 +13,7 @@ const ALLOWED_FILES = new Set([
   path.normalize("components/landing/LandingPage.tsx"),
   path.normalize("components/ubix/UbixCareerGraph.tsx"),
   path.normalize("components/ubix/UbixHeroScene.tsx"),
+  path.normalize("components/ubix/UbixAssistantAtmosphere.tsx"),
 ]);
 
 const HEX_REGEX = /#[0-9a-fA-F]{3,8}\b/g;
