@@ -689,6 +689,18 @@ function GlobalVoiceDictatorInner() {
           }
           setTimeout(() => {
             if (activeRef.current) {
+              const hasAssistantHome =
+                typeof document !== "undefined" &&
+                Boolean(
+                  document.querySelector(
+                    '#assistant-composer, textarea[placeholder*="Ask CareerForge"], textarea[placeholder*="Type or speak"], [data-assistant-home="true"]'
+                  )
+                );
+              if (hasAssistantHome) {
+                activeRef.current = false;
+                setActive(false);
+                return;
+              }
               setInteractionState("RECOVERING");
               setTimeout(() => {
                 if (activeRef.current) {
@@ -1888,9 +1900,30 @@ function GlobalVoiceDictatorInner() {
   // an event instead of creating their own SpeechRecognition instance.
   useEffect(() => {
     const handleVoiceStart = () => {
+      const hasAssistantHome =
+        typeof document !== "undefined" &&
+        Boolean(
+          document.querySelector(
+            '#assistant-composer, textarea[placeholder*="Ask CareerForge"], textarea[placeholder*="Type or speak"], [data-assistant-home="true"]'
+          )
+        );
+      if (hasAssistantHome) return;
       if (!activeRef.current) startVoiceDictation();
     };
     const handleToggleMic = (e: Event) => {
+      const hasAssistantHome =
+        typeof document !== "undefined" &&
+        Boolean(
+          document.querySelector(
+            '#assistant-composer, textarea[placeholder*="Ask CareerForge"], textarea[placeholder*="Type or speak"], [data-assistant-home="true"]'
+          )
+        );
+      if (hasAssistantHome) {
+        if (activeRef.current) {
+          stopVoiceDictation();
+        }
+        return;
+      }
       const customEvent = e as CustomEvent<{ active?: boolean }>;
       if (customEvent.detail?.active === true && !activeRef.current) {
         startVoiceDictation();
@@ -1932,11 +1965,7 @@ function GlobalVoiceDictatorInner() {
       try {
         if (typeof navigator !== "undefined" && navigator.permissions?.query) {
           const perm = await navigator.permissions.query({ name: "microphone" as PermissionName });
-          if (perm.state === "granted") {
-            // Already granted: start silently without app-level prompt
-            startVoiceDictation();
-            return;
-          } else if (perm.state === "denied") {
+          if (perm.state === "denied") {
             // Denied: show single dismissible notice, never nag again
             showStatus("Microphone access is blocked — enable it in browser settings to use voice", 6000);
             return;
@@ -1944,13 +1973,12 @@ function GlobalVoiceDictatorInner() {
         }
       } catch {}
 
-      // For blind_low_vision with prompt state: activate voice assistant
+      // For blind_low_vision: announce voice is ready via screen-reader, wait for explicit user activation (Alt+V or Voice button)
       if (accessibilityProfile === "blind_low_vision") {
         const welcome =
-          "ubix voice assistant active. Say 'help', or speak your answers to begin.";
+          "ubix voice assistant ready. Press Alt+V or click Voice in the assistant to speak.";
         setAiSpeechPrompt(welcome);
         showStatus(welcome, 5000);
-        startVoiceDictation();
       }
     };
 

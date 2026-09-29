@@ -14,11 +14,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import crypto from "crypto";
+import { generateText } from "ai";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import { PROVIDER_ORDER, getKeyFor, getModelInstance, PROVIDER_LABELS } from "@/lib/ai/providerConfig";
+import { aiTools } from "@/lib/ai/tools";
+import { getScopedRagContext } from "@/lib/ai/rag/scopedRag";
+import { createApiErrorResponse } from "@/lib/errors/apiError";
+
 
 export const runtime = "nodejs";
 
@@ -161,14 +167,11 @@ export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedUser();
     if (!authUser) {
-      return NextResponse.json(
-        {
-          code: "UNAUTHORIZED",
-          message: "Authentication required to interact with the assistant.",
-          retryable: false,
-          requestId,
-        },
-        { status: 401 }
+      return createApiErrorResponse(
+        "UNAUTHORIZED",
+        "Authentication required to interact with the assistant.",
+        requestId,
+        { statusCode: 401, retryable: false }
       );
     }
 
@@ -176,14 +179,11 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json(
-        {
-          code: "BAD_REQUEST",
-          message: "Invalid JSON request payload.",
-          retryable: false,
-          requestId,
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        "BAD_REQUEST",
+        "Invalid JSON request payload.",
+        requestId,
+        { statusCode: 400, retryable: false }
       );
     }
 
@@ -199,14 +199,11 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        {
-          code: "BAD_REQUEST",
-          message: "Messages array required",
-          retryable: false,
-          requestId,
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        "BAD_REQUEST",
+        "Messages array required",
+        requestId,
+        { statusCode: 400, retryable: false }
       );
     }
 
@@ -215,14 +212,11 @@ export async function POST(req: NextRequest) {
       0
     );
     if (totalMessageLength > MAX_TOTAL_MESSAGE_LENGTH) {
-      return NextResponse.json(
-        {
-          code: "PAYLOAD_TOO_LARGE",
-          message: `Messages content exceeds limit (${MAX_TOTAL_MESSAGE_LENGTH / 1024} KB).`,
-          retryable: false,
-          requestId,
-        },
-        { status: 413 }
+      return createApiErrorResponse(
+        "PAYLOAD_TOO_LARGE",
+        `Messages content exceeds limit (${MAX_TOTAL_MESSAGE_LENGTH / 1024} KB).`,
+        requestId,
+        { statusCode: 413, retryable: false }
       );
     }
 
@@ -241,105 +235,29 @@ export async function POST(req: NextRequest) {
     const role = targetRole || userProfile?.targetRole || "Software Engineer";
 
 
-    // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1) ──────────────────────
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey && groqKey.trim().length > 5) {
-      try {
-        const groqResponse = await callGroqLLM(
-          groqKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...groqResponse,
-            engine: "Groq (Llama 3.3 70B)",
-          });
-        }
-      } catch (groqErr) {
-        console.warn("[Assistant API] Groq error:", groqErr);
-      }
+    // ─── Scoped RAG Domain Retrieval (Courses, Roadmap, Resume, Jobs) ─────────
+    const ragResult = await getScopedRagContext(lastMessage, role);
+    let systemPrompt = getSystemPrompt(
+      userName,
+      role,
+      voiceMode,
+      currentPage,
+      currentEntity,
+      accessibilityPrefs
+    );
+    if (ragResult.retrieved && ragResult.contextText) {
+      systemPrompt += `\n${ragResult.contextText}\nDirective: Seamlessly synthesize the verified domain knowledge above when answering the user's inquiry.`;
     }
 
-    // ─── 2. Try Google Gemini API (Gemini 1.5 / 2.0 Flash) ────────────────────
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
-    if (geminiKey && geminiKey.trim().length > 5) {
-      try {
-        const geminiResponse = await callGeminiLLM(
-          geminiKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...geminiResponse,
-            engine: "Google Gemini 1.5 Flash",
-          });
-        }
-      } catch (geminiErr) {
-        console.warn("[Assistant API] Gemini error:", geminiErr);
-      }
+    // ─── Unified Vercel AI SDK Provider Cascade ──────────────────────────────
+    const cascadeResult = await callLLMCascade(messages, systemPrompt, voiceMode);
+    if (cascadeResult && cascadeResult.reply && cascadeResult.reply.trim().length > 0) {
+      return NextResponse.json({
+        ...cascadeResult,
+        isFallback: false,
+      });
     }
 
-    // ─── 3. Try OpenAI API (GPT-4o / GPT-4o-mini) ─────────────────────────────
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (openaiKey && openaiKey.trim().length > 5) {
-      try {
-        const openaiResponse = await callOpenAILLM(
-          openaiKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...openaiResponse,
-            engine: "OpenAI GPT-4o-mini",
-          });
-        }
-      } catch (openaiErr) {
-        console.warn("[Assistant API] OpenAI error:", openaiErr);
-      }
-    }
-
-    // ─── 4. Try OpenRouter Free Models ────────────────────────────────────────
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    if (openrouterKey && openrouterKey.trim().length > 5) {
-      try {
-        const orResponse = await callOpenRouterLLM(
-          openrouterKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
-          return NextResponse.json({
-            ...orResponse,
-            engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)",
-          });
-        }
-      } catch (orErr) {
-        console.warn("[Assistant API] OpenRouter error:", orErr);
-      }
-    }
 
 
 
@@ -364,7 +282,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[Assistant API] Fatal error:", error);
-    const { createApiErrorResponse } = await import("@/lib/errors/apiError");
     return createApiErrorResponse(
       "AI_PROVIDER_UNAVAILABLE",
       "The AI assistant is temporarily unavailable. Please try again shortly.",
@@ -417,168 +334,100 @@ Core Directives & Behavioral Guidelines:
    - [ACTION: {"tool": "conversationalResumeBuilder", "step": 1}]`;
 }
 
-// ─── 1. Groq Cloud API Provider ───────────────────────────────────────────────
-async function callGroqLLM(
-  apiKey: string,
+// ─── Unified AI SDK Provider Cascade ──────────────────────────────────────────
+async function callLLMCascade(
   messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
+  systemPrompt: string,
+  voiceMode = false
+): Promise<{
+  reply: string;
+  engine: string;
+  feature?: FeatureId | null;
+  resumeTab?: ResumeTab;
+  featureTitle?: string;
+  toolCall?: any;
+} | null> {
+  const formattedMessages: any[] = messages.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.text,
+  }));
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
+  for (const providerName of PROVIDER_ORDER) {
+    const key = getKeyFor(providerName);
+    if (!key || key.trim().length < 5) continue;
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
+    try {
+      const model = getModelInstance(providerName, key);
+      const result = await generateText({
+        model,
+        system: systemPrompt,
+        messages: formattedMessages,
+        tools: aiTools,
+        maxOutputTokens: voiceMode ? 400 : 900,
+        temperature: 0.35,
+      });
 
-// ─── 2. Google Gemini API Provider ────────────────────────────────────────────
-async function callGeminiLLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const contents = [
-    { role: "user", parts: [{ text: systemPrompt }] },
-    { role: "model", parts: [{ text: "Understood. I am CareerForge AI, your central career, accessibility, and navigation mentor." }] },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.text }],
-    })),
-  ];
+      const rawReply = result.text || "";
+      let feature: FeatureId | null = null;
+      let resumeTab: ResumeTab | undefined = undefined;
+      let featureTitle: string | undefined = undefined;
+      let toolCall: any = null;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        generationConfig: { temperature: 0.35, maxOutputTokens: voiceMode ? 400 : 900 },
-      }),
-      signal: AbortSignal.timeout(6000),
+      // 1. Check AI SDK native tool calls
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        const firstCall = result.toolCalls[0] as any;
+        const callArgs = firstCall.args || firstCall.parameters || {};
+        toolCall = {
+          tool: firstCall.toolName,
+          parameters: callArgs,
+        };
+
+        if (firstCall.toolName === "navigateTo" || firstCall.toolName === "openResume") {
+          feature = sanitizeNavPage(callArgs?.page);
+          resumeTab = sanitizeTab(callArgs?.tab);
+          if (!feature && firstCall.toolName === "openResume") {
+            feature = "resume";
+          }
+        } else if (firstCall.toolName === "searchJobs") {
+          feature = "local";
+        } else if (firstCall.toolName === "searchCourses") {
+          feature = "courses";
+        } else if (firstCall.toolName === "openSkillAnalysis") {
+          feature = "resume";
+          resumeTab = "analyzer";
+        }
+      }
+
+      // 2. If no native tool call was triggered, fallback to parsing [ACTION: ...] if present
+      if (!toolCall && rawReply.includes("[ACTION:")) {
+        const parsedAction = parseActionFromReply(rawReply);
+        feature = parsedAction.feature;
+        resumeTab = parsedAction.resumeTab;
+        featureTitle = parsedAction.featureTitle;
+        toolCall = parsedAction.toolCall;
+      }
+
+      // 3. Clean raw text if [ACTION: ...] was emitted in text
+      const cleanReply = rawReply.replace(/\[ACTION:[\s\S]*?\]/g, "").trim();
+
+      if (cleanReply.length > 10 || toolCall) {
+        return {
+          reply: cleanReply || "Action executed.",
+          engine: PROVIDER_LABELS[providerName] || providerName,
+          feature,
+          resumeTab,
+          featureTitle,
+          toolCall,
+        };
+      }
+    } catch (err) {
+      console.warn(`[Assistant API] ${providerName} failed:`, err);
     }
-  );
+  }
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  return parseActionFromReply(rawReply);
+  return null;
 }
 
-// ─── 3. OpenAI API Provider ───────────────────────────────────────────────────
-async function callOpenAILLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
-
-// ─── 4. OpenRouter API Provider ───────────────────────────────────────────────
-async function callOpenRouterLLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "meta-llama/llama-3.3-70b-instruct:free",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
 
 
 
@@ -1038,15 +887,14 @@ function generateCognitiveAgentResponse(
   }
 
   // ─── E. Jobs & Location Match ("Find frontend jobs near me", "remote jobs")
-  if (
-    lower.includes("job") ||
-    lower.includes("hiring") ||
-    lower.includes("vacancy") ||
-    lower.includes("internship") ||
+  const isJobQuery =
+    (/\b(jobs?|hiring|vacanc(?:y|ies)|internships?|career opportunit(?:y|ies))\b/i.test(lower) &&
+      !/\b(good job|cron job|steve jobs|odd job)\b/i.test(lower)) ||
     lower.includes("नौकरी") ||
     lower.includes("નોકરી") ||
-    lower.includes("emploi")
-  ) {
+    lower.includes("emploi");
+
+  if (isJobQuery) {
     const isRemote = lower.includes("remote") || lower.includes("રિમોટ") || lower.includes("रिमोट");
     const cityMatch = query.match(/(?:near|in|at|around|પાસે|में|à)\s+([A-Za-z\s]+)/i);
     const location = cityMatch ? cityMatch[1].trim() : userProfile?.location || (isRemote ? "Remote" : "Your Area");

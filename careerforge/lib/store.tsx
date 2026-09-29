@@ -207,11 +207,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Set ready immediately on mount so the user never encounters a blank screen!
     setReady(true);
 
-    // Step 2: Background sync with /api/user (with 2s timeout)
+    // Step 2: Server-authoritative session sync with /api/auth/session & /api/user
     (async () => {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
+        const timeout = setTimeout(() => controller.abort(), 2500);
+
+        // 1. Authoritative Session Check
+        const sessRes = await fetch("/api/auth/session", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        if (!sessRes.ok) {
+          // If server rejects session (401 / expired), strictly invalidate client state!
+          if (!cancelled) {
+            setUser(null);
+            try {
+              window.localStorage.removeItem(STORAGE_KEY);
+            } catch {}
+          }
+          clearTimeout(timeout);
+          return;
+        }
+
+        const sessionData = await sessRes.json();
+        if (sessionData.authenticated && sessionData.user) {
+          const authUser: User = {
+            id: sessionData.user.id,
+            name: sessionData.user.name || extractDisplayName(sessionData.user.email),
+            email: sessionData.user.email,
+            authProvider: sessionData.user.isGuest ? "guest" : "email",
+            targetRole: null,
+            dbId: sessionData.user.id,
+          };
+          if (!cancelled) {
+            setUser(authUser);
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+            } catch {}
+          }
+        }
+
+        // 2. Sync profile preferences
         const res = await fetch("/api/user", {
           credentials: "include",
           signal: controller.signal,
@@ -225,7 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
 
           if (!cancelled && u) {
-            setUser(u);
+            setUser((prev) => ({ ...(prev || u), ...u }));
             try {
               window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
             } catch {}
@@ -343,107 +381,214 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
+  /** Server-Authoritative Email Sign-in / Sign-up */
   const signIn = async (email: string, name?: string) => {
-    const displayName = extractDisplayName(email, name);
-    // Immediately sign in locally so the UI responds instantly
+    const cleanEmail = email.trim().toLowerCase();
+    const displayName = extractDisplayName(cleanEmail, name);
+
+    // Guest Mode check: generate isolated guest server session
+    if (cleanEmail.startsWith("guest_") || cleanEmail.includes("@guest.")) {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ mode: "guest" }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.user) {
+          const guestUser: User = {
+            id: data.user.id,
+            name: data.user.name || displayName,
+            email: data.user.email,
+            authProvider: "guest",
+            targetRole: user?.targetRole ?? null,
+            dbId: data.user.id,
+          };
+          persist(guestUser);
+          return;
+        }
+      } catch (e) {
+        console.warn("[auth] Guest login sync failed:", e);
+      }
+    }
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name: displayName,
+          authProvider: "email",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || displayName,
+          email: data.user.email,
+          authProvider: "email",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] Server signin sync failed:", e);
+    }
+
     const localUser: User = {
       name: displayName,
-      email,
+      email: cleanEmail,
       authProvider: "email",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
-
-    // Persist to DB in the background (doesn't block the UI)
-    try {
-      const dbRow = await upsertUser({
-        email,
-        name: localUser.name,
-        authProvider: "email",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  /** Google sign-in — upserts Google profile to DB then persists locally. */
+  /** Server-Authoritative Google sign-in */
   const signInWithGoogle = async (
     name: string,
     email: string,
     picture?: string,
   ) => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name,
+          authProvider: "google",
+          picture,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || name,
+          email: data.user.email,
+          picture: data.user.picture || picture,
+          authProvider: "google",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] Google server signin failed:", e);
+    }
+
     const localUser: User = {
       name,
-      email,
+      email: cleanEmail,
       picture,
       authProvider: "google",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
-
-    try {
-      const dbRow = await upsertUser({
-        email,
-        name,
-        picture,
-        authProvider: "google",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
+  /** Server-Authoritative GitHub sign-in */
   const signInWithGithub = async (
     name: string,
     email: string,
     picture?: string,
   ) => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name: name || cleanEmail.split("@")[0],
+          authProvider: "github",
+          picture,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || name,
+          email: data.user.email,
+          picture: data.user.picture || picture,
+          authProvider: "github",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] GitHub server signin failed:", e);
+    }
+
     const localUser: User = {
-      name: name || email.split("@")[0],
-      email,
+      name: name || cleanEmail.split("@")[0],
+      email: cleanEmail,
       picture,
       authProvider: "github",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
-
-    try {
-      const dbRow = await upsertUser({
-        email,
-        name: localUser.name,
-        picture,
-        authProvider: "github",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  /** Phone sign-in — upserts phone user to DB then persists locally. */
+  /** Server-Authoritative Phone sign-in */
   const signInWithPhone = async (phone: string, name?: string) => {
     const cleanPhone = phone.trim();
     const formattedEmail = `${cleanPhone.replace(/[^0-9]/g, "")}@phone.careerforge.io`;
+    const displayName = name || `User (${cleanPhone})`;
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "phone",
+          email: formattedEmail,
+          name: displayName,
+          authProvider: "phone",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || displayName,
+          email: data.user.email,
+          phone: cleanPhone,
+          authProvider: "phone",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] Phone server signin failed:", e);
+    }
+
     const localUser: User = {
-      name: name || `User (${cleanPhone})`,
+      name: displayName,
       email: formattedEmail,
       phone: cleanPhone,
       authProvider: "phone",
@@ -451,29 +596,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbId: null,
     };
     persist(localUser);
-
-    try {
-      const dbRow = await upsertUser({
-        email: formattedEmail,
-        name: localUser.name,
-        phone: cleanPhone,
-        authProvider: "phone",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/user", { method: "DELETE", credentials: "include" });
+    } catch {}
     persist(null);
-    fetch("/api/user", { method: "DELETE", credentials: "include" }).catch(
-      () => {},
-    );
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
   };
 
   const setTargetRole = (role: RoleId) => {

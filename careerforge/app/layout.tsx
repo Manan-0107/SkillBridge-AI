@@ -33,7 +33,6 @@ const fontMono = JetBrains_Mono({
 });
 
 import { TopNav } from "@/components/layout/TopNav";
-import { FloatingControlBar } from "@/components/layout/FloatingControlBar";
 import { AccessibilityProfileModal } from "@/components/accessibility/AccessibilityProfileModal";
 import { VoiceModeDetector } from "@/components/accessibility/VoiceModeDetector";
 
@@ -82,7 +81,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink relative overflow-x-hidden">
+      <body suppressHydrationWarning className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink relative overflow-x-hidden">
         <UbixAmbientBackground />
         <div className="relative z-10 flex min-h-screen flex-col">
           <AppProvider>
@@ -102,7 +101,6 @@ export default function RootLayout({
                 </a>
                 <TopNav />
                 {children}
-                <FloatingControlBar />
                 <AccessibilityProfileModal />
                 <VoiceModeDetector />
                 <GlobalVoiceDictator />

@@ -317,7 +317,11 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Authentication failed. Please check your details.");
+        const errorMsg =
+          typeof data?.error === "string"
+            ? data.error
+            : data?.error?.message || data?.message || "Authentication failed. Please check your details.";
+        throw new Error(errorMsg);
       }
 
       playAccessibleChime("success");
@@ -328,7 +332,13 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
       // Persist authenticated user to App Store
       await signIn(data.user.email, data.user.name);
     } catch (err: any) {
-      setError(err.message || "An error occurred during authentication.");
+      const msg =
+        typeof err?.message === "string" && err.message !== "[object Object]"
+          ? err.message
+          : typeof err === "string"
+          ? err
+          : "An error occurred during authentication.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -585,7 +595,7 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
               role="alert"
               className="rounded-xl bg-danger/10 border border-danger/30 p-3 text-xs font-medium text-danger font-sans"
             >
-              {error}
+              {typeof error === "string" ? error : (error as any)?.message || "Authentication error"}
             </div>
           )}
 

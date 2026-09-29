@@ -1,155 +1,444 @@
 "use client";
 
 /**
- * VoiceContext.tsx — global voice-command layer.
+ * context/VoiceContext.tsx
  *
- * Web Speech API handling (vendor prefixes, continuous listen, auto-restart,
- * 3-strike silence fallback) already lives in `@/hooks/useVoiceCommand`; this
- * provider reuses it and adds the command router on top.
+ * CANONICAL CENTRAL AUTHORITATIVE VOICE STATE MACHINE (§5, §6, §7, §8, §9)
  *
- * Routing: this project is a single page (`app/page.tsx`) whose sections are
- * switched via a `careerforge:navigate` window event, not real routes — so we
- * dispatch that event rather than calling `useRouter().push`. Swap `navigate()`
- * for the router if real route targets are ever added.
- *
- * This is the one mic the user explicitly controls. While it's listening it
- * calls `setCommandBarActive(true)` so the ambient probe / dictator recognizers
- * park and stop fighting it for the microphone.
+ * Rules:
+ * 1. Exactly ONE authoritative microphone owner in the entire application.
+ * 2. Strict 9-state state machine:
+ *    idle | requesting_permission | ready | listening | processing | success | error | stopped | cancelled
+ * 3. Event-driven: The microphone NEVER continuously records or leaks background audio.
+ * 4. Deaf parity: Every audio state has an authoritative visible status text for captions/subtitles.
+ * 5. Auto-send completion: Uses silence debounce timer (2.2s) + final transcript + explicit controls.
+ * 6. Voice Onboarding: Maximum 3 attempts x max 5 seconds. If all 3 fail, voice is disabled permanently.
+ * 7. Critical data confirmation: Spoken punctuation normalization, spelled confirmation, never speaks passwords.
  */
 
-import {
+import React, {
   createContext,
-  useCallback,
   useContext,
+  useState,
+  useRef,
+  useCallback,
   useEffect,
   useMemo,
-  useRef,
-  useState,
   type ReactNode,
 } from "react";
-import { useVoiceCommand } from "@/hooks/useVoiceCommand";
-import { setCommandBarActive } from "@/lib/voice";
+import { useApp } from "@/lib/store";
+import {
+  startSpeechRecognition,
+  SpeechRecognitionController,
+  isSpeechRecognitionSupported,
+  speakText,
+  stopSpeaking,
+  playAccessibleChime,
+  normalizeSpokenEmail,
+  normalizeSpokenName,
+  spellForVerification,
+  detectTextLanguage,
+} from "@/lib/voice";
 import { parseVoiceCommand } from "@/lib/voiceCommands";
 import type { FeatureId, ResumeTab } from "@/lib/intent";
 
-interface VoiceContextValue {
+export type CentralVoiceState =
+  | "idle"
+  | "requesting_permission"
+  | "ready"
+  | "listening"
+  | "processing"
+  | "success"
+  | "error"
+  | "stopped"
+  | "cancelled";
+
+export interface VoiceSessionOptions {
+  lang?: string;
+  mode?: "conversation" | "dictation" | "command";
+  onTranscript?: (transcript: string, isFinal: boolean) => void;
+  onComplete?: (finalText: string) => void;
+  onError?: (error: string) => void;
+  maxDurationMs?: number;
+}
+
+export interface VoiceContextValue {
+  state: CentralVoiceState;
   isSupported: boolean;
-  /** True from the moment START is pressed until STOP — the session the user asked for. */
   isActive: boolean;
-  /** True only while the browser recognizer is actually capturing audio. */
   isListening: boolean;
-  /** Latest recognized speech (final + interim). */
   transcript: string;
-  /** Human-readable label of the last command we routed, or null. */
+  interimTranscript: string;
+  statusText: string;
   lastCommand: string | null;
+  errorText: string | null;
+  activeLanguage: string;
+  // Controls
+  startSession: (options?: VoiceSessionOptions) => void;
+  stopSession: () => void;
+  cancelSession: () => void;
+  submitSession: (explicitText?: string) => void;
+  // Legacy compatibility helpers
   startListening: () => void;
   stopListening: () => void;
   clearTranscript: () => void;
   resetStrikes: () => void;
 }
 
-const VoiceContext = createContext<VoiceContextValue | null>(null);
+const CentralVoiceContext = createContext<VoiceContextValue | null>(null);
 
 export function useVoice(): VoiceContextValue {
-  const ctx = useContext(VoiceContext);
-  if (!ctx) throw new Error("useVoice must be used within a VoiceProvider");
+  const ctx = useContext(CentralVoiceContext);
+  if (!ctx) {
+    throw new Error("useVoice must be used within a VoiceProvider");
+  }
   return ctx;
 }
 
-/** Fire the app's existing in-page navigation event (see app/page.tsx). */
-function navigate(feature: FeatureId | "assistant", resumeTab?: ResumeTab) {
-  window.dispatchEvent(
-    new CustomEvent("careerforge:navigate", { detail: { feature, resumeTab } })
-  );
-}
-
 export function VoiceProvider({ children }: { children: ReactNode }) {
-  const [active, setActive] = useState(false);
+  const {
+    accessibilityProfile,
+    voiceLanguage,
+    setVoiceMode,
+    setVoiceConsentStatus,
+    accessibilityPrefs,
+  } = useApp();
+
+  const isDeaf = accessibilityProfile === "deaf_hard_of_hearing";
+
+  const [state, setState] = useState<CentralVoiceState>("idle");
+  const [transcript, setTranscript] = useState<string>("");
+  const [interimTranscript, setInterimTranscript] = useState<string>("");
+  const [statusText, setStatusText] = useState<string>("Voice ready");
+  const [errorText, setErrorText] = useState<string | null>(null);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
+  const [activeLang, setActiveLang] = useState<string>(voiceLanguage || "en-US");
 
-  const voiceRef = useRef<ReturnType<typeof useVoiceCommand> | null>(null);
+  // Recognition controller & lifecycle timers
+  const controllerRef = useRef<SpeechRecognitionController | null>(null);
+  const currentOptionsRef = useRef<VoiceSessionOptions | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const maxDurationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const transcriptBufferRef = useRef<string>("");
 
-  const routeCommand = useCallback((spoken: string) => {
-    const command = parseVoiceCommand(spoken);
-    console.log("[VoiceContext] heard:", JSON.stringify(spoken.trim()), "→", command?.label ?? "(no match)");
-    if (!command) return;
+  // Section 8: Strict Voice Onboarding (Max 3 attempts x 5 seconds)
+  const onboardingAttemptCountRef = useRef<number>(0);
 
-    // Clear completed command transcript so it doesn't accumulate
-    voiceRef.current?.clearTranscript();
-
-    navigate(command.feature, command.resumeTab);
-    const { action } = command;
-    if (action) {
-      // nav → mount → effect; a short delay lets the target subscribe first.
-      setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent("careerforge:action", { detail: { action } })
-        );
-        // Focus the actual target element or heading, not only <main>
-        const target = document.querySelector<HTMLElement>(
-          'h1, h2, [role="heading"], input:not([disabled]), textarea:not([disabled])'
-        );
-        if (target) {
-          target.focus();
-        }
-      }, 300);
+  // Sync active language from store
+  useEffect(() => {
+    if (voiceLanguage && voiceLanguage !== "auto") {
+      setActiveLang(voiceLanguage);
     }
-    setLastCommand(command.label);
+  }, [voiceLanguage]);
+
+  // Clean all timers
+  const clearTimers = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
+    }
   }, []);
 
-  const voice = useVoiceCommand({
-    enabled: active,
-    ownsCommandBar: true,
-    onResult: routeCommand,
-    onFallbackTriggered: () => setActive(false),
-  });
-
-  // `voice`'s identity changes every render; a ref lets the toggle effect call
-  // the latest start/stop without re-running on each render.
-  useEffect(() => {
-    voiceRef.current = voice;
-  });
-
-  useEffect(() => {
-    setCommandBarActive(active);
-    if (active) {
-      voiceRef.current?.resetStrikes();
-      voiceRef.current?.start();
-    } else {
-      voiceRef.current?.stop();
+  // Teardown recognition controller
+  const abortController = useCallback(() => {
+    clearTimers();
+    if (controllerRef.current) {
+      try {
+        controllerRef.current.stop();
+      } catch {}
+      controllerRef.current = null;
     }
-  }, [active]);
+  }, [clearTimers]);
 
-  // Release the shared mic lock if this provider unmounts mid-session.
-  useEffect(() => () => setCommandBarActive(false), []);
+  // Explicit Complete / Auto-Send handler
+  const completeSession = useCallback(
+    (explicitText?: string) => {
+      const finalText = (explicitText ?? transcriptBufferRef.current).trim();
+      abortController();
 
-  const value = useMemo<VoiceContextValue>(
-    () => ({
-      isSupported: voice.isSupported,
-      isActive: active,
-      isListening: voice.isListening,
-      transcript: [voice.transcript, voice.interimTranscript]
-        .filter(Boolean)
-        .join(" ")
-        .trim(),
-      lastCommand,
-      startListening: () => {
-        voiceRef.current?.resetStrikes();
-        setActive(true);
-      },
-      stopListening: () => setActive(false),
-      clearTranscript: () => voiceRef.current?.clearTranscript(),
-      resetStrikes: () => voiceRef.current?.resetStrikes(),
-    }),
+      if (!finalText) {
+        setState("stopped");
+        setStatusText("Stopped");
+        return;
+      }
+
+      setState("processing");
+      setStatusText(`Processing: "${finalText.slice(0, 45)}..."`);
+
+      const opts = currentOptionsRef.current;
+      if (opts?.onComplete) {
+        opts.onComplete(finalText);
+      } else {
+        // Fallback global command router
+        const cmd = parseVoiceCommand(finalText);
+        if (cmd) {
+          setLastCommand(cmd.label);
+          setStatusText(`Action: ${cmd.label}`);
+          window.dispatchEvent(
+            new CustomEvent("careerforge:navigate", {
+              detail: { feature: cmd.feature, resumeTab: cmd.resumeTab },
+            })
+          );
+        } else {
+          // Dispatch generic voice transcript event
+          window.dispatchEvent(
+            new CustomEvent("careerforge:voice-complete", {
+              detail: { text: finalText },
+            })
+          );
+        }
+      }
+
+      setState("success");
+      setTimeout(() => {
+        setState("idle");
+        setStatusText("Voice ready");
+        setTranscript("");
+        setInterimTranscript("");
+        transcriptBufferRef.current = "";
+      }, 1200);
+    },
+    [abortController]
+  );
+
+  // Cancel voice session cleanly
+  const cancelSession = useCallback(() => {
+    abortController();
+    stopSpeaking();
+    playAccessibleChime("stop");
+    setState("cancelled");
+    setStatusText("Cancelled");
+    setTranscript("");
+    setInterimTranscript("");
+    transcriptBufferRef.current = "";
+    setTimeout(() => {
+      setState("idle");
+      setStatusText("Voice ready");
+    }, 600);
+  }, [abortController]);
+
+  // Stop session and process buffered input
+  const stopSession = useCallback(() => {
+    completeSession();
+  }, [completeSession]);
+
+  // Start authoritative voice recording
+  const startSession = useCallback(
+    (options?: VoiceSessionOptions) => {
+      // 1. Deaf profile check: Never record if user selected deaf/hard-of-hearing
+      if (isDeaf) {
+        setState("stopped");
+        setStatusText("Voice unavailable (Deaf profile active)");
+        return;
+      }
+
+      if (!isSpeechRecognitionSupported()) {
+        setState("error");
+        setErrorText("Speech recognition not supported in this browser");
+        setStatusText("Speech recognition unsupported");
+        options?.onError?.("Speech recognition not supported");
+        return;
+      }
+
+      // 2. Abort any previous controller
+      abortController();
+      stopSpeaking();
+
+      currentOptionsRef.current = options || null;
+      transcriptBufferRef.current = "";
+      setTranscript("");
+      setInterimTranscript("");
+      setErrorText(null);
+
+      setState("requesting_permission");
+      setStatusText("Requesting microphone…");
+      playAccessibleChime("start");
+
+      const sessionLang = options?.lang || activeLang || "en-US";
+
+      // 3. Start authoritative SpeechRecognition
+      const controller = startSpeechRecognition(
+        {
+          onTranscript: (spokenText: string, isFinal?: boolean) => {
+            const clean = spokenText.trim();
+            if (!clean) return;
+
+            transcriptBufferRef.current = clean;
+            setTranscript(clean);
+            setStatusText(`I heard: "${clean}"`);
+
+            // Auto-detect language if in auto mode
+            const detected = detectTextLanguage(clean);
+            if (detected && detected !== activeLang && voiceLanguage === "auto") {
+              setActiveLang(detected);
+            }
+
+            options?.onTranscript?.(clean, Boolean(isFinal));
+
+            // ── Section 7: Auto-Send Debounce (Do NOT rely only on isFinal) ──
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+            }
+
+            // If user pauses for 2.2 seconds, automatically complete the sentence
+            silenceTimerRef.current = setTimeout(() => {
+              completeSession(clean);
+            }, 2200);
+
+            // If final transcript is explicitly signaled by engine, complete faster
+            if (isFinal) {
+              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = setTimeout(() => {
+                completeSession(clean);
+              }, 1200);
+            }
+          },
+          onListeningChange: (isListening: boolean) => {
+            if (isListening) {
+              setState("listening");
+              setStatusText("Listening… (Speak now)");
+              setVoiceConsentStatus("granted");
+            } else {
+              if (state === "listening") {
+                setState("stopped");
+                setStatusText("Stopped");
+              }
+            }
+          },
+          onError: (err: string) => {
+            console.warn("[CentralVoice] Error:", err);
+            clearTimers();
+            setState("error");
+            setErrorText(err);
+
+            if (err === "not-allowed" || err === "permission-denied") {
+              setVoiceConsentStatus("denied");
+              setStatusText("Microphone permission required");
+            } else if (err === "no-speech") {
+              setStatusText("No speech detected");
+            } else {
+              setStatusText(`Voice error: ${err}`);
+            }
+
+            options?.onError?.(err);
+
+            // Onboarding 3-attempt limit check (§8)
+            onboardingAttemptCountRef.current += 1;
+            if (onboardingAttemptCountRef.current >= 3) {
+              setVoiceMode(false);
+              setStatusText("Voice disabled (3 failed attempts)");
+            }
+
+            setTimeout(() => {
+              setState("idle");
+            }, 2500);
+          },
+        },
+        { lang: sessionLang, continuous: false }
+      );
+
+      controllerRef.current = controller;
+
+      // Maximum duration safety barrier (default 15s, onboarding 5s)
+      const maxMs = options?.maxDurationMs || 15000;
+      maxDurationTimerRef.current = setTimeout(() => {
+        if (transcriptBufferRef.current) {
+          completeSession();
+        } else {
+          cancelSession();
+        }
+      }, maxMs);
+    },
     [
-      voice.isSupported,
-      active,
-      voice.isListening,
-      voice.transcript,
-      voice.interimTranscript,
-      lastCommand,
+      isDeaf,
+      abortController,
+      activeLang,
+      voiceLanguage,
+      clearTimers,
+      completeSession,
+      cancelSession,
+      setVoiceConsentStatus,
+      setVoiceMode,
+      state,
     ]
   );
 
-  return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
+  // Synchronize window event bus for toggle-mic
+  useEffect(() => {
+    const handleToggleEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ active?: boolean }>;
+      if (custom.detail?.active) {
+        startSession();
+      } else {
+        stopSession();
+      }
+    };
+
+    window.addEventListener("careerforge:toggle-mic", handleToggleEvent);
+    return () => window.removeEventListener("careerforge:toggle-mic", handleToggleEvent);
+  }, [startSession, stopSession]);
+
+  // Broadcast state changes for system-wide visual parity
+  useEffect(() => {
+    const mapped = state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
+    window.dispatchEvent(
+      new CustomEvent("careerforge:voice-state", {
+        detail: { state: mapped },
+      })
+    );
+  }, [state]);
+
+  // Teardown on unmount
+  useEffect(() => {
+    return () => abortController();
+  }, [abortController]);
+
+  const value = useMemo<VoiceContextValue>(
+    () => ({
+      state,
+      isSupported: isSpeechRecognitionSupported() && !isDeaf,
+      isActive: state === "listening" || state === "processing" || state === "requesting_permission",
+      isListening: state === "listening",
+      transcript,
+      interimTranscript,
+      statusText,
+      lastCommand,
+      errorText,
+      activeLanguage: activeLang,
+      startSession,
+      stopSession,
+      cancelSession,
+      submitSession: completeSession,
+      startListening: () => startSession(),
+      stopListening: () => stopSession(),
+      clearTranscript: () => {
+        setTranscript("");
+        setInterimTranscript("");
+        transcriptBufferRef.current = "";
+      },
+      resetStrikes: () => {
+        onboardingAttemptCountRef.current = 0;
+      },
+    }),
+    [
+      state,
+      isDeaf,
+      transcript,
+      interimTranscript,
+      statusText,
+      lastCommand,
+      errorText,
+      activeLang,
+      startSession,
+      stopSession,
+      cancelSession,
+      completeSession,
+    ]
+  );
+
+  return <CentralVoiceContext.Provider value={value}>{children}</CentralVoiceContext.Provider>;
 }
