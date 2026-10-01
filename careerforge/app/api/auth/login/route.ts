@@ -28,7 +28,9 @@ const LoginRequestSchema = z.object({
   email: z.string().email("Please provide a valid email address.").optional(),
   password: z.string().min(6, "Password must be at least 6 characters.").optional(),
   name: z.string().min(2, "Name must be at least 2 characters.").optional(),
-  mode: z.enum(["signin", "signup", "guest"]).default("signin"),
+  mode: z.enum(["signin", "signup", "guest", "oauth", "phone"]).default("signin"),
+  authProvider: z.string().optional(),
+  picture: z.string().optional(),
 });
 
 function extractDisplayName(email: string, name?: string): string {
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { email, password, name, mode } = parseResult.data;
+    const { email, password, name, mode, authProvider, picture } = parseResult.data;
 
     // 2. Guest Mode: Isolated Unique Identity
     if (mode === "guest") {
@@ -107,6 +109,56 @@ export async function POST(req: NextRequest) {
       // Set legacy cookie for backward compatibility
       res.cookies.set("cf_uid", guestIdentity.email, SESSION_CONFIG.cookieOptions);
 
+      return res;
+    }
+
+    // 3. OAuth & Phone Mode: Authoritative Server Session Creation
+    if (mode === "oauth" || mode === "phone") {
+      if (!email) {
+        return createApiErrorResponse("BAD_REQUEST", "Email is required for sign-in.", requestId, {
+          statusCode: 400,
+        });
+      }
+      const cleanEmail = email.trim().toLowerCase();
+      const displayName = extractDisplayName(cleanEmail, name);
+      const effectiveProvider: "email" | "google" | "github" | "phone" =
+        authProvider === "github" ? "github" : authProvider === "phone" || mode === "phone" ? "phone" : "google";
+      let effectiveUserId = `usr_${crypto.createHash("sha256").update(cleanEmail).digest("hex").slice(0, 16)}`;
+
+      try {
+        const dbRow = await upsertUser({
+          email: cleanEmail,
+          name: displayName,
+          authProvider: effectiveProvider,
+          picture,
+        });
+        if (dbRow?.id) effectiveUserId = dbRow.id;
+      } catch (dbErr) {
+        console.warn("[Auth API] DB upsert warning for oauth:", dbErr);
+      }
+
+      const signedToken = createSignedSessionToken({
+        userId: effectiveUserId,
+        email: cleanEmail,
+        name: displayName,
+        isGuest: false,
+      });
+
+      const res = NextResponse.json({
+        success: true,
+        message: `Signed in successfully via ${effectiveProvider}`,
+        user: {
+          id: effectiveUserId,
+          name: displayName,
+          email: cleanEmail,
+          authProvider: effectiveProvider,
+          picture: picture || null,
+          token: signedToken,
+        },
+      });
+
+      res.cookies.set(SESSION_CONFIG.cookieName, signedToken, SESSION_CONFIG.cookieOptions);
+      res.cookies.set("cf_uid", cleanEmail, SESSION_CONFIG.cookieOptions);
       return res;
     }
 
@@ -225,7 +277,7 @@ export async function POST(req: NextRequest) {
           // Reject incorrect password or unregistered user
           return createApiErrorResponse(
             "UNAUTHORIZED",
-            "Invalid email or password.",
+            "Invalid email or password. If you haven't created an account yet, please switch to 'Create account'.",
             requestId,
             { statusCode: 401 }
           );

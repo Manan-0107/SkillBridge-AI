@@ -36,15 +36,22 @@ export function ResumeSuite({
   };
 
   return (
-    <Section
-      id="resume"
-      eyebrow="Resume Suite"
-      title="Get your resume market-ready"
-      description="Analyze against live market skills, tailor to your target role, or build from scratch."
-    >
-      {/* Tab bar */}
+    <div className="max-w-5xl mx-auto py-10 px-4 animate-slideUp">
+      <div className="mb-8 space-y-2">
+        <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+          ubix
+        </span>
+        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
+          Resume
+        </h1>
+        <p className="text-sm text-ink/60">
+          Document studio for live tailoring, ATS analysis, and instant export.
+        </p>
+      </div>
+
+      {/* Document Studio Mode Tabs */}
       <div
-        className="mb-6 flex gap-1 rounded-xl border border-ink/10 bg-surface/50 p-1 sm:inline-flex"
+        className="mb-8 flex gap-1 rounded-2xl border border-white/10 bg-surface/60 p-1.5 sm:inline-flex"
         role="tablist"
         aria-label="Resume suite tabs"
       >
@@ -54,17 +61,17 @@ export function ResumeSuite({
             role="tab"
             aria-selected={active === t.id}
             onClick={() => setActive(t.id)}
-            className={`flex items-center gap-2 flex-1 sm:flex-none rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 flex-1 sm:flex-none rounded-xl px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
               active === t.id
-                ? "bg-bg text-ink shadow-sm border border-ink/10"
-                : "text-ink/55 hover:text-ink hover:bg-bg/50"
+                ? "bg-surface text-white shadow-xs border border-white/15"
+                : "text-ink/60 hover:text-white hover:bg-surface/40"
             }`}
           >
             <span aria-hidden="true" className={active === t.id ? "text-accent" : "text-ink/40"}>
               {t.icon}
             </span>
             <span>{t.label}</span>
-            <span className={`hidden sm:inline text-[10px] font-normal ${active === t.id ? "text-ink/50" : "text-ink/35"}`}>
+            <span className={`hidden sm:inline text-[10px] font-normal ${active === t.id ? "text-ink/60" : "text-ink/40"}`}>
               {t.desc}
             </span>
           </button>
@@ -76,6 +83,6 @@ export function ResumeSuite({
         <Personalizer role={role} onTransferToBuilder={handleTransferToBuilder} />
       )}
       {active === "builder" && <Builder initialSummary={injectedSummary || undefined} />}
-    </Section>
+    </div>
   );
 }

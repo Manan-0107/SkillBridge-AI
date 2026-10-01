@@ -52,55 +52,25 @@ export function registerSpokenPhrase(text: string) {
 }
 
 export const KNOWN_AI_PROMPT_PATTERNS = [
-  "what is your",
-  "what is",
-  "full name",
-  "your full name",
-  "your name",
-  "step 1",
-  "step 2",
-  "step 3",
-  "step 4",
-  "step 5",
-  "contact email",
-  "email address",
-  "password or pin",
-  "target career",
-  "dream job",
-  "core technical skills",
-  "core skills",
-  "is that correct",
+  "what is your contact email",
+  "what is your full name",
+  "what is your target career",
+  "tell me your full name",
   "say yes to continue",
-  "say yes",
-  "say no",
+  "say yes or no",
   "to re-speak",
   "welcome to careerforge",
-  "welcome to",
-  "careerforge",
   "let's try again",
-  "no problem",
   "got it you said",
   "got it your email",
-  "પૂરું નામ",
-  "તમારું નામ",
-  "તમારું ઇમેઇલ",
-  "ઇમેઇલ સરનામું",
-  "પાસવર્ડ અથવા પિન",
-  "સાચું છે",
-  "સ્વાગત છે",
-  "કરિયરફોર્જ",
-  "ફરીથી પ્રયત્ન",
-  "આગળનો વિભાગ",
-  "पूरा नाम",
-  "आपका नाम",
-  "आपका ईमेल",
-  "ईमेल पता",
-  "पासवर्ड या पिन",
-  "सही है",
-  "स्वागत है",
-  "करियरफोर्ज",
-  "दोबारा कोशिश",
-  "अगला सेक्शन",
+  "તમારું પૂરું નામ શું છે",
+  "તમારું ઇમેઇલ સરનામું શું છે",
+  "સાચું છે કે નહીં",
+  "સ્વાગત છે કરિયરફોર્જ માં",
+  "आपका पूरा नाम क्या है",
+  "आपका ईमेल पता क्या है",
+  "क्या यह सही है",
+  "स्वागत है करियरफोर्ज में",
 ];
 
 /**
@@ -113,20 +83,25 @@ export function isSelfVoiceEcho(transcript: string): boolean {
   const cleanT = transcript.toLowerCase().trim();
   const now = Date.now();
 
-  // 1. User answers, names, and explicit interruption commands are NEVER echo
+  // If the AI is not currently speaking, and at least 1.2s has elapsed since speech ended,
+  // there cannot possibly be an acoustic speaker echo. All input is genuine user speech.
+  if (!isSelfSpeaking && now - lastSpeechEndedAt > 1200) {
+    return false;
+  }
+
+  // 1. Explicit user commands, answers, or common speech keywords are NEVER echo
   if (
     cleanT === "yes" ||
     cleanT === "no" ||
-    cleanT === "correct" ||
-    cleanT === "wrong" ||
     cleanT === "stop" ||
     cleanT === "wait" ||
     cleanT === "pause" ||
+    cleanT === "correct" ||
+    cleanT === "wrong" ||
     cleanT === "sure" ||
     cleanT === "go ahead" ||
     cleanT === "create it" ||
     cleanT === "create account" ||
-    cleanT === "create my account" ||
     cleanT === "review" ||
     cleanT === "review positions" ||
     cleanT === "હા" ||
@@ -140,18 +115,20 @@ export function isSelfVoiceEcho(transcript: string): boolean {
     return false;
   }
 
-  // 2. Reject any transcript that contains AI question prompt fragments
-  for (const pattern of KNOWN_AI_PROMPT_PATTERNS) {
-    if (pattern.length >= 6 && cleanT.includes(pattern)) {
+  // 2. If AI is speaking or just finished, match against recently spoken assistant sentences
+  const recent = recentSpokenPhrases.filter((p) => now - p.time < 5000);
+  for (const { text: phrase } of recent) {
+    if (phrase === cleanT || (phrase.length > 8 && cleanT.includes(phrase)) || (cleanT.length > 15 && phrase.includes(cleanT))) {
       return true;
     }
   }
 
-  // 3. Match against recently spoken assistant sentences
-  const recent = recentSpokenPhrases.filter((p) => now - p.time < 6000);
-  for (const { text: phrase } of recent) {
-    if (phrase === cleanT || (phrase.length > 10 && cleanT.includes(phrase)) || (cleanT.length > 15 && phrase.includes(cleanT))) {
-      return true;
+  // 3. Match against known system prompt sentences only if AI is actively speaking
+  if (isSelfSpeaking) {
+    for (const pattern of KNOWN_AI_PROMPT_PATTERNS) {
+      if (pattern.length >= 10 && cleanT === pattern) {
+        return true;
+      }
     }
   }
 
@@ -422,6 +399,7 @@ export function stopSpeaking() {
     } catch {}
     activeUtterance = null;
     isSelfSpeaking = false;
+    lastSpeechEndedAt = Date.now();
   }
 }
 
@@ -608,9 +586,14 @@ export function speakText(
     }
 
     let ended = false;
+    let keepAliveTimer: NodeJS.Timeout | null = null;
     const finalizeSpeech = () => {
       if (ended) return;
       ended = true;
+      if (keepAliveTimer) {
+        clearInterval(keepAliveTimer);
+        keepAliveTimer = null;
+      }
       if (activeSafetyTimeout) {
         clearTimeout(activeSafetyTimeout);
         activeSafetyTimeout = null;
@@ -626,6 +609,23 @@ export function speakText(
       if (sessionId !== currentSpeechSession) return;
       isSelfSpeaking = true;
       options?.onStart?.();
+
+      // Chrome/Edge freeze workaround: pulse pause/resume every 10s during long utterances
+      if (typeof window !== "undefined" && !keepAliveTimer) {
+        keepAliveTimer = setInterval(() => {
+          if (ended || sessionId !== currentSpeechSession) {
+            if (keepAliveTimer) clearInterval(keepAliveTimer);
+            keepAliveTimer = null;
+            return;
+          }
+          try {
+            if (window.speechSynthesis && window.speechSynthesis.speaking) {
+              window.speechSynthesis.pause();
+              window.speechSynthesis.resume();
+            }
+          } catch {}
+        }, 10000);
+      }
     };
 
     utterance.onend = () => {
@@ -639,7 +639,7 @@ export function speakText(
     };
 
     // Safety fallback timeout: prevent state hang if browser fails to trigger onend
-    const safetyTimeoutMs = Math.max(3500, (cleanText.length / 8) * 1000 + 3000);
+    const safetyTimeoutMs = Math.max(4000, (cleanText.length / 7) * 1000 + 4000);
     activeSafetyTimeout = setTimeout(() => {
       activeSafetyTimeout = null;
       if (!ended && isSelfSpeaking && sessionId === currentSpeechSession) {
@@ -650,6 +650,9 @@ export function speakText(
     }, safetyTimeoutMs);
 
     try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
       window.speechSynthesis.speak(utterance);
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
@@ -758,11 +761,13 @@ export function startSpeechRecognition(
         let interim = "";
         let final = "";
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        // Reconstruct the full continuous transcript across all speech segments
+        for (let i = 0; i < event.results.length; ++i) {
+          const part = event.results[i][0]?.transcript || "";
           if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
+            final += (final ? " " : "") + part.trim();
           } else {
-            interim += event.results[i][0].transcript;
+            interim += (interim ? " " : "") + part.trim();
           }
         }
 
@@ -783,13 +788,13 @@ export function startSpeechRecognition(
           const cleanFinal = final.trim();
           if (!cleanFinal) return;
 
-          if (isSelfVoiceEcho(cleanFinal)) {
+          if (isSelfSpeaking && isSelfVoiceEcho(cleanFinal)) {
             return;
           }
 
           onTranscript(cleanFinal, true);
         } else if (interim) {
-          if (!isSelfVoiceEcho(interim)) {
+          if (!isSelfSpeaking || !isSelfVoiceEcho(interim)) {
             onTranscript(interim, false);
           }
         }

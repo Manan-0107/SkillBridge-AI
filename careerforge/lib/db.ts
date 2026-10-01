@@ -91,27 +91,32 @@ export async function upsertUser(params: {
 }): Promise<DbUser | null> {
   if (!supabase) return null;
 
-  const { data, error } = await supabase
-    .from("users")
-    .upsert(
-      {
-        email: params.email,
-        name: params.name ?? null,
-        picture: params.avatarUrl ?? params.picture ?? null,
-        auth_provider: params.authProvider,
-        target_role: params.targetRole ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "email" }
-    )
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .upsert(
+        {
+          email: params.email,
+          name: params.name ?? null,
+          picture: params.avatarUrl ?? params.picture ?? null,
+          auth_provider: params.authProvider,
+          target_role: params.targetRole ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "email" }
+      )
+      .select()
+      .single();
 
-  if (error) {
-    console.error("[DB] upsertUser error:", error.message);
+    if (error) {
+      console.warn("[DB] upsertUser warning:", error.message);
+      return null;
+    }
+    return data as DbUser;
+  } catch (err) {
+    // Offline or network unreachable - continue safely
     return null;
   }
-  return data as DbUser;
 }
 
 /**

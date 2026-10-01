@@ -25,8 +25,17 @@ import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
+import dynamic from "next/dynamic";
 import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
 import { UbixBorderBeam } from "@/components/ubix/UbixBorderBeam";
+
+const UbixAtmosphere = dynamic(
+  () =>
+    import("@/components/ubix/UbixAtmosphere").then(
+      (mod) => mod.UbixAtmosphere
+    ),
+  { ssr: false }
+);
 
 export type Msg = {
   id: string;
@@ -104,8 +113,8 @@ export function AssistantHome({
   } = useApp();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [contextPanelOpen, setContextPanelOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"all" | "pinned" | "archived">("all");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -130,6 +139,7 @@ export function AssistantHome({
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   const [activeQuestion, setActiveQuestion] = useState<QuestionState | null>(null);
   const [textFallbackActive, setTextFallbackActive] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   // Share & Toast State
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -229,13 +239,18 @@ export function AssistantHome({
   }, [clearSilenceTimers]);
 
   const startListening = useCallback(() => {
-    if (isAISpeakingRef.current || speakingMsgId || textFallbackActive) {
-      console.warn("[Voice Guard] Cannot start listening while AI is speaking or in text fallback mode.");
-      return;
+    // Barge-in: if AI is currently speaking, stop it immediately so user can talk
+    if (isAISpeakingRef.current || speakingMsgId) {
+      stopSpeaking();
+      isAISpeakingRef.current = false;
+      setSpeakingMsgId(null);
+      setLiveSpokenText(null);
     }
 
     setMicError(null);
     clearSilenceTimers();
+    setTextFallbackActive(false);
+    setVoiceMode(true);
     setVoiceStatus("initializing");
 
     const controller = startSpeechRecognition({
@@ -318,15 +333,23 @@ export function AssistantHome({
     }
 
     speechControllerRef.current = controller;
-  }, [clearSilenceTimers, setVoiceLanguage, speakingMsgId, startSilenceAutoSendCountdown, textFallbackActive, voiceLang, voiceLanguage]);
+  }, [clearSilenceTimers, setVoiceLanguage, setVoiceMode, speakingMsgId, startSilenceAutoSendCountdown, voiceLang, voiceLanguage]);
 
   const toggleListening = useCallback(() => {
     if (listening) {
       stopListening();
     } else {
+      setTextFallbackActive(false);
+      if (isAISpeakingRef.current || speakingMsgId) {
+        stopSpeaking();
+        isAISpeakingRef.current = false;
+        setSpeakingMsgId(null);
+        setLiveSpokenText(null);
+      }
+      setVoiceMode(true);
       startListening();
     }
-  }, [listening, startListening, stopListening]);
+  }, [listening, setVoiceMode, speakingMsgId, startListening, stopListening]);
 
   // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
   useEffect(() => {
@@ -370,9 +393,65 @@ export function AssistantHome({
   const stopAllVoice = () => {
     stopSpeaking();
     stopListening();
+    isAISpeakingRef.current = false;
     setSpeakingMsgId(null);
     setLiveSpokenText(null);
   };
+
+  // ─── Global FloatingControlBar / Alt+V Mic Toggle Sync ─────────────────────
+  useEffect(() => {
+    const handleToggleMic = (e: Event) => {
+      const customEvent = e as CustomEvent<{ active?: boolean }>;
+      if (customEvent.detail?.active === true) {
+        if (!listening) {
+          setTextFallbackActive(false);
+          setVoiceMode(true);
+          startListening();
+        }
+      } else if (customEvent.detail?.active === false) {
+        if (listening) {
+          stopListening();
+        }
+      } else {
+        toggleListening();
+      }
+    };
+
+    window.addEventListener("careerforge:toggle-mic", handleToggleMic);
+    return () => {
+      window.removeEventListener("careerforge:toggle-mic", handleToggleMic);
+    };
+  }, [listening, setVoiceMode, startListening, stopListening, toggleListening]);
+
+  // ─── Broadcast Assistant Voice State to FloatingControlBar & A11y Announcements ─
+  useEffect(() => {
+    const state: "idle" | "listening" | "processing" | "speaking" | "error" =
+      micError
+        ? "error"
+        : listening
+        ? "listening"
+        : busy
+        ? "processing"
+        : speakingMsgId || isAISpeakingRef.current
+        ? "speaking"
+        : "idle";
+
+    window.dispatchEvent(
+      new CustomEvent("careerforge:voice-state", {
+        detail: { state },
+      })
+    );
+  }, [listening, busy, speakingMsgId, micError]);
+
+  useEffect(() => {
+    if (liveSpokenText) {
+      window.dispatchEvent(
+        new CustomEvent("careerforge:live-caption", {
+          detail: { text: liveSpokenText, speaker: "ubix" },
+        })
+      );
+    }
+  }, [liveSpokenText]);
 
   const toggleSpeech = (msgId: string, text: string) => {
     if (speakingMsgId === msgId) {
@@ -449,25 +528,60 @@ export function AssistantHome({
     }
   };
 
+function generateChatTitle(prompt: string): string {
+  const p = prompt.trim();
+  const lower = p.toLowerCase();
+  
+  if (lower.includes("frontend") || lower.includes("front end")) return "Frontend Developer Roadmap";
+  if (lower.includes("backend") || lower.includes("back end")) return "Backend Development";
+  if (lower.includes("fullstack") || lower.includes("full stack")) return "Full-Stack Strategy";
+  if (lower.includes("resume") || lower.includes("cv")) return "Resume Improvement";
+  if (lower.includes("interview") || lower.includes("mock")) return "Interview Preparation";
+  if (lower.includes("salary") || lower.includes("compensation")) return "Salary Insights";
+  if (lower.includes("job") || lower.includes("career")) return "Career Planning";
+  if (lower.includes("polymorphism") || lower.includes("oop") || lower.includes("java")) return "Java Polymorphism";
+  if (lower.includes("react") || lower.includes("next")) return "React Architecture";
+  if (lower.includes("python") || lower.includes("ai") || lower.includes("machine learning")) return "Python & AI Track";
+  if (lower.includes("cloud") || lower.includes("aws") || lower.includes("devops")) return "DevOps & Cloud";
+
+  const words = p.replace(/[?.,!/\\;:'"()[\]{}]/g, "").split(/\s+/).filter(Boolean).slice(0, 4);
+  const title = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return title.length > 30 ? title.slice(0, 30) + "…" : title || "New Career Chat";
+}
+
   // ─── 1. Load Conversations from LocalStorage ────────────────────────────────
+  // Phase 10: On a new visit / fresh start: OPEN A NEW CHAT.
+  // Do NOT automatically reopen the last active conversation.
+  // Previous conversations remain in history. The user can intentionally click to reopen.
   useEffect(() => {
+    let existingList: Conversation[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: Conversation[] = JSON.parse(raw);
-        if (parsed.length > 0) {
-          setConversations(parsed);
-          const firstActive = parsed.find((c) => !c.archived) || parsed[0];
-          setActiveConvId(firstActive.id);
-          return;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          existingList = parsed;
         }
       }
     } catch {
       // ignore
     }
 
-    createNewConversation();
-  }, [user?.name, user?.email]);
+    const newId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newConv: Conversation = {
+      id: newId,
+      title: "New Career Chat",
+      messages: [getGreetingMessage()],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      archived: false,
+    };
+
+    const combined = [newConv, ...existingList.filter((c) => c.id !== newId)];
+    setConversations(combined);
+    setActiveConvId(newId);
+  }, []);
 
   // ─── 2. Persist Conversations ───────────────────────────────────────────────
   const saveConversations = (updated: Conversation[]) => {
@@ -485,13 +599,13 @@ export function AssistantHome({
       id: "intro-1",
       role: "assistant",
       time: now,
-      text: `Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type. How would you like to continue?`,
+      text: "How can I help you today?",
     };
   };
 
   // ─── 3. New Chat Action ────────────────────────────────────────────────────
   const createNewConversation = () => {
-    const newId = `conv-${Date.now()}`;
+    const newId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newConv: Conversation = {
       id: newId,
       title: "New Career Chat",
@@ -845,15 +959,20 @@ export function AssistantHome({
 
     let fullPromptForLlm = userMsgText;
     if (docInfo) {
+      const truncatedDoc =
+        docInfo.text.length > 6000
+          ? `${docInfo.text.slice(0, 6000)}\n\n[... Remaining content truncated for token limits ...]`
+          : docInfo.text;
       fullPromptForLlm = userMsgText
-        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${docInfo.text}`
-        : `Please review and analyze my attached document: ${docInfo.name}\n\n${docInfo.text}`;
+        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${truncatedDoc}`
+        : `Please review and analyze my attached document: ${docInfo.name}\n\n${truncatedDoc}`;
     }
 
     let chatTitle = activeConversation.title;
     if (chatTitle === "New Career Chat" || chatTitle === "New Conversation") {
-      const displayTitle = userMsgText || `Review: ${docInfo?.name || "Document"}`;
-      chatTitle = displayTitle.slice(0, 32) + (displayTitle.length > 32 ? "…" : "");
+      chatTitle = userMsgText
+        ? generateChatTitle(userMsgText)
+        : `Review: ${docInfo?.name || "Document"}`;
     }
 
     const nextMessages: Msg[] = [
@@ -1102,8 +1221,141 @@ export function AssistantHome({
 
   const emptyThread = messages.length <= 1;
 
+  const renderComposer = (isCentered: boolean) => (
+    <form
+      onSubmit={onSubmit}
+      className={`relative flex flex-col rounded-2xl border transition-all duration-200 overflow-hidden ${
+        isCentered
+          ? "border-white/10 bg-surface/85 p-3.5 shadow-lg focus-within:border-accent/50 focus-within:shadow-[0_0_32px_rgba(120,227,238,0.12)] focus-within:bg-surface/95"
+          : "border-white/[0.08] bg-surface/90 p-3 shadow-xs focus-within:border-accent/40 focus-within:shadow-[0_0_24px_rgba(120,227,238,0.08)]"
+      }`}
+    >
+      <UbixBorderBeam active={listening || busy} duration={6} />
+      {/* Attached Document Preview Badge */}
+      {attachedFile && (
+        <div className="mb-2 flex items-center justify-between rounded-xl border border-white/10 bg-surface px-3 py-1.5 text-xs text-white">
+          <div className="flex items-center gap-2 truncate">
+            <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="font-semibold truncate">{attachedFile.name}</span>
+            <span className="text-[10px] text-ink/60">Ready to review</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAttachedFile(null)}
+            className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer"
+            title="Remove attachment"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Textarea Input with Instant Enter Submission */}
+      <label htmlFor={isCentered ? "assistant-composer-centered" : "assistant-composer"} className="sr-only">
+        Message ubix Assistant
+      </label>
+      <textarea
+        id={isCentered ? "assistant-composer-centered" : "assistant-composer"}
+        ref={isCentered ? undefined : textareaRef}
+        value={input}
+        onFocus={() => setComposerFocused(true)}
+        onBlur={() => setComposerFocused(false)}
+        onChange={(e) => {
+          setInput(e.target.value);
+          inputRef.current = e.target.value;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as any).isComposing) {
+            e.preventDefault();
+            if (input.trim() || attachedFile) {
+              const val = input;
+              setInput("");
+              inputRef.current = "";
+              runPrompt(val);
+            }
+          }
+        }}
+        rows={isCentered ? 2 : 1}
+        placeholder={
+          attachedFile
+            ? `Ask anything about ${attachedFile.name}...`
+            : "Ask anything about your work, career, or what you're learning..."
+        }
+        className="max-h-36 min-h-[44px] w-full resize-none bg-transparent px-2 py-1 text-sm text-white placeholder:text-ink/40 focus:outline-none"
+      />
+
+      {/* Bottom Control Bar inside Composer */}
+      <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] mt-1">
+        {/* Left Controls: Clean Attach & Collapsed Voice Indicator */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={parsingDoc}
+            title="Attach document (PDF, DOCX, TXT)"
+            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-surface px-3 py-1 text-xs font-medium text-ink/80 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {parsingDoc ? (
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            ) : (
+              <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
+            )}
+            <span className="hidden sm:inline">Attach</span>
+          </button>
+
+          {/* Integrated Physical Voice Control Hub (§14) */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            aria-pressed={listening}
+            aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+              listening
+                ? "ubix-voice-btn-listening"
+                : busy
+                ? "ubix-voice-btn-busy"
+                : "ubix-voice-btn-idle"
+            }`}
+            title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
+          >
+            <MicIcon className={`w-3.5 h-3.5 ${listening ? "ubix-voice-icon-active animate-pulse" : "ubix-voice-icon-idle"}`} />
+
+            <span>
+              {listening
+                ? (silenceCountdown ? `Listening (${silenceCountdown}s)` : "Listening…")
+                : busy
+                ? "Processing…"
+                : "Voice"}
+            </span>
+          </button>
+
+          {micError && (
+            <span className="text-[10px] text-danger truncate max-w-[140px]">
+              {micError}
+            </span>
+          )}
+        </div>
+
+        {/* Right: Clean Send Button */}
+        <button
+          type="submit"
+          disabled={busy || (!input.trim() && !attachedFile)}
+          aria-label="Send prompt"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+            input.trim() || attachedFile
+              ? "bg-accent text-bg font-bold hover:opacity-90 scale-100 cursor-pointer active:scale-95"
+              : "bg-white/10 text-white/30 cursor-not-allowed opacity-50"
+          }`}
+          title="Send prompt (or press Enter)"
+        >
+          <ArrowUpIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </form>
+  );
+
   return (
-    <div className="flex h-[calc(100vh-3rem)] overflow-hidden bg-bg text-ink">
+    <div data-assistant-home="true" className="flex h-[calc(100vh-3rem)] overflow-hidden bg-bg text-ink">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
@@ -1303,10 +1555,15 @@ export function AssistantHome({
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink relative">
+        {/* Subtle Three.js Atmosphere (GPU-friendly, felt before noticed) */}
+        <UbixAtmosphere
+          composerFocused={composerFocused}
+          voiceStatus={voiceStatus}
+        />
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
+        <div className="relative z-10 flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
@@ -1320,7 +1577,7 @@ export function AssistantHome({
             </button>
 
             <span className="text-xs font-medium text-ink truncate max-w-[160px] sm:max-w-xs">
-              {activeConversation?.title || "Career Assistant"}
+              {activeConversation?.title || "Assistant"}
             </span>
 
             {/* Dynamic Voice State Status Badge */}
@@ -1370,106 +1627,36 @@ export function AssistantHome({
         </div>
 
         {/* Scrollable Conversation Stream */}
-        <div ref={listRef} className="flex-1 overflow-y-auto">
+        <div ref={listRef} className="relative z-10 flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-12 max-w-xl animate-slideUp">
-                {/* Welcome mark */}
-                <div className="mb-6">
-                  <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-ink">
-                    {userDisplayName ? `Good to see you, ${userDisplayName.split(" ")[0]}` : "ubix Assistant"}
-                  </h1>
-                  <p className="mt-1.5 text-sm text-ink/55 leading-relaxed max-w-md">
-                    General AI assistant with career superpowers — ask anything.
-                  </p>
-                </div>
+              <div className="my-auto max-w-xl w-full mx-auto py-12 md:py-16 animate-slideUp">
+                {/* Minimal atmospheric greeting */}
+                <div className="flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="space-y-3">
+                    <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+                      ubix
+                    </span>
+                    <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
+                      What are you working on?
+                    </h1>
+                  </div>
 
-                {/* Two primary action buttons */}
-                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  {/* Contextual Single Next Step (Section 12: Calm text link with subtle hover depth) */}
                   <button
                     type="button"
-                    onClick={() => {
-                      const initialQ: QuestionState = {
-                        id: "onboarding_name",
-                        question: "Hi! I'm your career assistant. What would you like me to call you?",
-                        answerType: "name",
-                        expectedType: "name",
-                        attempts: 0,
-                        maxAttempts: 3,
-                        answered: false,
-                      };
-                      setActiveQuestion(initialQ);
-                      activeQuestionRef.current = initialQ;
-                      setVoiceMode(true);
-                      setTextFallbackActive(false);
-                      stopListening();
-                      isAISpeakingRef.current = true;
-                      speakText(
-                        "Hi! I'm your career assistant. I'll guide you step by step. You can speak naturally, and you can interrupt me anytime. What would you like me to call you?",
-                        {
-                          lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
-                          onStart: () => {
-                            isAISpeakingRef.current = true;
-                            stopListening();
-                          },
-                          onEnd: () => {
-                            isAISpeakingRef.current = false;
-                            setTimeout(() => {
-                              if (!isAISpeakingRef.current) startListening();
-                            }, 300);
-                          },
-                          onError: () => {
-                            isAISpeakingRef.current = false;
-                          },
-                        }
-                      );
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-accent/10 border border-accent/25 px-4 py-2 text-xs font-semibold text-accent hover:bg-accent/15 transition-colors cursor-pointer"
+                    onClick={() => onRedirect("roadmap")}
+                    className="inline-flex items-center gap-2 text-xs font-medium text-ink/60 hover:text-accent transition-colors group cursor-pointer"
                   >
-                    <MicIcon className="w-3.5 h-3.5" />
-                    <span>Start talking</span>
+                    <span className="font-mono text-[10px] text-accent">●</span>
+                    <span>Continue your journey: {user?.targetRole ? `${user.targetRole.charAt(0).toUpperCase() + user.targetRole.slice(1)} Architecture (68%)` : "Frontend Architecture (68%)"}</span>
+                    <span className="transform group-hover:translate-x-0.5 transition-transform text-accent">→</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      textareaRef.current?.focus();
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-ink/12 bg-surface/60 px-4 py-2 text-xs font-medium text-ink/70 hover:bg-surface hover:text-ink transition-colors cursor-pointer"
-                  >
-                    <span>Type a message</span>
-                  </button>
-                </div>
-
-                {/* 3 curated conversational suggestion cards (distinct from ecosystem shortcuts) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => runPrompt("Help me frame my most complex project using the STAR method for senior interviews.")}
-                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
-                  >
-                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Interview Prep</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">STAR Story Framing</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Turn complex projects into compelling interview narratives</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runPrompt("Based on 2026 industry demand for my target role, what are the top 3 highest-leverage skills I should learn next?")}
-                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
-                  >
-                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Skill Strategy</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">High-Leverage Gaps</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Identify what to prioritize based on market demand</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runPrompt("Walk me through how to design a high-throughput, low-latency rate limiter with Redis and Token Bucket.")}
-                    className="group p-3.5 rounded-xl border border-ink/10 bg-surface/50 hover:border-accent/30 hover:bg-surface text-left transition-all cursor-pointer"
-                  >
-                    <div className="text-[11px] font-bold text-accent/80 uppercase tracking-widest mb-1">Architecture</div>
-                    <div className="text-xs font-semibold text-ink group-hover:text-accent transition-colors">System Design Prep</div>
-                    <div className="text-[11px] text-ink/50 mt-0.5 leading-normal">Analyze trade-offs and distributed systems patterns</div>
-                  </button>
+                  {/* Centered Composer Input */}
+                  <div className="w-full text-left pt-2">
+                    {renderComposer(true)}
+                  </div>
                 </div>
               </div>
             )}
@@ -1633,146 +1820,24 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── COMPOSER ─────────────────────────────────────────── */}
-        <div className="border-t border-ink/8 bg-bg/98 px-4 pb-6 pt-3 backdrop-blur-md">
-          <div className="mx-auto max-w-3xl">
-            {/* Hidden Document File Input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.txt,.md,.rtf"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="ai-doc-upload"
-            />
+        {/* Hidden Document File Input (Mounted Once) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt,.md,.rtf"
+          onChange={handleFileUpload}
+          className="hidden"
+          id="ai-doc-upload"
+        />
 
-            {/* AI Composer Slab (Section 14: Dark graphite, thin metallic border, subtle internal depth) */}
-            <form
-              onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl border border-ink/15 bg-surface p-3 shadow-xs focus-within:border-accent/40 transition-all overflow-hidden"
-            >
-              <UbixBorderBeam active={listening || busy} duration={6} />
-              {/* Attached Document Preview Badge */}
-              {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink shadow-2xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
-                    <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-ink/60">Ready to review</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer"
-                    title="Remove attachment"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Textarea Input with Instant Enter Submission */}
-              <label htmlFor="assistant-composer" className="sr-only">
-                Message ubix Assistant
-              </label>
-              <textarea
-                id="assistant-composer"
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  inputRef.current = e.target.value;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as any).isComposing) {
-                    e.preventDefault();
-                    if (input.trim() || attachedFile) {
-                      const val = input;
-                      setInput("");
-                      inputRef.current = "";
-                      runPrompt(val);
-                    }
-                  }
-                }}
-                rows={1}
-                placeholder={
-                  attachedFile
-                    ? `Ask anything about ${attachedFile.name}...`
-                    : "Ask about resumes, roadmaps, technical practice, or voice interview prep..."
-                }
-                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-1 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
-              />
-
-              {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-ink/10 mt-1">
-                {/* Left Controls: Clean Attach & Collapsed Voice Indicator */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={parsingDoc}
-                    title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-bg px-3 py-1 text-xs font-medium text-ink hover:bg-surface transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                    ) : (
-                      <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
-                    )}
-                    <span className="hidden sm:inline">Attach</span>
-                  </button>
-
-                  {/* Integrated Physical Voice Control Hub (§14) */}
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    aria-pressed={listening}
-                    aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                      listening
-                        ? "ubix-voice-btn-listening"
-                        : busy
-                        ? "ubix-voice-btn-busy"
-                        : "ubix-voice-btn-idle"
-                    }`}
-                    title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
-                  >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "ubix-voice-icon-active animate-pulse" : "ubix-voice-icon-idle"}`} />
-
-                    <span>
-                      {listening
-                        ? (silenceCountdown ? `Listening (${silenceCountdown}s)` : "Listening…")
-                        : busy
-                        ? "Processing…"
-                        : "Voice"}
-                    </span>
-                  </button>
-
-                  {micError && (
-                    <span className="text-[10px] text-danger truncate max-w-[140px]">
-                      {micError}
-                    </span>
-                  )}
-                </div>
-
-                {/* Right: Clean Send Button */}
-                <button
-                  type="submit"
-                  disabled={busy || (!input.trim() && !attachedFile)}
-                  aria-label="Send prompt"
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
-                    input.trim() || attachedFile
-                      ? "bg-accent text-white font-bold hover:opacity-90 scale-100 cursor-pointer active:scale-95"
-                      : "bg-ink/10 text-ink/30 cursor-not-allowed opacity-50"
-                  }`}
-                  title="Send prompt (or press Enter)"
-                >
-                  <ArrowUpIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </form>
+        {/* ─── BOTTOM COMPOSER (Active when thread has conversation messages) ─── */}
+        {!emptyThread && (
+          <div className="border-t border-white/[0.06] bg-bg/95 px-4 pb-6 pt-3 backdrop-blur-md">
+            <div className="mx-auto max-w-3xl">
+              {renderComposer(false)}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ─── RIGHT AI SIDEBAR (Career Context Co-Pilot) ────────────────────── */}

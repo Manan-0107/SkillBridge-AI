@@ -5,24 +5,27 @@ import { useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { roleOptions } from "@/lib/data";
 import { RoleId } from "@/lib/types";
-import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
 import { UbixCareerGraph, CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
 import { CourseCards } from "@/components/courses/CourseCards";
+import { PracticeHub } from "@/components/practice/PracticeHub";
 import { CareerTelemetry } from "@/components/progress/CareerTelemetry";
 import {
-  Map,
   Compass,
+  Map,
   BookOpen,
+  Code2,
   TrendingUp,
   ChevronDown,
+  Layers,
 } from "lucide-react";
 
-export type RoadmapSubTab = "roadmap" | "journey" | "learning" | "progress";
+export type JourneyViewMode = "constellation" | "roadmap" | "learning" | "practice" | "trajectory";
 
-export default function RoadmapPage() {
+export default function JourneyPage() {
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as RoadmapSubTab) || "journey";
-  const [activeTab, setActiveTab] = useState<RoadmapSubTab>(initialTab);
+  const initialTab = (searchParams.get("tab") as JourneyViewMode) || "constellation";
+  const [viewMode, setViewMode] = useState<JourneyViewMode>(initialTab);
   const { user, setTargetRole } = useApp();
 
   const role: RoleId =
@@ -30,48 +33,56 @@ export default function RoadmapPage() {
       ? (user.targetRole as RoleId)
       : "frontend";
 
+  // Sync tab with URL search parameter if changed
   useEffect(() => {
-    const tab = searchParams.get("tab") as RoadmapSubTab;
-    if (tab && ["roadmap", "journey", "learning", "progress"].includes(tab)) {
-      setActiveTab(tab);
+    const tab = searchParams.get("tab") as JourneyViewMode;
+    if (tab && ["constellation", "roadmap", "learning", "practice", "trajectory"].includes(tab)) {
+      setViewMode(tab);
     }
   }, [searchParams]);
 
-  const navItems = [
-    { id: "journey", label: "Spatial Constellation", icon: <Compass size={13} strokeWidth={2} /> },
-    { id: "roadmap", label: "Phased Milestones", icon: <Map size={13} strokeWidth={2} /> },
-    { id: "learning", label: "Curated Learning", icon: <BookOpen size={13} strokeWidth={2} /> },
-    { id: "progress", label: "Progress Telemetry", icon: <TrendingUp size={13} strokeWidth={2} /> },
-  ];
-
   const handleGraphNodeSelect = (nodeId: CareerNodeId | "core") => {
-    if (nodeId === "roadmap") setActiveTab("roadmap");
-    else if (nodeId === "learning" || nodeId === "skills") setActiveTab("learning");
-    else if (nodeId === "practice") {
-      if (typeof window !== "undefined") window.location.href = "/practice";
-    } else if (nodeId === "jobs") {
-      if (typeof window !== "undefined") window.location.href = "/jobs";
+    if (nodeId === "roadmap") setViewMode("roadmap");
+    else if (nodeId === "learning" || nodeId === "skills") setViewMode("learning");
+    else if (nodeId === "practice") setViewMode("practice");
+    else if (nodeId === "jobs") {
+      if (typeof window !== "undefined") {
+        window.location.href = "/opportunities?tab=radar";
+      }
     } else if (nodeId === "resume") {
-      if (typeof window !== "undefined") window.location.href = "/resume";
+      if (typeof window !== "undefined") {
+        window.location.href = "/opportunities?tab=resume";
+      }
     } else if (nodeId === "ai") {
-      if (typeof window !== "undefined") window.location.href = "/";
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
     }
   };
 
+  const navItems: { id: JourneyViewMode; label: string; icon: React.ReactNode }[] = [
+    { id: "constellation", label: "Constellation", icon: <Compass size={13} strokeWidth={2} /> },
+    { id: "roadmap", label: "Roadmap", icon: <Map size={13} strokeWidth={2} /> },
+    { id: "learning", label: "Learning", icon: <BookOpen size={13} strokeWidth={2} /> },
+    { id: "practice", label: "Practice", icon: <Code2 size={13} strokeWidth={2} /> },
+    { id: "trajectory", label: "Trajectory", icon: <TrendingUp size={13} strokeWidth={2} /> },
+  ];
+
   return (
     <main id="main-content" tabIndex={-1} className="min-h-[calc(100vh-3rem)] bg-bg text-ink flex flex-col">
-      {/* Sub-navigation strip */}
+      {/* Sub-header Navigation Bar: Streamlined & Atmospheric */}
       <div className="border-b border-ink/8 bg-bg/90 backdrop-blur-md sticky top-12 z-30">
         <div className="app-shell flex items-center justify-between h-13 gap-3">
-          {/* Sub-tabs */}
+          
+          {/* Left: View Tabs */}
           <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
             {navItems.map((item) => {
-              const active = activeTab === item.id;
+              const active = viewMode === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveTab(item.id as RoadmapSubTab)}
+                  onClick={() => setViewMode(item.id)}
                   aria-pressed={active}
                   className={`group relative flex items-center gap-1.5 py-1 text-xs font-medium tracking-wide transition-colors cursor-pointer whitespace-nowrap ${
                     active
@@ -96,7 +107,7 @@ export default function RoadmapPage() {
             })}
           </div>
 
-          {/* Track selector */}
+          {/* Right: Subtle Track Selector */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[11px] font-mono text-ink/40 hidden sm:inline uppercase tracking-wider">
               Track
@@ -125,15 +136,9 @@ export default function RoadmapPage() {
         </div>
       </div>
 
-      {/* Tab content */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-0 relative">
-        {activeTab === "roadmap" && (
-          <div className="app-shell py-8">
-            <CareerRoadmap role={role} />
-          </div>
-        )}
-
-        {activeTab === "journey" && (
+        {viewMode === "constellation" && (
           <div className="relative flex-1 min-h-[calc(100vh-6.25rem)] flex flex-col">
             <div className="absolute top-4 left-6 z-20 pointer-events-none">
               <span className="font-mono text-[10px] uppercase tracking-widest text-accent/80 font-semibold">
@@ -143,21 +148,35 @@ export default function RoadmapPage() {
                 Select a node to inspect skills, milestones, and training drills.
               </p>
             </div>
-            <UbixCareerGraph
-              onNodeSelect={handleGraphNodeSelect}
-              onCtaClick={handleGraphNodeSelect}
-            />
+            <div className="flex-1 w-full h-full min-h-[580px]">
+              <UbixCareerGraph
+                onNodeSelect={(nodeId) => handleGraphNodeSelect(nodeId)}
+                onCtaClick={(nodeId) => handleGraphNodeSelect(nodeId)}
+              />
+            </div>
           </div>
         )}
 
-        {activeTab === "learning" && (
-          <div className="app-shell py-8">
+        {viewMode === "roadmap" && (
+          <div className="py-4">
+            <CareerRoadmap role={role} />
+          </div>
+        )}
+
+        {viewMode === "learning" && (
+          <div className="py-4">
             <CourseCards role={role} />
           </div>
         )}
 
-        {activeTab === "progress" && (
-          <div className="app-shell py-8">
+        {viewMode === "practice" && (
+          <div className="py-4">
+            <PracticeHub />
+          </div>
+        )}
+
+        {viewMode === "trajectory" && (
+          <div className="py-4">
             <CareerTelemetry />
           </div>
         )}

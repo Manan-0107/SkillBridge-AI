@@ -48,7 +48,7 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
       error,
     } = (await Promise.race([
       authPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 1200)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 3000)),
     ])) as any;
 
     if (!error && user && user.id && user.email) {

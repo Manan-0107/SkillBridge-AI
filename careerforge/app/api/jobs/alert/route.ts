@@ -191,35 +191,64 @@ export async function POST(req: NextRequest) {
 
     // Free Cloud Email Dispatch (Resend API if key is present)
     const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return NextResponse.json(
+        {
+          code: "PROVIDER_NOT_CONFIGURED",
+          status: "error",
+          message: "Email dispatch service is not configured (RESEND_API_KEY missing). Alert could not be created.",
+          retryable: false,
+          requestId,
+        },
+        { status: 503 }
+      );
+    }
+
     let emailSentViaCloud = false;
+    let providerErrorMsg: string | null = null;
 
-    if (resendApiKey) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      try {
-        const resendRes = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resendApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "CareerForge Alerts <onboarding@resend.dev>",
-            to: [recipientEmail],
-            subject: emailSubject,
-            html: emailHtml,
-          }),
-          signal: controller.signal,
-        });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "ubix Alerts <onboarding@resend.dev>",
+          to: [recipientEmail],
+          subject: emailSubject,
+          html: emailHtml,
+        }),
+        signal: controller.signal,
+      });
 
-        if (resendRes.ok) {
-          emailSentViaCloud = true;
-        }
-      } catch (cloudErr) {
-        console.warn("[Jobs Alert API] Resend email dispatch error:", cloudErr);
-      } finally {
-        clearTimeout(timeoutId);
+      if (resendRes.ok) {
+        emailSentViaCloud = true;
+      } else {
+        const errJson = await resendRes.json().catch(() => ({}));
+        providerErrorMsg = errJson?.message || `HTTP ${resendRes.status}`;
       }
+    } catch (cloudErr: any) {
+      console.warn("[Jobs Alert API] Resend email dispatch error:", cloudErr);
+      providerErrorMsg = cloudErr?.message || "Connection timeout to email provider";
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!emailSentViaCloud) {
+      return NextResponse.json(
+        {
+          code: "EMAIL_DISPATCH_FAILED",
+          status: "error",
+          message: `Email provider rejected the dispatch request (${providerErrorMsg}). Alert could not be created.`,
+          retryable: true,
+          requestId,
+        },
+        { status: 502 }
+      );
     }
 
     return NextResponse.json({
@@ -233,7 +262,7 @@ export async function POST(req: NextRequest) {
         salary: cleanSalary,
         applyUrl: cleanApplyLink,
         sentAt: new Date().toISOString(),
-        cloudDispatched: emailSentViaCloud,
+        cloudDispatched: true,
         subject: emailSubject,
       },
     });

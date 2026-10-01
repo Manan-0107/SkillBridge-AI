@@ -10,17 +10,19 @@ import {
   Bot,
   Map,
   Code2,
+  Briefcase,
   FileText,
   Settings,
   LogOut,
-  Briefcase,
   ChevronDown,
   Menu,
   X,
 } from "lucide-react";
 
+export type NavTabId = "assistant" | "roadmap" | "practice" | "jobs" | "resume";
+
 interface NavLinkItem {
-  id: FeatureId | "assistant";
+  id: NavTabId;
   label: string;
   href: string;
   icon: React.ReactNode;
@@ -30,6 +32,7 @@ const NAV_LINKS: NavLinkItem[] = [
   { id: "assistant", label: "Assistant", href: "/", icon: <Bot size={15} strokeWidth={2} /> },
   { id: "roadmap", label: "Roadmap", href: "/roadmap", icon: <Map size={15} strokeWidth={2} /> },
   { id: "practice", label: "Practice", href: "/practice", icon: <Code2 size={15} strokeWidth={2} /> },
+  { id: "jobs", label: "Jobs", href: "/jobs", icon: <Briefcase size={15} strokeWidth={2} /> },
   { id: "resume", label: "Resume", href: "/resume", icon: <FileText size={15} strokeWidth={2} /> },
 ];
 
@@ -41,11 +44,19 @@ export function TopNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const getActiveTab = (): FeatureId | "assistant" => {
-    if (pathname.startsWith("/resume")) return "resume";
-    if (pathname.startsWith("/roadmap")) return "roadmap";
-    if (pathname.startsWith("/practice")) return "practice";
-    if (pathname.startsWith("/local")) return "local" as FeatureId;
+  const getActiveTab = (): NavTabId => {
+    if (pathname.startsWith("/roadmap") || pathname.startsWith("/journey") || pathname.startsWith("/learning") || pathname.startsWith("/courses") || pathname.startsWith("/progress")) {
+      return "roadmap";
+    }
+    if (pathname.startsWith("/practice")) {
+      return "practice";
+    }
+    if (pathname.startsWith("/jobs") || pathname.startsWith("/opportunities") || pathname.startsWith("/local")) {
+      return "jobs";
+    }
+    if (pathname.startsWith("/resume")) {
+      return "resume";
+    }
     return "assistant";
   };
   const activeTab = getActiveTab();
@@ -66,7 +77,7 @@ export function TopNav() {
     setMobileOpen(false);
   }, [pathname]);
 
-  const handleNavClick = (id: FeatureId | "assistant") => {
+  const handleNavClick = (id: NavTabId | FeatureId | "progress") => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("careerforge:navigate", { detail: { feature: id } })
@@ -103,7 +114,7 @@ export function TopNav() {
             </span>
           </Link>
 
-          {/* Center: Floating pill nav — desktop only */}
+          {/* Center: Weightless refined nav — desktop only */}
           <nav
             aria-label="Primary navigation"
             className="hidden md:flex absolute left-1/2 -translate-x-1/2"
@@ -116,7 +127,7 @@ export function TopNav() {
               }
             }}
           >
-            <div className="flex items-center gap-0.5 rounded-full border border-ink/10 bg-surface/70 px-1 py-1 shadow-sm backdrop-blur-xs">
+            <div className="flex items-center gap-7">
               {NAV_LINKS.map((link) => {
                 const isActive = activeTab === link.id;
                 return (
@@ -126,14 +137,24 @@ export function TopNav() {
                     onClick={() => handleNavClick(link.id)}
                     aria-current={isActive ? "page" : undefined}
                     title={link.label}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+                    className={`group relative flex items-center gap-1.5 py-1 text-xs font-medium tracking-wide transition-colors ${
                       isActive
-                        ? "bg-bg text-ink shadow-sm border border-accent/40 shadow-[0_0_12px_rgba(120,227,238,0.15)] font-semibold"
-                        : "text-ink/55 hover:text-ink hover:bg-bg/60"
+                        ? "text-white font-semibold"
+                        : "text-ink/60 hover:text-ink"
                     }`}
                   >
-                    <span aria-hidden="true" className={isActive ? "text-accent" : ""}>{link.icon}</span>
+                    <span
+                      aria-hidden="true"
+                      className={`transition-colors ${
+                        isActive ? "text-accent" : "text-ink/40 group-hover:text-ink/60"
+                      }`}
+                    >
+                      {link.icon}
+                    </span>
                     <span>{link.label}</span>
+                    {isActive && (
+                      <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] bg-[--accent] rounded-full shadow-[0_0_8px_var(--accent)]" />
+                    )}
                   </Link>
                 );
               })}
