@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { RoadmapTier, RoadmapNode, NodeStatus } from "@/types/roadmapTree";
 import { checkNodeLocked } from "@/lib/roadmap/roadmapData";
+import { Check, Lock } from "lucide-react";
 
 interface RoadmapListViewProps {
   tiers: RoadmapTier[];
@@ -20,27 +21,27 @@ interface RoadmapListViewProps {
 
 const statusBadgeConfig: Record<
   NodeStatus,
-  { label: string; badgeClass: string; icon: string }
+  { label: string; badgeClass: string; iconType: "check" | "progress" | "planned" | "locked" }
 > = {
   completed: {
     label: "Done",
     badgeClass: "bg-success/15 text-success border-success/30",
-    icon: "✓",
+    iconType: "check",
   },
   "in-progress": {
     label: "Active",
     badgeClass: "bg-accent/15 text-accent border-accent/30",
-    icon: "•",
+    iconType: "progress",
   },
   planned: {
     label: "Planned",
     badgeClass: "bg-surface text-ink/70 border-ink/15",
-    icon: "○",
+    iconType: "planned",
   },
   locked: {
     label: "Locked",
     badgeClass: "bg-ink/5 text-ink/40 border-ink/10",
-    icon: "—",
+    iconType: "locked",
   },
 };
 
@@ -192,7 +193,15 @@ export const RoadmapListView: React.FC<RoadmapListViewProps> = ({
                         badge.badgeClass
                       } ${!isLocked ? "hover:brightness-95 cursor-pointer" : "cursor-not-allowed"}`}
                     >
-                      {badge.icon}
+                      {status === "completed" ? (
+                        <Check size={12} strokeWidth={2.5} />
+                      ) : status === "in-progress" ? (
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                      ) : isLocked ? (
+                        <Lock size={10} />
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-ink/40" />
+                      )}
                     </button>
 
                     <div>

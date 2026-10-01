@@ -4,6 +4,7 @@ import { useState } from "react";
 import { marketSkills } from "@/lib/data";
 import { RoleId } from "@/lib/types";
 import { PrimaryButton, GhostButton } from "@/components/ui/Primitives";
+import { Check, Edit3 } from "lucide-react";
 
 export function Personalizer({
   role,
@@ -63,8 +64,9 @@ export function Personalizer({
             2. Intermediate Tailored Output (Editable)
           </p>
           {output && (
-            <span className="text-[11px] text-success font-semibold">
-              Live Editable Field ✓
+            <span className="flex items-center gap-1 text-[11px] text-success font-semibold">
+              <Check size={12} strokeWidth={2.5} />
+              <span>Live Editable Field</span>
             </span>
           )}
         </div>
@@ -82,9 +84,10 @@ export function Personalizer({
               <GhostButton
                 type="button"
                 onClick={() => onTransferToBuilder(output)}
-                className="w-full justify-center bg-ink text-bg hover:opacity-90 text-xs py-2.5 shadow-sm"
+                className="w-full justify-center bg-ink text-bg hover:opacity-90 text-xs py-2.5 shadow-sm flex items-center gap-1.5"
               >
-                ✏️ Transfer to Resume Builder (Intermediate Edit Mode) →
+                <Edit3 size={13} />
+                <span>Transfer to Resume Builder (Intermediate Edit Mode) →</span>
               </GhostButton>
             )}
           </div>

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { PracticeQuestion } from "@/types/practice";
+import { Check, X } from "lucide-react";
 
 interface QuestionCardProps {
   question: PracticeQuestion;
@@ -161,9 +162,15 @@ export const QuestionCard = React.memo(function QuestionCard({
         <div className="mt-5 p-4 rounded-xl bg-bg border border-ink/10 text-xs space-y-1.5 animate-fadeIn">
           <div className="flex items-center gap-1.5 font-bold font-mono">
             {isCorrect ? (
-              <span className="text-success font-semibold">✓ Correct</span>
+              <span className="flex items-center gap-1 text-success font-semibold">
+                <Check size={14} strokeWidth={2.5} />
+                <span>Correct</span>
+              </span>
             ) : (
-              <span className="text-danger font-semibold">✕ Incorrect</span>
+              <span className="flex items-center gap-1 text-danger font-semibold">
+                <X size={14} strokeWidth={2.5} />
+                <span>Incorrect</span>
+              </span>
             )}
             <span className="text-ink/50 font-normal ml-2">
               Correct Answer: <strong className="text-ink font-semibold">{question.answer}</strong>

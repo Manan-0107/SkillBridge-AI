@@ -827,7 +827,7 @@ function generateChatTitle(prompt: string): string {
               id: `fallback-${Date.now()}`,
               role: "assistant",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              text: `🎤 Voice assistant paused.\n\n${fallbackText}`,
+              text: `Voice assistant paused.\n\n${fallbackText}`,
               engine: "CareerForge AI",
             },
           ];
@@ -1188,7 +1188,7 @@ function generateChatTitle(prompt: string): string {
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          text: `⚠️ ${errorMessageText}`,
+          text: errorMessageText,
         },
       ];
       saveConversations(
@@ -1242,10 +1242,10 @@ function generateChatTitle(prompt: string): string {
           <button
             type="button"
             onClick={() => setAttachedFile(null)}
-            className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer"
+            className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer flex items-center justify-center"
             title="Remove attachment"
           >
-            ✕
+            <CloseIcon className="w-3 h-3" />
           </button>
         </div>
       )}
@@ -1393,10 +1393,10 @@ function generateChatTitle(prompt: string): string {
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1 text-ink/60 hover:bg-bg hover:text-ink transition-colors sm:hidden"
+              className="rounded-lg p-1 text-ink/60 hover:bg-bg hover:text-ink transition-colors sm:hidden flex items-center justify-center"
               title="Close sidebar"
             >
-              ✕
+              <CloseIcon className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -1982,3 +1982,13 @@ function StopIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
     </svg>
   );
 }
+
+function CloseIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+

@@ -3,6 +3,7 @@
 import React from "react";
 import { RoadmapNode } from "@/types/roadmap";
 import { Badge } from "@/components/shared/Badge";
+import { Check, Zap } from "lucide-react";
 
 interface AccessibleRoadmapListViewProps {
   nodes: RoadmapNode[];
@@ -123,7 +124,19 @@ export function AccessibleRoadmapListView({
                             : "bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700"
                         }`}
                       >
-                        {isCompleted ? "✓ Completed" : isInProgress ? "⚡ In Progress" : "Mark Done"}
+                        {isCompleted ? (
+                          <span className="flex items-center gap-1">
+                            <Check size={13} strokeWidth={2.5} />
+                            <span>Completed</span>
+                          </span>
+                        ) : isInProgress ? (
+                          <span className="flex items-center gap-1">
+                            <Zap size={13} />
+                            <span>In Progress</span>
+                          </span>
+                        ) : (
+                          "Mark Done"
+                        )}
                       </button>
 
                       <button

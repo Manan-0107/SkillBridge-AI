@@ -13,27 +13,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // ─── CareerForge Design Tokens (Single Source of Truth) ─────────────
-        bg: "#FAF6F1",       // page background — near-neutral cream, NOT saturated peach
-        surface: "#F1E9DF",  // card/panel background — one shade deeper
-        ink: "#14110F",      // primary text — warm near-black, not pure #000
+        // ─── CareerForge Unified Dark Workspace Tokens ──────────────────────
+        bg: "#080A0D",       // primary obsidian canvas background
+        surface: "#111418",  // card/panel elevated surface
+        "surface-elevated": "#171A21", // popovers, drawers, hover states
+        "surface-sunken": "#0B0E13",   // input fields, recessed panels
+        ink: "#F3F5F7",      // primary text — crisp high-contrast cool white
         accent: {
-          DEFAULT: "#B5541F", // rust/terracotta — used sparingly, never as a full-page button fill
-          soft: "#C1652E",
+          DEFAULT: "#22D3EE", // electric cyan — technical, modern & clear
+          soft: "#67E8F9",
         },
-        info: "#2F4858",
-        success: "#5C6B44",
-        danger: "#99341F",
-        // ─── Legacy aliases (used in AuthGate) ──────────────────────────────
-        paper: "#FAF6F1",       // = bg
-        graphite: "#6B6560",    // ≈ ink/60
-        line: "rgba(20,17,15,0.12)", // hairline border
-        muted: "#A09890",       // ≈ ink/40
+        info: "#38BDF8",
+        success: "#34D399",
+        danger: "#F87171",
+        // ─── Compatibility aliases ──────────────────────────────────────────
+        paper: "#080A0D",
+        graphite: "#8E95A0",
+        line: "rgba(255, 255, 255, 0.09)", // hairline border
+        muted: "#64748B",
       },
       borderColor: {
-        hairline: "rgba(27, 24, 21, 0.12)",
-        "hairline-subtle": "rgba(27, 24, 21, 0.06)",
-        "hairline-strong": "rgba(27, 24, 21, 0.22)",
+        hairline: "rgba(255, 255, 255, 0.09)",
+        "hairline-subtle": "rgba(255, 255, 255, 0.05)",
+        "hairline-strong": "rgba(255, 255, 255, 0.18)",
       },
       fontFamily: {
         display: ["var(--font-display)", "ui-sans-serif", "system-ui"],

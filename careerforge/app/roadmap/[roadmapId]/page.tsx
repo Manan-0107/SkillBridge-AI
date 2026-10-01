@@ -14,6 +14,7 @@ import { RoadmapTree } from "@/components/roadmap/RoadmapTree";
 import { Skeleton } from "@/components/shared/Skeleton";
 
 import { AccessibleRoadmapListView } from "@/components/roadmap/AccessibleRoadmapListView";
+import { AlertTriangle } from "lucide-react";
 
 // Dynamic import for drawer as required by Section 8 (code-split)
 const NodeDrawer = dynamic(
@@ -205,7 +206,9 @@ export default function RoadmapDetailPage() {
     return (
       <main className="min-h-screen bg-bg text-ink p-8 flex flex-col items-center justify-center text-center">
         <div className="max-w-md p-8 rounded-2xl bg-surface border border-ink/15 space-y-4 shadow-sm">
-          <div className="text-3xl">⚠️</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mx-auto">
+            <AlertTriangle size={24} />
+          </div>
           <h1 className="text-xl font-bold text-ink">Roadmap Unavailable</h1>
           <p className="text-sm text-ink/70">
             {error || "Could not retrieve the requested roadmap document."}

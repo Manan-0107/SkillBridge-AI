@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Award,
   CheckCircle2,
+  Check,
   Clock,
   Code2,
   FileText,
@@ -161,8 +162,8 @@ export function CareerTelemetry() {
               >
                 <div className="mt-1 shrink-0">
                   {m.status === "completed" ? (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-bg text-xs font-bold">
-                      ✓
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-bg shadow-xs">
+                      <Check size={12} strokeWidth={3} />
                     </span>
                   ) : m.status === "in_progress" ? (
                     <span className="flex h-6 w-6 items-center justify-center rounded-full border border-accent text-accent text-xs font-mono font-bold animate-pulse">

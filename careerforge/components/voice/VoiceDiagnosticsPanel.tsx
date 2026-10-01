@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { VoiceSessionManager } from "@/lib/voice/VoiceSessionManager";
 import { VoiceInteractionContext, VoiceHealthMetrics } from "@/lib/voice/voiceProtocol";
+import { X } from "lucide-react";
 
 export function VoiceDiagnosticsPanel() {
   const [open, setOpen] = useState(false);
@@ -76,9 +77,9 @@ export function VoiceDiagnosticsPanel() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-slate-400 hover:text-white text-xs px-1 rounded hover:bg-slate-800 cursor-pointer"
+              className="text-slate-400 hover:text-white text-xs p-1 rounded hover:bg-slate-800 cursor-pointer flex items-center justify-center"
             >
-              ✕
+              <X size={13} />
             </button>
           </div>
 

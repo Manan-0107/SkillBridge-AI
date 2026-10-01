@@ -1466,7 +1466,7 @@ To find the smallest figurine in the center, you open each outer doll (recursive
   if (isFrench) {
     return {
       reply: isGreeting
-        ? `Bonjour ${userName} ! 👋 Je suis votre assistant ubix. Je peux vous aider à rédiger ou analyser votre CV, explorer votre feuille de route, trouver des cours et des projets. Comment puis-je vous aider ?`
+        ? `Bonjour ${userName} ! Je suis votre assistant ubix. Je peux vous aider à rédiger ou analyser votre CV, explorer votre feuille de route, trouver des cours et des projets. Comment puis-je vous aider ?`
         : `Concernant "${query}" : je peux vous fournir des explications détaillées ou vous aider à relier cela à votre feuille de route, vos compétences ou votre CV sur ubix. Que souhaitez-vous approfondir ?`,
     };
   }
@@ -1474,7 +1474,7 @@ To find the smallest figurine in the center, you open each outer doll (recursive
   if (isGujarati) {
     return {
       reply: isGreeting
-        ? `નમસ્તે ${userName}! 👋 હું ubix સહાયક છું. હું તમારા રેઝ્યૂમે, સ્કિલ ગેપ રોડમેપ, કોર્સ અને જોબ્સ માટે મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`
+        ? `નમસ્તે ${userName}! હું ubix સહાયક છું. હું તમારા રેઝ્યૂમે, સ્કિલ ગેપ રોડમેપ, કોર્સ અને જોબ્સ માટે મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`
         : `તમારા પ્રશ્ન "${query}" સંદર્ભે: હું તમને આ વિષય સમજાવી શકું છું અથવા તમારા કરિયર રોડમેપ અને કૌશલ્યો સાથે જોડી શકું છું. તમે આગળ શું જાણવા માંગો છો?`,
     };
   }
@@ -1482,7 +1482,7 @@ To find the smallest figurine in the center, you open each outer doll (recursive
   if (isHindi) {
     return {
       reply: isGreeting
-        ? `नमस्ते ${userName}! 👋 मैं ubix सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, रोडमैप और नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+        ? `नमस्ते ${userName}! मैं ubix सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, रोडमैप और नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
         : `"${query}" के बारे में: मैं इस पर विस्तृत जानकारी दे सकता हूँ या इसे आपके ubix रोडमैप और कौशल विकास से जोड़ सकता हूँ। आप क्या जानना चाहेंगे?`,
     };
   }
@@ -1491,7 +1491,7 @@ To find the smallest figurine in the center, you open each outer doll (recursive
     return {
       reply: voiceMode
         ? `Hello ${userName}! I'm your ubix assistant. How can I assist you with your career roadmap, interview practice, or resume today?`
-        : `Hello ${userName}! 👋 I'm your **ubix Assistant**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Roadmaps**: Tier-by-tier learning milestones and project blueprints\n• **Interview Practice**: Instant interactive drills with targeted feedback\n• **Accessible Voice Guidance**: Hands-free navigation across the entire workspace\n\nWhat would you like to explore today?`,
+        : `Hello ${userName}! I'm your **ubix Assistant**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Roadmaps**: Tier-by-tier learning milestones and project blueprints\n• **Interview Practice**: Instant interactive drills with targeted feedback\n• **Accessible Voice Guidance**: Hands-free navigation across the entire workspace\n\nWhat would you like to explore today?`,
     };
   }
 

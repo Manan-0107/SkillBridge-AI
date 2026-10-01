@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { RoadmapNode, NodeStatus } from "@/types/roadmapTree";
+import { Check, Lock } from "lucide-react";
 
 interface RoadmapNodeCardProps {
   node: RoadmapNode;
@@ -20,31 +21,31 @@ interface RoadmapNodeCardProps {
 
 const statusBadgeConfig: Record<
   NodeStatus,
-  { label: string; badgeClass: string; dotClass: string; icon: string }
+  { label: string; badgeClass: string; dotClass: string; iconType: "check" | "progress" | "planned" | "locked" }
 > = {
   completed: {
     label: "Completed",
     badgeClass: "bg-success/15 border-success/30 text-success",
     dotClass: "bg-success",
-    icon: "✓",
+    iconType: "check",
   },
   "in-progress": {
     label: "In Progress",
     badgeClass: "bg-accent/15 border-accent/30 text-accent",
     dotClass: "bg-accent animate-pulse",
-    icon: "•",
+    iconType: "progress",
   },
   planned: {
     label: "Planned",
     badgeClass: "bg-surface border-ink/15 text-ink/70",
     dotClass: "bg-ink/40",
-    icon: "○",
+    iconType: "planned",
   },
   locked: {
     label: "Locked",
     badgeClass: "bg-ink/5 border-ink/10 text-ink/40",
     dotClass: "bg-ink/20",
-    icon: "—",
+    iconType: "locked",
   },
 };
 
@@ -153,7 +154,15 @@ export const RoadmapNodeCard = memo<RoadmapNodeCardProps>(function RoadmapNodeCa
             !isLocked ? "hover:brightness-95 cursor-pointer" : "cursor-not-allowed"
           }`}
         >
-          <span className="text-[10px]">{currentBadge.icon}</span>
+          {currentBadge.iconType === "check" ? (
+            <Check size={11} strokeWidth={2.5} />
+          ) : currentBadge.iconType === "progress" ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+          ) : currentBadge.iconType === "locked" ? (
+            <Lock size={10} />
+          ) : (
+            <span className="h-1.5 w-1.5 rounded-full bg-ink/40" />
+          )}
           <span>{currentBadge.label}</span>
         </button>
       </div>

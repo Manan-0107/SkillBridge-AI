@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { RoadmapNode, NodeStatus } from "@/types/roadmapTree";
+import { Check, X } from "lucide-react";
 
 interface RoadmapDrawerProps {
   node: RoadmapNode | null;
@@ -122,7 +123,7 @@ export const RoadmapDrawer: React.FC<RoadmapDrawerProps> = ({
               <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono text-ink/50 bg-bg rounded border border-ink/15 mr-2">
                 Esc
               </kbd>
-              ✕
+              <X size={14} className="inline" />
             </button>
           </div>
 
@@ -144,9 +145,10 @@ export const RoadmapDrawer: React.FC<RoadmapDrawerProps> = ({
                     key={st}
                     type="button"
                     onClick={() => onStatusChange(node.id, st)}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${activeClass}`}
+                    className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${activeClass}`}
                   >
-                    {st === "completed" ? "✓ Done" : st === "in-progress" ? "Active" : "Planned"}
+                    {st === "completed" && <Check size={12} strokeWidth={2.5} />}
+                    <span>{st === "completed" ? "Done" : st === "in-progress" ? "Active" : "Planned"}</span>
                   </button>
                 );
               })}
@@ -326,7 +328,7 @@ export const RoadmapDrawer: React.FC<RoadmapDrawerProps> = ({
                             : "border-ink/25 bg-surface"
                         }`}
                       >
-                        {isChecked && <span className="text-[10px] font-bold">✓</span>}
+                        {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -479,9 +481,10 @@ export const RoadmapDrawer: React.FC<RoadmapDrawerProps> = ({
               <button
                 type="button"
                 onClick={() => onStatusChange(node.id, "completed")}
-                className="px-3.5 py-1.5 rounded-lg bg-success hover:brightness-105 text-white font-semibold text-xs transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-success hover:brightness-105 text-white font-semibold text-xs transition-colors cursor-pointer"
               >
-                ✓ Mark Completed
+                <Check size={13} strokeWidth={2.5} />
+                <span>Mark Completed</span>
               </button>
             ) : (
               <button

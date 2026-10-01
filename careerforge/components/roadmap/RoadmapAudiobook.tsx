@@ -13,6 +13,7 @@ import {
   SUPPORTED_LANGUAGES,
   playAccessibleChime,
 } from "@/lib/voice";
+import { X } from "lucide-react";
 
 interface RoadmapAudiobookProps {
   role: RoleId;
@@ -407,11 +408,11 @@ export function RoadmapAudiobook({
                 <button
                   type="button"
                   onClick={() => setDoubtModalOpen(false)}
-                  className="rounded p-1 text-ink/60 hover:text-ink cursor-pointer"
+                  className="rounded p-1 text-ink/60 hover:text-ink cursor-pointer flex items-center justify-center"
                   title="Close doubt resolution"
                   aria-label="Close doubt resolution"
                 >
-                  ✕
+                  <X size={14} />
                 </button>
               </div>
 

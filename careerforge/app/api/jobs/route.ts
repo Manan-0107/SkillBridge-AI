@@ -336,7 +336,7 @@ function detectWorkArrangement(
     return {
       remote: true,
       workArrangement: "worldwide_remote",
-      workArrangementLabel: "🌐 Worldwide Remote",
+      workArrangementLabel: "Worldwide Remote",
     };
   }
 
@@ -344,7 +344,7 @@ function detectWorkArrangement(
     return {
       remote: true,
       workArrangement: "hybrid",
-      workArrangementLabel: `🔄 Hybrid (${location || "Flexible"})`,
+      workArrangementLabel: `Hybrid (${location || "Flexible"})`,
     };
   }
 
@@ -354,34 +354,34 @@ function detectWorkArrangement(
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 UK - Remote Only",
+        workArrangementLabel: "UK - Remote Only",
       };
     }
     if (loc.includes("us") || loc.includes("united states") || full.includes("us remote") || full.includes("us only")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 US - Remote Only",
+        workArrangementLabel: "US - Remote Only",
       };
     }
     if (loc.includes("india") || loc.includes("in") || full.includes("india remote")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 India - Remote",
+        workArrangementLabel: "India - Remote",
       };
     }
     if (loc.includes("germany") || loc.includes("europe") || full.includes("eu remote") || full.includes("europe only")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 Europe - Remote",
+        workArrangementLabel: "Europe - Remote",
       };
     }
     return {
       remote: true,
       workArrangement: "worldwide_remote",
-      workArrangementLabel: "🌐 Remote",
+      workArrangementLabel: "Remote",
     };
   }
 
@@ -389,7 +389,7 @@ function detectWorkArrangement(
   return {
     remote: false,
     workArrangement: "onsite",
-    workArrangementLabel: `🏢 On-Site (${location || "In-Office"})`,
+    workArrangementLabel: `On-Site (${location || "In-Office"})`,
   };
 }
 

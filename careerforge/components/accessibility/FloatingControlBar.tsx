@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useApp, AccessibilityProfile } from "@/lib/store";
 import { playAccessibleChime } from "@/lib/voice";
+import { X, Settings, Eye, Ear, Laptop, Check } from "lucide-react";
 
 export type AssistantVoiceState = "idle" | "listening" | "processing" | "speaking" | "error";
 
@@ -278,10 +279,10 @@ export function FloatingControlBar() {
               <button
                 type="button"
                 onClick={() => setPermissionBlockedNotice(false)}
-                className="ml-3 rounded font-bold hover:text-ink cursor-pointer"
+                className="ml-3 rounded p-1 hover:text-ink cursor-pointer flex items-center justify-center"
                 aria-label="Dismiss microphone blocked alert"
               >
-                ✕
+                <X size={13} />
               </button>
             </div>
           )}
@@ -384,7 +385,7 @@ export function FloatingControlBar() {
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-bg/90 border border-ink/15 text-xs font-semibold text-ink">
-                  <span aria-hidden="true">🦻</span>
+                  <Ear size={13} className="text-accent shrink-0" />
                   <span>Captions Mode (Text Only)</span>
                 </div>
               )}
@@ -419,20 +420,20 @@ export function FloatingControlBar() {
                   aria-expanded={settingsOpen}
                   aria-controls="accessibility-settings-panel"
                   aria-label="Open Accessibility and Display Settings"
-                  className="rounded-full border border-ink/15 bg-bg/80 px-2.5 py-1 text-xs font-medium text-ink hover:bg-bg transition-colors cursor-pointer"
+                  className="rounded-full border border-ink/15 bg-bg/80 p-1.5 text-xs font-medium text-ink hover:bg-bg transition-colors cursor-pointer flex items-center justify-center"
                   title="Accessibility settings"
                 >
-                  ⚙
+                  <Settings size={13} />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setMinimized(true)}
                   aria-label="Minimize Voice Assistant Bar"
-                  className="rounded-full border border-ink/15 bg-bg/80 px-2 py-1 text-xs font-medium text-ink/70 hover:bg-bg hover:text-ink transition-colors cursor-pointer"
+                  className="rounded-full border border-ink/15 bg-bg/80 p-1.5 text-xs font-medium text-ink/70 hover:bg-bg hover:text-ink transition-colors cursor-pointer flex items-center justify-center"
                   title="Minimize bar"
                 >
-                  ✕
+                  <X size={13} />
                 </button>
               </div>
             </div>
@@ -461,7 +462,10 @@ export function FloatingControlBar() {
                           : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold text-ink">👁️ Blind / Low Vision</div>
+                      <div className="flex items-center gap-1.5 font-semibold text-ink">
+                        <Eye size={13} className="text-accent shrink-0" />
+                        <span>Blind / Low Vision</span>
+                      </div>
                       <div className="text-[10px] text-ink/70 mt-0.5">Ambient voice &amp; full TTS</div>
                     </button>
 
@@ -474,7 +478,10 @@ export function FloatingControlBar() {
                           : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold text-ink">🦻 Deaf / Hard of Hearing</div>
+                      <div className="flex items-center gap-1.5 font-semibold text-ink">
+                        <Ear size={13} className="text-accent shrink-0" />
+                        <span>Deaf / Hard of Hearing</span>
+                      </div>
                       <div className="text-[10px] text-ink/70 mt-0.5">Zero mic access &amp; text captions</div>
                     </button>
 
@@ -487,7 +494,10 @@ export function FloatingControlBar() {
                           : "border-ink/15 bg-bg/50 text-ink/80 hover:border-accent/40"
                       }`}
                     >
-                      <div className="font-semibold text-ink">💻 Standard</div>
+                      <div className="flex items-center gap-1.5 font-semibold text-ink">
+                        <Laptop size={13} className="text-accent shrink-0" />
+                        <span>Standard</span>
+                      </div>
                       <div className="text-[10px] text-ink/70 mt-0.5">Voice off by default</div>
                     </button>
                   </div>
@@ -509,7 +519,14 @@ export function FloatingControlBar() {
                         : "border-ink/15 bg-bg/80 text-ink"
                     }`}
                   >
-                    {settings.highContrast ? "✓ High Contrast (ON)" : "Standard Contrast"}
+                    {settings.highContrast ? (
+                      <span className="flex items-center gap-1">
+                        <Check size={12} strokeWidth={2.5} />
+                        <span>High Contrast (ON)</span>
+                      </span>
+                    ) : (
+                      "Standard Contrast"
+                    )}
                   </button>
                 </div>
 

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { NodeStatus } from "@/types/roadmapTree";
+import { Check } from "lucide-react";
 
 interface MilestoneCheckpointProps {
   stageNumber: number;
@@ -47,9 +48,9 @@ export const MilestoneCheckpoint: React.FC<MilestoneCheckpointProps> = ({
               : "bg-surface border-ink/15 text-ink"
           }`}
         >
-          <span className="font-mono text-[10px] font-bold uppercase tracking-widest">
-            {isCompleted ? "✓ CHECKPOINT" : isCurrent ? "CURRENT STAGE" : "STAGE"}{" "}
-            0{stageNumber}
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-widest">
+            {isCompleted && <Check size={11} strokeWidth={2.5} />}
+            <span>{isCompleted ? "CHECKPOINT" : isCurrent ? "CURRENT STAGE" : "STAGE"} 0{stageNumber}</span>
           </span>
           <span className="text-ink/30">·</span>
           <h3 className="font-semibold text-xs uppercase tracking-wider text-ink">

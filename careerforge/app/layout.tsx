@@ -5,7 +5,7 @@ import "../styles/ubix-effects.css";
 import { AppProvider } from "@/lib/store";
 import { GlobalVoiceDictator } from "@/components/accessibility/GlobalVoiceDictator";
 import { GlobalVoiceProvider } from "@/providers/GlobalVoiceProvider";
-import { UbixAmbientBackground } from "@/components/ubix/UbixAmbientBackground";
+import { WorkspaceBackground } from "@/components/ui/WorkspaceBackground";
 
 const fontDisplay = Space_Grotesk({
   subsets: ["latin"],
@@ -80,8 +80,8 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body suppressHydrationWarning className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-surface selection:text-ink relative overflow-x-hidden">
-        <UbixAmbientBackground />
+      <body suppressHydrationWarning className="font-sans antialiased bg-bg text-ink min-h-screen selection:bg-accent/20 selection:text-white relative overflow-x-hidden">
+        <WorkspaceBackground />
         <div className="relative z-10 flex min-h-screen flex-col">
           <AppProvider>
             <GlobalVoiceProvider>

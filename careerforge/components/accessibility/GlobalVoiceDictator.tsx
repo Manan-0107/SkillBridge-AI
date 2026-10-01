@@ -797,7 +797,7 @@ function GlobalVoiceDictatorInner() {
 
         if (replyText) {
           setAiSpeechPrompt(replyText);
-          showStatus(`🤖 ${replyText.slice(0, 55)}...`, 5000);
+          showStatus(`${replyText.slice(0, 55)}...`, 5000);
           if (accessibilityPrefs?.speechOutput !== false) {
             speakAndListen(replyText, detectedLang);
           }
@@ -922,7 +922,7 @@ function GlobalVoiceDictatorInner() {
           setWaitingAccountConfirmation(false);
           playAccessibleChime("success");
           setInteractionState("SAVING_ANSWER");
-          showStatus("🚀 Creating your account...", 4000);
+          showStatus("Creating your account...", 4000);
 
           try {
             const emailVal = interviewStateRef.current.email;
@@ -1062,7 +1062,7 @@ function GlobalVoiceDictatorInner() {
 
         if (action) {
           window.dispatchEvent(new CustomEvent("careerforge:audiobook-control", { detail: { action } }));
-          showStatus(`🎧 Audiobook: ${action.toUpperCase()}`, 2500);
+          showStatus(`Audiobook: ${action.toUpperCase()}`, 2500);
           return;
         }
       }
@@ -1077,7 +1077,7 @@ function GlobalVoiceDictatorInner() {
 
       if (isDoubtIntent) {
         window.dispatchEvent(new CustomEvent("careerforge:practice-doubt", { detail: { query: clean } }));
-        showStatus("💡 Addressing assessment doubt...", 3000);
+        showStatus("Addressing assessment doubt...", 3000);
         return;
       }
 
@@ -1177,7 +1177,7 @@ function GlobalVoiceDictatorInner() {
               : emailQ.confirmPrompts.en(extractedEmail);
 
             setAiSpeechPrompt(confirmMsg);
-            showStatus(`📧 ${extractedEmail} — ${confirmMsg}`, 5000);
+            showStatus(`${extractedEmail} — ${confirmMsg}`, 5000);
             speakAndListen(confirmMsg);
             return;
           }
@@ -1228,7 +1228,7 @@ function GlobalVoiceDictatorInner() {
               : nameQ.confirmPrompts.en(extractedName);
 
             setAiSpeechPrompt(confirmMsg);
-            showStatus(`👤 ${extractedName} — ${confirmMsg}`, 5000);
+            showStatus(`${extractedName} — ${confirmMsg}`, 5000);
             speakAndListen(confirmMsg);
             return;
           }
@@ -1397,7 +1397,7 @@ function GlobalVoiceDictatorInner() {
             const exactPrompt =
               "Awesome! I have gathered all your details and found matching internships. Would you like me to go ahead and create your account now, or should we review the positions first?";
             setAiSpeechPrompt(exactPrompt);
-            showStatus(`🎉 All details gathered! Asking account creation confirmation...`, 6000);
+            showStatus(`All details gathered! Asking account creation confirmation...`, 6000);
             speakAndListen(exactPrompt);
             return;
           }
@@ -1428,7 +1428,7 @@ function GlobalVoiceDictatorInner() {
               : `${verifiedQuestion.label} confirmed! Next section: ${nextQ.prompts.en}`;
 
             setAiSpeechPrompt(promptText);
-            showStatus(`🎙️ Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4500);
+            showStatus(`Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4500);
             speakAndListen(promptText);
           } else {
             const allDoneMsg = isGujarati
@@ -1438,7 +1438,7 @@ function GlobalVoiceDictatorInner() {
               : "Awesome! All sections are verified. Your ubix profile is ready!";
 
             setAiSpeechPrompt(allDoneMsg);
-            showStatus(`🎉 ${allDoneMsg}`, 5000);
+            showStatus(`${allDoneMsg}`, 5000);
             speakAndListen(allDoneMsg);
           }
           return;
@@ -1473,7 +1473,7 @@ function GlobalVoiceDictatorInner() {
             : targetQ.retryPrompts.en;
 
           setAiSpeechPrompt(retryMsg);
-          showStatus(`🎙️ Retrying: ${targetQ.label}`, 4000);
+          showStatus(`Retrying: ${targetQ.label}`, 4000);
           speakAndListen(retryMsg);
           return;
         }
@@ -1725,7 +1725,7 @@ function GlobalVoiceDictatorInner() {
               : `Password must be at least 6 characters. You spoke ${candidateAnswer.length} characters. Please speak a password or PIN with at least 6 characters.`;
 
             setAiSpeechPrompt(shortMsg);
-            showStatus(`⚠️ Password needs 6+ characters (${candidateAnswer.length} spoken)`, 5000);
+            showStatus(`Password needs 6+ characters (${candidateAnswer.length} spoken)`, 5000);
             speakAndListen(shortMsg);
             return;
           }
@@ -1754,9 +1754,9 @@ function GlobalVoiceDictatorInner() {
         setAiSpeechPrompt(confirmMsg);
         if (activeQ.id === "password") {
           setLiveTranscript("••••••••");
-          showStatus(`🔒 Password recorded (${candidateAnswer.length} characters) — ${confirmMsg}`, 5000);
+          showStatus(`Password recorded (${candidateAnswer.length} characters) — ${confirmMsg}`, 5000);
         } else {
-          showStatus(`❓ "${candidateAnswer}" — ${confirmMsg}`, 5000);
+          showStatus(`"${candidateAnswer}" — ${confirmMsg}`, 5000);
         }
         speakAndListen(confirmMsg);
         return;
@@ -1854,7 +1854,7 @@ function GlobalVoiceDictatorInner() {
       const promptText = isGu ? nextQ.prompts.gu : isHi ? nextQ.prompts.hi : nextQ.prompts.en;
 
       setAiSpeechPrompt(promptText);
-      showStatus(`🎙️ Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4000);
+      showStatus(`Step ${nextQ.stepNumber} of 5: ${nextQ.label}`, 4000);
       speakAndListen(promptText);
     } else {
       const isGu = currentLangRef.current === "gu-IN";
@@ -1866,7 +1866,7 @@ function GlobalVoiceDictatorInner() {
         : "Welcome back! Your profile is verified. I am listening—speak to type, navigate, or ask any question.";
 
       setAiSpeechPrompt(welcomeBack);
-      showStatus("🎙️ Voice Assistant Active", 3500);
+      showStatus("Voice Assistant Active", 3500);
       speakAndListen(welcomeBack);
     }
   }, [setVoiceMode, showStatus, speakAndListen, user]);

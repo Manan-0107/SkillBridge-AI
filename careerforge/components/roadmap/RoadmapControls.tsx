@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { TechCategory, NodeStatus, RoadmapNode } from "@/types/roadmapTree";
+import { X } from "lucide-react";
 
 interface RoadmapControlsProps {
   categories: {
@@ -197,7 +198,7 @@ export const RoadmapControls: React.FC<RoadmapControlsProps> = ({
               onClick={() => onSearchChange("")}
               className="absolute inset-y-0 right-0 pr-3 flex items-center text-ink/50 hover:text-ink text-xs cursor-pointer"
             >
-              ✕
+              <X size={13} />
             </button>
           ) : (
             <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">

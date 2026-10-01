@@ -5,6 +5,7 @@ import { RoadmapNode, Resource } from "@/types/roadmap";
 import { FocusTrap } from "@/components/shared/FocusTrap";
 import { Badge } from "@/components/shared/Badge";
 import { ConceptChecklist } from "./ConceptChecklist";
+import { X } from "lucide-react";
 
 interface NodeDrawerProps {
   node: RoadmapNode | null;
@@ -92,9 +93,9 @@ export function NodeDrawer({
                 type="button"
                 onClick={onClose}
                 aria-label="Close details drawer"
-                className="p-1.5 rounded-lg text-ink/50 hover:text-ink hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-ink/50 hover:text-ink hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-colors cursor-pointer flex items-center justify-center"
               >
-                ✕
+                <X size={15} />
               </button>
             </div>
 

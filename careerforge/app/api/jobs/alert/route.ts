@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     const cleanSnippet = escapeHtml(rawSnippet);
     const cleanJobType = escapeHtml(rawJobType);
 
-    const emailSubject = `🚀 New Opening in ${cleanJobLoc}: ${cleanJobTitle} at ${cleanCompany}`;
+    const emailSubject = `New Opening in ${cleanJobLoc}: ${cleanJobTitle} at ${cleanCompany}`;
 
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; color: #111827;">
@@ -162,10 +162,10 @@ export async function POST(req: NextRequest) {
         <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; margin: 20px 0;">
           <h3 style="margin: 0 0 6px 0; color: #111827; font-size: 17px;">${cleanJobTitle}</h3>
           <p style="margin: 0 0 10px 0; color: #4b5563; font-size: 13px; font-weight: 600;">
-            🏢 ${cleanCompany} &nbsp;·&nbsp; 📍 ${cleanJobLoc} &nbsp;·&nbsp; 💼 ${cleanJobType}
+            ${cleanCompany} &nbsp;·&nbsp; ${cleanJobLoc} &nbsp;·&nbsp; ${cleanJobType}
           </p>
           <p style="margin: 0 0 12px 0; color: #059669; font-size: 13px; font-weight: 700;">
-            💰 Compensation: ${cleanSalary}
+            Compensation: ${cleanSalary}
           </p>
           <p style="margin: 0; color: #6b7280; font-size: 12px; line-height: 1.5;">
             ${cleanSnippet}
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
 
         <div style="text-align: center; margin: 28px 0;">
           <a href="${cleanApplyLink}" target="_blank" rel="noopener noreferrer" style="background-color: #111827; color: #ffffff; padding: 12px 28px; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            👉 Open Company Application & Registration Form →
+            Open Company Application & Registration Form →
           </a>
         </div>
 

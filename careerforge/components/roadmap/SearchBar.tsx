@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface SearchBarProps {
   value: string;
@@ -72,9 +73,9 @@ export function SearchBar({
               onChange("");
             }}
             aria-label="Clear search query"
-            className="text-ink/40 hover:text-ink transition-colors cursor-pointer"
+            className="text-ink/40 hover:text-ink transition-colors cursor-pointer flex items-center justify-center"
           >
-            ✕
+            <X size={13} />
           </button>
         </div>
       )}

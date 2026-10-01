@@ -21,28 +21,28 @@ import {
 } from "@/lib/voice";
 
 const COUNTRY_CODES = [
-  { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
-  { code: "+91", country: "India", flag: "🇮🇳" },
-  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
-  { code: "+61", country: "Australia", flag: "🇦🇺" },
-  { code: "+49", country: "Germany", flag: "🇩🇪" },
-  { code: "+33", country: "France", flag: "🇫🇷" },
-  { code: "+81", country: "Japan", flag: "🇯🇵" },
-  { code: "+971", country: "UAE", flag: "🇦🇪" },
-  { code: "+65", country: "Singapore", flag: "🇸🇬" },
-  { code: "+86", country: "China", flag: "🇨🇳" },
-  { code: "+55", country: "Brazil", flag: "🇧🇷" },
-  { code: "+27", country: "South Africa", flag: "🇿🇦" },
-  { code: "+234", country: "Nigeria", flag: "🇳🇬" },
-  { code: "+92", country: "Pakistan", flag: "🇵🇰" },
-  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
-  { code: "+31", country: "Netherlands", flag: "🇳🇱" },
-  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
-  { code: "+39", country: "Italy", flag: "🇮🇹" },
-  { code: "+34", country: "Spain", flag: "🇪🇸" },
-  { code: "+52", country: "Mexico", flag: "🇲🇽" },
-  { code: "+64", country: "New Zealand", flag: "🇳🇿" },
-  { code: "+82", country: "South Korea", flag: "🇰🇷" },
+  { code: "+1", country: "United States / Canada", iso: "US" },
+  { code: "+91", country: "India", iso: "IN" },
+  { code: "+44", country: "United Kingdom", iso: "GB" },
+  { code: "+61", country: "Australia", iso: "AU" },
+  { code: "+49", country: "Germany", iso: "DE" },
+  { code: "+33", country: "France", iso: "FR" },
+  { code: "+81", country: "Japan", iso: "JP" },
+  { code: "+971", country: "UAE", iso: "AE" },
+  { code: "+65", country: "Singapore", iso: "SG" },
+  { code: "+86", country: "China", iso: "CN" },
+  { code: "+55", country: "Brazil", iso: "BR" },
+  { code: "+27", country: "South Africa", iso: "ZA" },
+  { code: "+234", country: "Nigeria", iso: "NG" },
+  { code: "+92", country: "Pakistan", iso: "PK" },
+  { code: "+880", country: "Bangladesh", iso: "BD" },
+  { code: "+31", country: "Netherlands", iso: "NL" },
+  { code: "+966", country: "Saudi Arabia", iso: "SA" },
+  { code: "+39", country: "Italy", iso: "IT" },
+  { code: "+34", country: "Spain", iso: "ES" },
+  { code: "+52", country: "Mexico", iso: "MX" },
+  { code: "+64", country: "New Zealand", iso: "NZ" },
+  { code: "+82", country: "South Korea", iso: "KR" },
 ];
 
 export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } = {}) {
@@ -869,7 +869,7 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
                         >
                           {COUNTRY_CODES.map((c) => (
                             <option key={c.code + c.country} value={c.code}>
-                              {c.flag} {c.code}
+                              {c.iso} ({c.code})
                             </option>
                           ))}
                         </select>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useApp, AccessibilityProfile } from "@/lib/store";
+import { Eye, Ear, Laptop } from "lucide-react";
 
 export function AccessibilityProfileModal() {
   const { accessibilityProfile, setAccessibilityProfile } = useApp();
@@ -63,7 +64,7 @@ export function AccessibilityProfileModal() {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden="true">👁️</span>
+                <Eye size={20} className="text-accent shrink-0" />
                 <span className="font-bold text-base text-ink">Blind or Low Vision</span>
               </div>
               {selected === "blind_low_vision" && (
@@ -91,7 +92,7 @@ export function AccessibilityProfileModal() {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden="true">🦻</span>
+                <Ear size={20} className="text-accent shrink-0" />
                 <span className="font-bold text-base text-ink">Deaf or Hard of Hearing</span>
               </div>
               {selected === "deaf_hard_of_hearing" && (
@@ -119,7 +120,7 @@ export function AccessibilityProfileModal() {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden="true">💻</span>
+                <Laptop size={20} className="text-accent shrink-0" />
                 <span className="font-bold text-base text-ink">Standard Experience</span>
               </div>
               {selected === "standard" && (

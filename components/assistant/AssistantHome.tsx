@@ -910,11 +910,12 @@ export function AssistantHome({
   const emptyThread = messages.length <= 1;
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-paper">
+    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden" style={{ background: 'var(--bg-void)' }}>
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-ink px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-surface border border-line/60 px-4 py-2.5 text-xs font-semibold text-ink shadow-panel animate-in fade-in slide-in-from-top-3 duration-200 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           {toastMessage}
         </div>
       )}
@@ -929,100 +930,68 @@ export function AssistantHome({
 
       {/* ─── LEFT AI SIDEBAR (Vertical List of Chats) ───────────────────────── */}
       <aside
-        className={`flex flex-col border-r border-line bg-white transition-all duration-200 z-20 ${
-          sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
+        className={`flex flex-col border-r border-line transition-all duration-300 z-20 ${
+          sidebarOpen ? "w-64 sm:w-72 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
+        style={{ background: 'var(--bg-surface)' }}
       >
         {/* Top Action: New Chat */}
-        <div className="p-3.5 border-b border-line space-y-3">
+        <div className="p-4 border-b border-line space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-display text-base italic text-ink">
-              Assistant
+            <span className="font-display text-sm font-medium text-ink tracking-tight">
+              Conversations
             </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink sm:hidden"
+              className="rounded-md p-1.5 text-graphite hover:bg-mist hover:text-ink transition-colors sm:hidden"
               title="Close sidebar"
             >
-              ✕
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
 
           <button
             type="button"
             onClick={createNewConversation}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-ink/90 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-accent/30 bg-accentGlow py-2 px-3 text-xs font-semibold text-accent hover:bg-accent/15 hover:border-accent/50 transition-all cursor-pointer"
           >
-            <span className="text-sm font-bold">+</span>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" /></svg>
             <span>New Chat</span>
           </button>
         </div>
 
-        {/* Vertical Navigation Sections */}
-        <div className="p-2 space-y-1 border-b border-line">
-          <button
-            type="button"
-            onClick={() => setSidebarTab("all")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
-              sidebarTab === "all"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
-            }`}
-          >
-            <ChatBubbleIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
-            <span className="flex-1 text-left">All Recent Chats</span>
-            <span className="text-[11px] text-graphite/55">
-              {conversations.filter((c) => !c.archived).length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSidebarTab("pinned")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
-              sidebarTab === "pinned"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
-            }`}
-          >
-            <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="flex-1 text-left">Pinned &amp; Starred</span>
-            <span className="text-[11px] text-graphite/55">
-              {conversations.filter((c) => c.pinned && !c.archived).length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSidebarTab("archived")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
-              sidebarTab === "archived"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
-            }`}
-          >
-            <ArchiveIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
-            <span className="flex-1 text-left">Archived Chats</span>
-            <span className="text-[11px] text-graphite/55">
-              {conversations.filter((c) => c.archived).length}
-            </span>
-          </button>
+        {/* Sidebar Filter Tabs */}
+        <div className="flex gap-1 p-2 border-b border-line">
+          {(["all", "pinned", "archived"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setSidebarTab(tab)}
+              className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium capitalize transition-colors cursor-pointer ${
+                sidebarTab === tab
+                  ? "bg-accentGlow text-accent"
+                  : "text-graphite hover:bg-mist hover:text-ink"
+              }`}
+            >
+              {tab === "all" ? "All" : tab === "pinned" ? "Pinned" : "Archive"}
+            </button>
+          ))}
         </div>
 
-        {/* Vertical Conversation List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-graphite/60">
-            {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "History"}
+        {/* Conversation List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          <p className="px-3 pt-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-graphite/50">
+            {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "Recent"}
           </p>
 
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-xs text-graphite/55">
+            <div className="px-3 py-6 text-center text-xs text-graphite/40">
               {sidebarTab === "pinned"
-                ? "No pinned chats. Click the pin icon to keep important chats at top."
+                ? "No pinned conversations yet."
                 : sidebarTab === "archived"
                 ? "No archived conversations."
-                : "No previous chats."}
+                : "No conversations yet."}
             </div>
           ) : (
             filteredConversations.map((conv) => {
@@ -1031,42 +1000,40 @@ export function AssistantHome({
                 <div
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
-                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
+                  className={`group relative flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-xs transition-all cursor-pointer ${
                     isActive
-                      ? "bg-mist font-semibold text-ink"
-                      : "text-graphite hover:bg-paper hover:text-ink"
+                      ? "bg-accentGlow border border-accent/20 text-ink"
+                      : "text-graphite hover:bg-mist hover:text-ink border border-transparent"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-600 shrink-0" />}
-                    <span className="truncate">{conv.title}</span>
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-500 shrink-0" />}
+                    <span className={`truncate ${isActive ? "font-medium text-ink" : ""}`}>{conv.title}</span>
                   </div>
 
                   {/* Actions on Hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
-                      title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-amber-600 transition-colors"
+                      title={conv.pinned ? "Unpin" : "Pin"}
+                      className="rounded p-1 text-graphite/50 hover:text-amber-400 transition-colors"
                     >
                       <PinIcon filled={conv.pinned} className="w-3 h-3" />
                     </button>
-
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
-                      title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink transition-colors"
+                      title={conv.archived ? "Unarchive" : "Archive"}
+                      className="rounded p-1 text-graphite/50 hover:text-ink transition-colors"
                     >
                       <ArchiveIcon className="w-3 h-3" />
                     </button>
-
                     <button
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
-                      title="Delete chat"
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-red-600 transition-colors"
+                      title="Delete"
+                      className="rounded p-1 text-graphite/50 hover:text-red-400 transition-colors"
                     >
                       <TrashIcon className="w-3 h-3" />
                     </button>
@@ -1079,20 +1046,20 @@ export function AssistantHome({
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--bg-void)' }}>
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-line bg-white px-3 sm:px-4 py-2 gap-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-line px-3 sm:px-4 py-2.5 gap-2" style={{ background: 'var(--bg-surface)' }}>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-mist px-2.5 py-1.5 text-xs font-medium text-graphite hover:bg-surfaceHover hover:text-ink transition-colors cursor-pointer"
               title="Toggle Sidebar"
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
               <SidebarToggleIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
+              <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Chats"}</span>
             </button>
 
             <span className="text-xs font-semibold text-ink truncate max-w-[140px] sm:max-w-xs">
@@ -1134,12 +1101,12 @@ export function AssistantHome({
               onChange={(e) => setVoiceLanguage(e.target.value)}
               title="Select speech and assistant language"
               aria-label="Speech Language Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer"
+              className="rounded-lg border border-line bg-mist px-2 py-1 text-xs font-medium text-graphite hover:bg-surfaceHover focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer"
             >
-              <option value="auto">🌐 Auto Detect Language</option>
+              <option value="auto">Auto Detect Language</option>
               {LANGUAGE_LIST.map((l) => (
                 <option key={l.code} value={l.code}>
-                  {l.flag} {l.nativeName} ({l.name})
+                  {l.nativeName} ({l.name})
                 </option>
               ))}
             </select>
@@ -1150,12 +1117,12 @@ export function AssistantHome({
               onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
               title="Speech Provider Strategy"
               aria-label="Speech Provider Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer hidden md:inline-block"
+              className="rounded-lg border border-line bg-mist px-2 py-1 text-xs font-medium text-graphite hover:bg-surfaceHover focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer hidden md:inline-block"
             >
-              <option value="auto">⚡ Auto (Web → Azure → Google)</option>
-              <option value="web">🌐 Web Speech API (Free)</option>
-              <option value="azure">☁️ Microsoft Azure Speech</option>
-              <option value="google">☁️ Google Cloud Speech</option>
+              <option value="auto">Auto (Web → Azure → Google)</option>
+              <option value="web">Web Speech API (Free)</option>
+              <option value="azure">Microsoft Azure Speech</option>
+              <option value="google">Google Cloud Speech</option>
             </select>
 
             {/* Repeat Button */}
@@ -1164,7 +1131,7 @@ export function AssistantHome({
               onClick={repeatLastResponse}
               title="Repeat last spoken response"
               aria-label="Repeat last spoken response"
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium text-graphite hover:bg-paper hover:text-ink transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-mist px-2 py-1 text-xs font-medium text-graphite hover:bg-surfaceHover hover:text-ink transition-colors cursor-pointer"
             >
               <SpeakerIcon className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Repeat</span>
@@ -1203,7 +1170,7 @@ export function AssistantHome({
             <button
               type="button"
               onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-mist px-2 py-1 text-xs font-medium text-graphite hover:bg-surfaceHover hover:text-ink transition-colors cursor-pointer"
               title="Share conversation link or transcript"
               aria-label="Share Conversation"
             >
@@ -1214,11 +1181,12 @@ export function AssistantHome({
             <button
               type="button"
               onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:bg-paper cursor-pointer shadow-xs"
+              className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accentGlow px-2.5 py-1 text-xs font-semibold text-accent hover:bg-accent/15 hover:border-accent/50 transition-all cursor-pointer"
               title="Start new chat"
               aria-label="Start New Chat"
             >
-              <span>+ New</span>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" /></svg>
+              <span>New</span>
             </button>
           </div>
         </div>
@@ -1227,15 +1195,18 @@ export function AssistantHome({
         <div ref={listRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-10 max-w-xl space-y-5">
-                <h1 className="font-display text-4xl italic leading-[1.1] text-ink md:text-5xl">
-                  {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
-                  <span className="block text-graphite">Where should we start?</span>
-                </h1>
+              <div className="mb-10 max-w-xl space-y-6 animate-fade-up">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent/70">Career Intelligence</p>
+                  <h1 className="font-display text-4xl font-medium italic leading-[1.1] text-ink md:text-5xl">
+                    {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
+                    <span className="block text-graphite/60 mt-1">Where should we start?</span>
+                  </h1>
+                </div>
 
                 <p className="max-w-md text-sm leading-relaxed text-graphite">
                   I can help you build or sharpen your resume, choose skills to learn,
-                  find projects worth doing, and track down jobs. Speak or type &mdash;
+                  find projects worth doing, and track down jobs. Speak or type —
                   whichever is easier.
                 </p>
 
@@ -1279,18 +1250,16 @@ export function AssistantHome({
                         }
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/90 cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-[#0A0C0F] transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(34,211,238,0.35)] cursor-pointer"
                   >
-                    <MicIcon className="w-4 h-4 text-paper" />
+                    <MicIcon className="w-4 h-4" />
                     <span>Start talking</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => {
-                      textareaRef.current?.focus();
-                    }}
-                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-graphite underline decoration-line underline-offset-4 transition-colors hover:text-ink cursor-pointer"
+                    onClick={() => { textareaRef.current?.focus(); }}
+                    className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-medium text-graphite transition-all hover:border-accent/40 hover:text-ink cursor-pointer"
                   >
                     <span>Type instead</span>
                   </button>
@@ -1352,8 +1321,8 @@ export function AssistantHome({
                       <div
                         className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink text-paper rounded-tr-xs"
-                            : "bg-white text-ink rounded-tl-xs border border-line/60"
+                            ? "bg-accent text-[#0A0C0F] font-medium rounded-tr-sm"
+                            : "bg-surface border border-line text-ink rounded-tl-sm"
                         }`}
                       >
                         <p className="whitespace-pre-line">{m.text}</p>
@@ -1406,14 +1375,14 @@ export function AssistantHome({
 
               {busy && redirectCountdown === null && (
                 <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-graphite/55 px-1">
-                    CareerForge AI is thinking…
+                  <div className="mb-1.5 text-[11px] font-medium text-graphite/50 px-1">
+                    CareerForge AI
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-line bg-white px-4 py-3 shadow-xs">
+                  <div className="rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
                     </div>
                   </div>
                 </div>
@@ -1422,8 +1391,8 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS MATCHING PHOTO 3 ─────────── */}
-        <div className="border-t border-line bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
+        {/* ─── BOTTOM COMPOSER ─────────────────────────────────────────────────── */}
+        <div className="border-t border-line px-4 pb-5 pt-3" style={{ background: 'var(--bg-surface)' }}>
           <div className="mx-auto max-w-3xl space-y-3">
             
             {/* Live Spoken Text & Captions Visualizer for Accessibility */}
@@ -1432,30 +1401,26 @@ export function AssistantHome({
                 role="region"
                 aria-label="Live Voice Captions"
                 aria-live="polite"
-                className="flex items-center justify-between rounded-xl border border-accent/25 bg-accent/10 px-3.5 py-2 text-xs text-accent shadow-sm animate-in fade-in slide-in-from-bottom-2"
+                className="flex items-center justify-between rounded-xl border border-accent/20 bg-accentGlow px-3.5 py-2.5 text-xs text-accent animate-in fade-in slide-in-from-bottom-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-ping" />
+                  <span className="flex h-2 w-2 shrink-0 rounded-full bg-accent animate-ping" />
                   <div className="truncate">
-                    <span className="font-semibold text-accent">
+                    <span className="font-semibold text-accent mr-1.5">
                       {listening ? "Listening" : "Speaking"}
-                      <span className="mx-1.5 text-accent/40">/</span>
                     </span>
-                    <span className="font-normal text-accent">
-                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening") : liveSpokenText}
+                    <span className="font-normal text-accent/70">
+                      {listening ? (input ? `"${input}"` : "Speak now…") : liveSpokenText}
                     </span>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={stopAllVoice}
-                    className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/25 transition-colors cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={stopAllVoice}
+                  className="shrink-0 rounded-md border border-accent/20 px-2 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/10 transition-colors cursor-pointer"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
@@ -1469,26 +1434,26 @@ export function AssistantHome({
               id="ai-doc-upload"
             />
 
-            {/* AI Rounded Card Box */}
+            {/* Composer Card */}
             <form
               onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-line bg-paper p-3 shadow-sm focus-within:border-graphite focus-within:bg-white focus-within:ring-2 focus-within:ring-ink/5 transition-colors"
+              className="relative flex flex-col rounded-2xl border border-line bg-mist p-3 transition-all focus-within:border-accent/40 focus-within:shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
             >
               {/* Attached Document Preview Badge */}
               {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-line bg-white px-3 py-1.5 text-xs text-ink animate-in fade-in shadow-2xs">
+                <div className="mb-2 flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink animate-in fade-in">
                   <div className="flex items-center gap-2 truncate">
                     <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
-                    <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-graphite/55">Ready to review</span>
+                    <span className="font-semibold text-ink truncate">{attachedFile.name}</span>
+                    <span className="text-[10px] text-graphite/50">Ready to review</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-graphite/55 hover:text-red-600 cursor-pointer"
+                    className="rounded p-1 text-graphite/50 hover:text-red-400 transition-colors cursor-pointer"
                     title="Remove attachment"
                   >
-                    ✕
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               )}
@@ -1518,11 +1483,11 @@ export function AssistantHome({
                     ? `Ask anything about ${attachedFile.name}...`
                     : "Message CareerForge AI or attach a document..."
                 }
-                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-ink placeholder:text-graphite/55 focus:outline-none"
+                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-ink placeholder:text-graphite/40 focus:outline-none"
               />
 
               {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-line mt-1">
+              <div className="flex items-center justify-between pt-2 border-t border-line/60 mt-1">
                 {/* Left Controls: Clean Attach & Unlimited Voice */}
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1530,7 +1495,7 @@ export function AssistantHome({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parsingDoc}
                     title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-graphite hover:bg-surfaceHover hover:text-ink transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {parsingDoc ? (
                       <span className="h-3.5 w-3.5 rounded-full border-2 border-graphite border-t-transparent animate-spin" />
@@ -1546,8 +1511,8 @@ export function AssistantHome({
                     onClick={toggleListening}
                     className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                       listening
-                        ? "bg-ink text-paper"
-                        : "text-graphite hover:bg-mist hover:text-ink"
+                        ? "bg-accent text-[#0A0C0F] font-semibold"
+                        : "text-graphite hover:bg-surfaceHover hover:text-ink"
                     }`}
                     title={
                       listening
@@ -1555,7 +1520,7 @@ export function AssistantHome({
                         : "Voice Dictation in any language (Auto-sends on pause)"
                     }
                   >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-paper" : "text-graphite/80"}`} />
+                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-[#0A0C0F]" : "text-graphite/70"}`} />
                     <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
                   </button>
 
@@ -1566,14 +1531,14 @@ export function AssistantHome({
                   )}
                 </div>
 
-                {/* Right: Circular Send Button (↑) */}
+                {/* Send Button */}
                 <button
                   type="submit"
                   disabled={busy || (!input.trim() && !attachedFile)}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all ${
                     input.trim() || attachedFile
-                      ? "bg-ink text-white hover:bg-ink/90 scale-100 cursor-pointer"
-                      : "bg-mist text-graphite/55 cursor-not-allowed opacity-60"
+                      ? "bg-accent text-[#0A0C0F] hover:brightness-110 hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] cursor-pointer scale-100"
+                      : "bg-surface border border-line text-graphite/30 cursor-not-allowed opacity-50"
                   }`}
                   title="Send prompt (or press Enter)"
                 >
@@ -1590,10 +1555,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("left")}
                 disabled={!canScrollLeft}
                 aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface shadow-panel backdrop-blur transition-colors ${
                   canScrollLeft
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
+                    ? "opacity-100 hover:bg-surfaceHover cursor-pointer text-ink"
+                    : "opacity-0 pointer-events-none text-graphite/30"
                 }`}
               >
                 <ChevronLeftIcon className="w-4 h-4" />
@@ -1611,7 +1576,7 @@ export function AssistantHome({
                     key={pill.label}
                     type="button"
                     onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-line bg-white px-3.5 py-1.5 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer whitespace-nowrap"
+                    className="shrink-0 rounded-full border border-line bg-mist px-3.5 py-1.5 text-xs font-medium text-graphite hover:border-accent/40 hover:bg-accentGlow hover:text-accent transition-all cursor-pointer whitespace-nowrap"
                   >
                     {pill.label}
                   </button>
@@ -1624,10 +1589,10 @@ export function AssistantHome({
                 onClick={() => scrollPrompts("right")}
                 disabled={!canScrollRight}
                 aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
+                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface shadow-panel backdrop-blur transition-colors ${
                   canScrollRight
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
+                    ? "opacity-100 hover:bg-surfaceHover cursor-pointer text-ink"
+                    : "opacity-0 pointer-events-none text-graphite/30"
                 }`}
               >
                 <ChevronRightIcon className="w-4 h-4" />

@@ -6,6 +6,7 @@ import { useApp } from "@/lib/store";
 import { Section } from "@/components/ui/Section";
 import { Card, PrimaryButton, GhostButton, Tag } from "@/components/ui/Primitives";
 import { startSpeechRecognition, SpeechRecognitionController, speakText, stopSpeaking } from "@/lib/voice";
+import { Check, RotateCcw, Volume2, Square } from "lucide-react";
 
 export interface PracticeQuestion {
   id: string;
@@ -713,8 +714,9 @@ export function PracticeHub() {
           <div className="rounded-2xl border border-ink/15 bg-surface p-6 sm:p-8 shadow-sm text-ink">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-ink/15 pb-5">
               <div>
-                <span className="rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success border border-success/30 uppercase tracking-wider">
-                  ✓ Quiz Completed
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success border border-success/30 uppercase tracking-wider">
+                  <Check size={12} strokeWidth={2.5} />
+                  <span>Quiz Completed</span>
                 </span>
                 <h3 className="font-sans text-2xl font-bold tracking-tight text-ink mt-2">
                   Global Concept Summary: {role.toUpperCase()} Track
@@ -725,8 +727,9 @@ export function PracticeHub() {
               </div>
 
               <div className="flex items-center gap-3">
-                <PrimaryButton type="button" onClick={handleRestartQuiz} className="text-xs">
-                  ↺ Practice Again
+                <PrimaryButton type="button" onClick={handleRestartQuiz} className="text-xs flex items-center gap-1.5">
+                  <RotateCcw size={13} />
+                  <span>Practice Again</span>
                 </PrimaryButton>
               </div>
             </div>
@@ -800,17 +803,17 @@ export function PracticeHub() {
                       setSpeakingQuestion(false);
                       setVocalizingExplanation(false);
                     }}
-                    className={`h-6 w-6 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`h-6 w-6 rounded-full text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center ${
                       activeQuestionIdx === idx
-                        ? "bg-accent text-white ring-1 ring-accent/30"
+                        ? "bg-accent text-bg ring-1 ring-accent/30 font-bold"
                         : completedIds[q.id]
                         ? "bg-success/20 text-success border border-success/40"
-                        : "bg-bg text-ink/60 border border-ink/15 hover:border-accent/50"
+                        : "bg-surface-elevated text-ink/60 border border-white/10 hover:border-accent/50"
                     }`}
                     title={`Question ${idx + 1}: ${q.type}`}
                     aria-label={`Go to question ${idx + 1}`}
                   >
-                    {completedIds[q.id] ? "✓" : idx + 1}
+                    {completedIds[q.id] ? <Check size={11} strokeWidth={2.5} /> : idx + 1}
                   </button>
                 ))}
               </div>
@@ -850,12 +853,22 @@ export function PracticeHub() {
                   onClick={handleReadQuestion}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                     speakingQuestion
-                      ? "bg-accent text-white animate-pulse"
-                      : "bg-bg text-ink hover:bg-surface border border-ink/15"
+                      ? "bg-accent text-bg animate-pulse"
+                      : "bg-surface-elevated text-ink hover:bg-surface border border-white/10"
                   }`}
                   title="Read question aloud (Speech Synthesis)"
                 >
-                  <span>{speakingQuestion ? "Stop" : "🔊 Listen"}</span>
+                  {speakingQuestion ? (
+                    <>
+                      <Square className="w-3 h-3 text-bg fill-current" />
+                      <span>Stop</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-accent" />
+                      <span>Listen</span>
+                    </>
+                  )}
                 </button>
 
                 {/* Question Switcher */}

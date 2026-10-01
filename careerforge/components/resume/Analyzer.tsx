@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { RoleId, ResumeAnalysis, EnhancedAnalysis } from "@/lib/types";
+import { Paperclip, FileText, BarChart3, Check, Lightbulb } from "lucide-react";
 
 const sampleResumeTexts: Record<RoleId, string> = {
   frontend: `ALEX RIVERA
@@ -238,20 +239,22 @@ export function Analyzer({ role }: { role: RoleId }) {
             onClick={() => fileInputRef.current?.click()}
             className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer"
           >
-            📎 Upload File
+            <Paperclip size={13} />
+            <span>Upload File</span>
           </button>
           <button
             type="button"
             onClick={() => setText(sampleResumeTexts[role] || "")}
-            className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-white/20 transition-all cursor-pointer"
           >
-            📝 Load Sample
+            <FileText size={13} />
+            <span>Load Sample</span>
           </button>
           <button
             type="button"
             onClick={run}
             disabled={!text.trim() || busy}
-            className="ml-auto rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer shadow-xs"
+            className="ml-auto rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-bg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer shadow-xs"
           >
             {busy ? "Analyzing..." : "Analyze Match"}
           </button>
@@ -265,8 +268,8 @@ export function Analyzer({ role }: { role: RoleId }) {
             {error}
           </div>
         ) : !result ? (
-          <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-ink/12 bg-bg/50 p-6 text-center">
-            <span className="text-2xl mb-2">📊</span>
+          <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
+            <BarChart3 size={32} className="text-ink/30 mb-2" />
             <p className="text-xs font-semibold uppercase tracking-wider text-ink/40">
               {busy ? "Analyzing skills against market data..." : "No analysis yet"}
             </p>
@@ -277,7 +280,7 @@ export function Analyzer({ role }: { role: RoleId }) {
         ) : (
           <div className="space-y-6">
             {/* Score Banner */}
-            <div className="rounded-xl border border-ink/10 bg-bg p-5 shadow-xs">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xs">
               <p className="text-[11px] font-bold uppercase tracking-widest text-ink/50">
                 Market Match Score
               </p>
@@ -286,7 +289,7 @@ export function Analyzer({ role }: { role: RoleId }) {
                   {result.score}
                 </span>
                 <span className="text-lg text-ink/40">/100</span>
-                <span className="ml-auto rounded-full bg-surface border border-ink/10 px-3 py-1 text-xs font-bold text-accent">
+                <span className="ml-auto rounded-full bg-accent/15 border border-accent/30 px-3 py-1 text-xs font-bold text-accent">
                   {verdict(result.score)}
                 </span>
               </div>
@@ -304,9 +307,10 @@ export function Analyzer({ role }: { role: RoleId }) {
                   {result.matchedSkills.map((s, idx) => (
                     <span
                       key={idx}
-                      className="rounded-md border border-success/25 bg-success/10 px-2.5 py-1 text-xs font-medium text-success"
+                      className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success"
                     >
-                      ✓ {s}
+                      <Check size={11} strokeWidth={2.5} />
+                      <span>{s}</span>
                     </span>
                   ))}
                 </div>
@@ -327,7 +331,7 @@ export function Analyzer({ role }: { role: RoleId }) {
                   {result.missingSkills.map((s, idx) => (
                     <span
                       key={idx}
-                      className="rounded-md border border-danger/25 bg-danger/10 px-2.5 py-1 text-xs font-medium text-danger"
+                      className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-1 text-xs font-medium text-danger"
                     >
                       + {s}
                     </span>
@@ -348,9 +352,10 @@ export function Analyzer({ role }: { role: RoleId }) {
                   {result.suggestions.map((s, i) => (
                     <li
                       key={i}
-                      className="rounded-lg border border-ink/8 bg-bg p-3 text-xs leading-relaxed text-ink/75"
+                      className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-ink/80"
                     >
-                      💡 {s}
+                      <Lightbulb size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>{s}</span>
                     </li>
                   ))}
                 </ul>

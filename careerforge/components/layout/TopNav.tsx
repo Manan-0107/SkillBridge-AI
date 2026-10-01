@@ -99,17 +99,20 @@ export function TopNav() {
       role="banner"
     >
       {/* Main navbar strip */}
-      <div className="border-b border-ink/8 bg-bg/95 backdrop-blur-md">
-        <div className="app-shell flex items-center justify-between h-12 gap-4">
+      <div className="border-b border-white/[0.08] bg-bg/80 backdrop-blur-xl">
+        <div className="app-shell flex items-center justify-between h-14 gap-4">
 
-          {/* Left: Brand Wordmark (Section 3: No AI logo, lowercase ubix in Space Grotesk, no icon) */}
+          {/* Left: Brand Wordmark */}
           <Link
             href="/"
             onClick={() => handleNavClick("assistant")}
-            className="flex items-center shrink-0 group focus-visible:outline-offset-4"
+            className="flex items-center gap-2.5 shrink-0 group focus-visible:outline-offset-4"
             aria-label="ubix — home"
           >
-            <span className="font-display text-lg font-semibold tracking-[-0.03em] text-ink select-none">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/40 flex items-center justify-center shadow-[0_0_12px_rgba(34,211,238,0.25)]">
+              <span className="font-display font-bold text-accent text-xs">u</span>
+            </div>
+            <span className="font-display text-lg font-bold tracking-tight text-white select-none group-hover:text-accent transition-colors">
               ubix
             </span>
           </Link>
@@ -127,7 +130,7 @@ export function TopNav() {
               }
             }}
           >
-            <div className="flex items-center gap-7">
+            <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-1 backdrop-blur-lg shadow-inner">
               {NAV_LINKS.map((link) => {
                 const isActive = activeTab === link.id;
                 return (
@@ -137,24 +140,21 @@ export function TopNav() {
                     onClick={() => handleNavClick(link.id)}
                     aria-current={isActive ? "page" : undefined}
                     title={link.label}
-                    className={`group relative flex items-center gap-1.5 py-1 text-xs font-medium tracking-wide transition-colors ${
+                    className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all ${
                       isActive
-                        ? "text-white font-semibold"
-                        : "text-ink/60 hover:text-ink"
+                        ? "text-white bg-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] border border-white/[0.1]"
+                        : "text-ink/65 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     <span
                       aria-hidden="true"
                       className={`transition-colors ${
-                        isActive ? "text-accent" : "text-ink/40 group-hover:text-ink/60"
+                        isActive ? "text-accent" : "text-ink/40"
                       }`}
                     >
                       {link.icon}
                     </span>
                     <span>{link.label}</span>
-                    {isActive && (
-                      <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] bg-[--accent] rounded-full shadow-[0_0_8px_var(--accent)]" />
-                    )}
                   </Link>
                 );
               })}
@@ -179,7 +179,7 @@ export function TopNav() {
                   aria-expanded={profileOpen}
                   aria-controls="profile-menu"
                   onClick={() => setProfileOpen((o) => !o)}
-                  className="flex items-center gap-1.5 rounded-full border border-ink/12 bg-surface/80 px-2 py-1 hover:border-ink/25 hover:bg-surface transition-all duration-150 cursor-pointer"
+                  className="flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 hover:border-white/[0.2] hover:bg-white/[0.08] transition-all duration-150 cursor-pointer"
                 >
                   {user?.picture ? (
                     <img

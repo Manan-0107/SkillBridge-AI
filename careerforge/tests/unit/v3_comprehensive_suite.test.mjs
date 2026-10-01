@@ -157,20 +157,20 @@ test("4. Real LLM Assistant Intelligence (§4): No generic templated responses",
   }
 });
 
-test("5. Visual Design System & Zero Seams (§2, §5): Cream & Ink palette applied uniformly", () => {
+test("5. Visual Design System & Zero Seams (§2, §5): Obsidian & Ink palette applied uniformly", () => {
   // Check tailwind tokens
   const twPath = path.join(projectRoot, "tailwind.config.ts");
   const twCode = fs.readFileSync(twPath, "utf-8");
-  assert(twCode.includes('"#FAF6F1"'), "Must define #FAF6F1 (bg)");
-  assert(twCode.includes('"#F1E9DF"'), "Must define #F1E9DF (surface)");
-  assert(twCode.includes('"#14110F"'), "Must define #14110F (ink)");
-  assert(twCode.includes('"#B5541F"'), "Must define #B5541F (accent)");
+  assert(twCode.includes('"#080A0D"'), "Must define #080A0D (bg)");
+  assert(twCode.includes('"#111418"'), "Must define #111418 (surface)");
+  assert(twCode.includes('"#F3F5F7"'), "Must define #F3F5F7 (ink)");
+  assert(twCode.includes('"#22D3EE"'), "Must define #22D3EE (accent)");
 
   // Check root globals.css
   const cssPath = path.join(projectRoot, "app/globals.css");
   const css = fs.readFileSync(cssPath, "utf-8");
-  assert(css.includes("background-color: #FAF6F1;"), "body background must be #FAF6F1");
-  assert(css.includes("color: #14110F;"), "body color must be #14110F");
+  assert(css.includes("background-color: #080A0D;"), "body background must be #080A0D");
+  assert(css.includes("color: #F3F5F7;"), "body color must be #F3F5F7");
 
   // Check app/page.tsx
   const pagePath = path.join(projectRoot, "app/page.tsx");
