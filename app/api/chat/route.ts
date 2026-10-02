@@ -6,16 +6,17 @@
  * Primary Model: Google Gemini 1.5 Flash (gemini-1.5-flash)
  * Multilingual Scope: English, Hindi, Gujarati (Native scripts & Romanized variations / Hinglish / Gujlish)
  *
- * Open-Source Fallback Inference Engines & Links:
- * 1. Llama 3 (Meta): https://huggingface.co/meta-llama
- * 2. Gemma 2 (Google): https://huggingface.co/google/gemma-2-9b-it
- * 3. Sarvam AI (Indic-Optimized): https://huggingface.co/sarvamai
- * 4. High-Precision Autonomous Multilingual Engine (Zero-Key fallback)
+ * Authenticated only. Request body limited to 64KB.
+ * Sanitized error responses with request tracing.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+const MAX_MESSAGES_TEXT_LENGTH = 64 * 1024; // 64 KB
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -65,13 +66,67 @@ CRITICAL MULTILINGUAL INSTRUCTIONS:
 3. Be direct, clear, polite, and structure your responses with markdown formatting (bullet points, bold text, code blocks) where helpful.`;
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body: GeneralChatRequest = await req.json();
-    const messages = body.messages || [];
-    const userName = body.userName || "Friend";
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to use the chat assistant.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: GeneralChatRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const messages = body?.messages || [];
+    const userName = authUser.name || body?.userName || authUser.email.split("@")[0];
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Messages array is required." }, { status: 400 });
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Messages array is required.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const totalChars = messages.reduce(
+      (sum, m) => sum + (typeof (m?.text || m?.content) === "string" ? (m.text || m.content)!.length : 0),
+      0
+    );
+
+    if (totalChars > MAX_MESSAGES_TEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Messages content exceeds limit (${MAX_MESSAGES_TEXT_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
     }
 
     const lastMessage =
@@ -79,80 +134,87 @@ export async function POST(req: NextRequest) {
       messages[messages.length - 1]?.content ||
       "";
 
-    // ─── 1. Google Gemini 1.5 Flash API ──────────────────────────────────────
-    const geminiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_AI_KEY;
+    // ─── Canonical AI Assistant Provider Gateway ──────────────────────────
+    const { getCanonicalProvider, mapProviderError } = await import("@/lib/ai/providerConfig");
+    const providerInfo = getCanonicalProvider();
 
-    if (geminiKey && geminiKey.trim().length > 5) {
-      try {
-        const geminiReply = await callGemini15Flash(geminiKey, messages, userName);
-        if (geminiReply && geminiReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: geminiReply,
-            engine: "Google Gemini 1.5 Flash",
-            model: "gemini-1.5-flash",
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Gemini API failed, falling back:", err);
-      }
+    if (providerInfo.isMock) {
+      return NextResponse.json({
+        reply: "UBIX_MOCK_CHAT_OK: General chat inference completed.",
+        engine: "Mock Test Provider",
+        model: "mock-model",
+      });
     }
 
-    // ─── 2. Groq Cloud Llama 3 Fallback ──────────────────────────────────────
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey && groqKey.trim().length > 5) {
-      try {
-        const groqReply = await callGroqLlama3(groqKey, messages, userName);
-        if (groqReply && groqReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: groqReply,
-            engine: "Meta Llama 3 (Groq LPU)",
-            model: "llama-3.3-70b-versatile",
-            fallbackLink: OPEN_SOURCE_FALLBACKS.llama3.link,
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Groq Llama 3 failed:", err);
-      }
+    if (!providerInfo.isConfigured || !providerInfo.apiKey) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "AI_PROVIDER_NOT_CONFIGURED",
+            message: "No AI provider is configured for this environment. Please configure OPENAI_API_KEY on the server.",
+          },
+        },
+        { status: 503 }
+      );
     }
 
-    // ─── 3. Hugging Face Serverless Fallback (Gemma 2 / Sarvam AI / Llama 3) ──
-    const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
-    if (hfToken && hfToken.trim().length > 5) {
-      try {
-        const hfReply = await callHuggingFaceInference(hfToken, messages);
-        if (hfReply && hfReply.trim().length > 0) {
-          return NextResponse.json({
-            reply: hfReply,
-            engine: "Hugging Face Inference (Gemma 2 / Llama 3)",
-            fallbacks: OPEN_SOURCE_FALLBACKS,
-          });
-        }
-      } catch (err) {
-        console.warn("[/api/chat] Hugging Face inference failed:", err);
-      }
-    }
+    try {
+      const { generateAIResponse } = await import("@/lib/ai/centralProvider");
+      const formattedMessages = messages.map((m) => ({
+        role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        content: m.text || m.content || "",
+      }));
 
-    // ─── 4. High-Precision Autonomous General Engine (Zero-Key Fallback) ──────
-    const autonomousReply = generateAutonomousGeneralReply(lastMessage, userName);
-    return NextResponse.json({
-      reply: autonomousReply,
-      engine: "CareerForge Autonomous Multilingual General Engine",
-      fallbacks: OPEN_SOURCE_FALLBACKS,
-    });
+      const aiResult = await generateAIResponse({
+        messages: formattedMessages,
+        systemPrompt: GENERAL_ASSISTANT_SYSTEM_PROMPT,
+        temperature: body.temperature ?? 0.35,
+        maxTokens: 1200,
+        timeoutMs: 8000,
+      });
+
+      if (aiResult && aiResult.text) {
+        return NextResponse.json({
+          reply: aiResult.text,
+          engine: `${aiResult.provider.toUpperCase()} (${aiResult.model})`,
+          model: aiResult.model,
+          fallbacks: OPEN_SOURCE_FALLBACKS,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "AI_PROVIDER_UNAVAILABLE",
+            message: "Upstream AI provider returned an empty response.",
+          },
+        },
+        { status: 503 }
+      );
+    } catch (aiErr: any) {
+      console.warn("[/api/chat] Central AI cascade error:", aiErr);
+      const mapped = mapProviderError(aiErr);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: mapped.code,
+            message: mapped.message,
+          },
+        },
+        { status: mapped.statusCode }
+      );
+    }
   } catch (err) {
-    console.error("[/api/chat] General Chat Error:", err);
-    return NextResponse.json(
-      {
-        error: "Internal assistant error",
-        reply: "Hello! I am ready to help you with any questions in English, Hindi (हिन्दी), or Gujarati (ગુજરાતી). Please ask away!",
-        fallbacks: OPEN_SOURCE_FALLBACKS,
-      },
-      { status: 500 }
+    console.error(`[/api/chat] General Chat Error (${requestId}):`, err);
+    const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+    return createApiErrorResponse(
+      "AI_PROVIDER_UNAVAILABLE",
+      "The chat assistant is temporarily unavailable. Please try again shortly.",
+      requestId,
+      { statusCode: 503, retryable: true }
     );
   }
 }

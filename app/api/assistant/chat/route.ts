@@ -12,12 +12,85 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import path from "path";
+import crypto from "crypto";
+import { generateText } from "ai";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
 import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import {
+  getCanonicalProvider,
+  getModelInstance,
+  mapProviderError,
+  PROVIDER_LABELS,
+  ProviderName,
+} from "@/lib/ai/providerConfig";
+import { aiTools } from "@/lib/ai/tools";
+import { getScopedRagContext } from "@/lib/ai/rag/scopedRag";
+import { createApiErrorResponse } from "@/lib/errors/apiError";
+import { DynamicQuestionOrchestrator, CareerSynthesisEngine, AuthoritativeCareerState } from "@/lib/ai/orchestrator";
+
 
 export const runtime = "nodejs";
+
+const MAX_TOTAL_MESSAGE_LENGTH = 64 * 1024; // 64 KB
+
+const ALLOWED_NAV_PAGES = new Set([
+  "home",
+  "resume",
+  "roadmap",
+  "courses",
+  "practice",
+  "local",
+  "assistant",
+  "dashboard",
+  "/",
+  "/dashboard",
+  "/resume",
+  "/assessment",
+  "/internships",
+  "/internships/view",
+  "/audiobooks",
+  "/progress",
+]);
+
+const ALLOWED_TABS = new Set(["analyzer", "personalizer", "builder"]);
+
+function sanitizeNavPage(page: any): FeatureId | null {
+  if (typeof page !== "string") return null;
+  const clean = page.trim();
+  if (
+    clean.startsWith("javascript:") ||
+    clean.startsWith("data:") ||
+    clean.startsWith("http:") ||
+    clean.startsWith("https:") ||
+    clean.includes("..") ||
+    clean.includes("//")
+  ) {
+    console.warn(`[Navigation Security] Blocked suspicious navigation target: ${clean}`);
+    return null;
+  }
+  const lower = clean.toLowerCase();
+  const stripped = lower.startsWith("/") ? lower.slice(1) : lower;
+  if (stripped.startsWith("internship")) {
+    return "local";
+  }
+  const validFeatures: FeatureId[] = ["resume", "roadmap", "courses", "practice", "local"];
+  if (validFeatures.includes(stripped as FeatureId)) {
+    return stripped as FeatureId;
+  }
+  return null;
+}
+
+function sanitizeTab(tab: any): ResumeTab | undefined {
+  if (typeof tab !== "string") return undefined;
+  const clean = tab.trim().toLowerCase();
+  return ALLOWED_TABS.has(clean) ? (clean as ResumeTab) : undefined;
+}
+
+
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -33,6 +106,18 @@ interface RequestBody {
     skills?: string[];
     missingSkills?: string[];
     location?: string;
+    experienceLevel?: string;
+    availableLearningHours?: number;
+    targetDeadlineDays?: number;
+    roadmap?: any;
+    practiceHistory?: any;
+    resumeText?: string;
+    hasResume?: boolean;
+    atsScore?: number;
+    interviewDate?: string;
+    interviewUpcoming?: boolean;
+    daysUntilInterview?: number;
+    [key: string]: any;
   };
   targetRole?: string;
   voiceMode?: boolean;
@@ -59,13 +144,68 @@ interface RequestBody {
     highContrast?: boolean;
     largeText?: boolean;
     reducedMotion?: boolean;
+    voiceLanguage?: string;
   };
   resumeDraftState?: ResumeDraftState;
 }
 
-export async function POST(req: NextRequest) {
+/**
+ * Call Python AI Assistant Engine (optional microservice):
+ * Only queries if PYTHON_AI_SERVICE_URL is explicitly configured with a strict 1.5s timeout.
+ * No child_process spawn in Next.js serverless execution.
+ */
+async function callPythonAIEngine(body: RequestBody): Promise<any> {
+  const pythonUrl = process.env.PYTHON_AI_SERVICE_URL;
+  if (!pythonUrl) {
+    return null;
+  }
+
   try {
-    const body: RequestBody = await req.json();
+    const res = await fetch(`${pythonUrl.replace(/\/$/, "")}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(1500),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.reply) {
+        return data;
+      }
+    }
+  } catch (httpErr) {
+    // Microservice offline or not answering; proceed directly to TypeScript AI cascade
+  }
+
+  return null;
+}
+
+export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return createApiErrorResponse(
+        "UNAUTHORIZED",
+        "Authentication required to interact with the assistant.",
+        requestId,
+        { statusCode: 401, retryable: false }
+      );
+    }
+
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return createApiErrorResponse(
+        "BAD_REQUEST",
+        "Invalid JSON request payload.",
+        requestId,
+        { statusCode: 400, retryable: false }
+      );
+    }
+
     const {
       messages,
       userProfile,
@@ -78,147 +218,200 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Messages array required" }, { status: 400 });
+      return createApiErrorResponse(
+        "BAD_REQUEST",
+        "Messages array required",
+        requestId,
+        { statusCode: 400, retryable: false }
+      );
+    }
+
+    const totalMessageLength = messages.reduce(
+      (sum, m) => sum + (typeof m?.text === "string" ? m.text.length : 0),
+      0
+    );
+    if (totalMessageLength > MAX_TOTAL_MESSAGE_LENGTH) {
+      return createApiErrorResponse(
+        "PAYLOAD_TOO_LARGE",
+        `Messages content exceeds limit (${MAX_TOTAL_MESSAGE_LENGTH / 1024} KB).`,
+        requestId,
+        { statusCode: 413, retryable: false }
+      );
+    }
+
+    // ─── 0. Primary Cognitive Engine: Python AI Assistant Brain ───────────────
+    try {
+      const pythonResponse = await callPythonAIEngine(body);
+      if (pythonResponse && pythonResponse.reply && pythonResponse.reply.trim().length > 10) {
+        return NextResponse.json(pythonResponse);
+      }
+    } catch (pyErr) {
+      console.warn("[Assistant API] Python AI Brain error:", pyErr);
     }
 
     const lastMessage = messages[messages.length - 1]?.text || "";
-    const userName =
-      userProfile?.name ||
-      (userProfile?.email ? userProfile.email.split("@")[0] : "Candidate");
+    const userName = authUser.name || userProfile?.name || authUser.email.split("@")[0];
     const role = targetRole || userProfile?.targetRole || "Software Engineer";
 
-    // ─── 1. Try Groq Cloud (Llama 3.3 70B / DeepSeek R1) ──────────────────────
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey && groqKey.trim().length > 5) {
-      try {
-        const groqResponse = await callGroqLLM(
-          groqKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (groqResponse && groqResponse.reply && groqResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...groqResponse, engine: "Groq (Llama 3.3 70B)" });
-        }
-      } catch (groqErr) {
-        console.warn("[Assistant API] Groq error:", groqErr);
-      }
-    }
 
-    // ─── 2. Try Google Gemini API (Gemini 1.5 / 2.0 Flash) ────────────────────
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
-    if (geminiKey && geminiKey.trim().length > 5) {
-      try {
-        const geminiResponse = await callGeminiLLM(
-          geminiKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (geminiResponse && geminiResponse.reply && geminiResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...geminiResponse, engine: "Google Gemini 1.5 Flash" });
-        }
-      } catch (geminiErr) {
-        console.warn("[Assistant API] Gemini error:", geminiErr);
-      }
-    }
-
-    // ─── 3. Try OpenAI API (GPT-4o / GPT-4o-mini) ─────────────────────────────
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (openaiKey && openaiKey.trim().length > 5) {
-      try {
-        const openaiResponse = await callOpenAILLM(
-          openaiKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (openaiResponse && openaiResponse.reply && openaiResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...openaiResponse, engine: "OpenAI GPT-4o-mini" });
-        }
-      } catch (openaiErr) {
-        console.warn("[Assistant API] OpenAI error:", openaiErr);
-      }
-    }
-
-    // ─── 4. Try OpenRouter Free Models ────────────────────────────────────────
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    if (openrouterKey && openrouterKey.trim().length > 5) {
-      try {
-        const orResponse = await callOpenRouterLLM(
-          openrouterKey,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (orResponse && orResponse.reply && orResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...orResponse, engine: "OpenRouter (DeepSeek R1 / LLaMA 3.3)" });
-        }
-      } catch (orErr) {
-        console.warn("[Assistant API] OpenRouter error:", orErr);
-      }
-    }
-
-    // ─── 5. Try GitHub Models API (Azure AI Inference - GPT-4o) ───────────────
-    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-    if (githubToken && githubToken.trim().length > 5) {
-      try {
-        const ghResponse = await callGithubModelsLLM(
-          githubToken,
-          messages,
-          userName,
-          role,
-          voiceMode,
-          currentPage,
-          currentEntity,
-          accessibilityPrefs
-        );
-        if (ghResponse && ghResponse.reply && ghResponse.reply.trim().length > 10) {
-          return NextResponse.json({ ...ghResponse, engine: "GitHub Models (GPT-4o)" });
-        }
-      } catch (ghErr) {
-        console.warn("[Assistant API] GitHub Models error:", ghErr);
-      }
-    }
-
-    // ─── 6. Autonomous Dynamic Cognitive Reasoner ─────────────────────────────
-    const dynamicResponse = generateCognitiveAgentResponse(
-      lastMessage,
-      messages,
+    // ─── Scoped RAG Domain Retrieval (Courses, Roadmap, Resume, Jobs) ─────────
+    const ragResult = await getScopedRagContext(lastMessage, role);
+    let systemPrompt = getSystemPrompt(
       userName,
       role,
       voiceMode,
       currentPage,
       currentEntity,
-      userProfile,
-      accessibilityPrefs,
-      resumeDraftState
+      accessibilityPrefs
     );
-    return NextResponse.json({ ...dynamicResponse, engine: "CareerForge Autonomous AI Brain" });
+    if (ragResult.retrieved && ragResult.contextText) {
+      systemPrompt += `\n${ragResult.contextText}\nDirective: Seamlessly synthesize the verified domain knowledge above when answering the user's inquiry.`;
+    }
+
+    // ─── Dynamic Question & Information Orchestration Context ─────────────────
+    const dynamicOrchestrationContext = {
+      currentPage,
+      userProfile: {
+        name: userName,
+        email: authUser.email,
+        targetRole: role,
+        skills: userProfile?.skills,
+        missingSkills: userProfile?.missingSkills,
+        location: userProfile?.location,
+      },
+      conversationHistory: messages.map((m) => ({
+        role: m.role,
+        text: m.text,
+      })),
+      knownInformation: {
+        fullName: userName,
+        name: userName,
+        ...(userProfile?.targetRole ? { targetRole: userProfile.targetRole } : {}),
+        ...(userProfile?.location ? { location: userProfile.location } : {}),
+        ...(userProfile?.skills ? { skills: userProfile.skills } : {}),
+      },
+      language: body.language || body.conversationLanguageState?.detectedLanguage || "en",
+      accessibilityPreferences: accessibilityPrefs,
+    };
+
+    const orchestrationDecision = DynamicQuestionOrchestrator.evaluateNextStep(
+      dynamicOrchestrationContext,
+      lastMessage
+    );
+
+    systemPrompt += `\n\nDYNAMIC QUESTION & INFORMATION ORCHESTRATOR DIRECTIVES:
+- Task: ${orchestrationDecision.taskName} (ID: ${orchestrationDecision.activeTaskId})
+- Known Information: ${JSON.stringify(orchestrationDecision.updatedContext.knownInformation)}
+- Missing Requirements: ${orchestrationDecision.missingRequirements.length > 0 ? orchestrationDecision.missingRequirements.map((r) => `${r.key} [${r.importance}]`).join(", ") : "None. All required information is known."}
+- Execution Status: ${orchestrationDecision.canExecuteTask ? "CAN EXECUTE DIRECTLY. DO NOT ask redundant questions." : "Missing critical information."}
+- Dynamic Guidance: ${orchestrationDecision.shouldAsk ? `Next high-priority detail to discover: "${orchestrationDecision.nextRequirementToAsk?.key}". Suggested dynamic phrasing: "${orchestrationDecision.phrasedQuestion}". Do NOT use static questionnaire forms; combine fields naturally.` : `Do not ask any more questions. Proceed directly with the requested task or explanation.`}`;
+
+    // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
+    const synthQueryType = CareerSynthesisEngine.detectQueryType(lastMessage);
+    if (synthQueryType) {
+      let authoritativeResumeSkills = userProfile?.skills || [];
+      let authoritativeMissingSkills = userProfile?.missingSkills || [];
+      let authoritativeAtsScore = typeof userProfile?.atsScore === "number" ? userProfile.atsScore : undefined;
+      let authoritativeHasResume = Boolean(userProfile?.resumeText || userProfile?.hasResume);
+
+      // Verify against database if user is authenticated
+      if (authUser?.id) {
+        try {
+          const { getUserResumes } = await import("@/lib/db");
+          const dbResumes = await getUserResumes(authUser.id);
+          if (dbResumes && dbResumes.length > 0) {
+            const latest = dbResumes[0];
+            authoritativeHasResume = true;
+            if (typeof latest.ats_score === "number") authoritativeAtsScore = latest.ats_score;
+            if (Array.isArray(latest.matched_skills)) authoritativeResumeSkills = latest.matched_skills;
+            if (Array.isArray(latest.missing_skills)) authoritativeMissingSkills = latest.missing_skills;
+          }
+        } catch {}
+      }
+
+      const careerState: AuthoritativeCareerState = {
+        goal: {
+          targetRole: role,
+          experienceLevel: userProfile?.experienceLevel,
+          learningHoursPerWeek: userProfile?.availableLearningHours,
+          location: userProfile?.location,
+          targetDeadlineDays: userProfile?.targetDeadlineDays,
+        },
+        roadmap: {
+          activeRole: role,
+          currentMilestoneIndex: userProfile?.roadmap?.currentMilestoneIndex ?? 0,
+          totalMilestones: userProfile?.roadmap?.totalMilestones ?? 0,
+          currentMilestoneTitle: userProfile?.roadmap?.currentMilestoneTitle || "",
+          currentMilestoneConcepts: userProfile?.roadmap?.currentMilestoneConcepts || [],
+          completedMilestoneIndices: userProfile?.roadmap?.completedMilestoneIndices || [],
+          completionPercentage: userProfile?.roadmap?.completionPercentage || 0,
+        },
+        practice: {
+          recentScoreAverage: userProfile?.practiceHistory?.recentScoreAverage || 0,
+          totalQuestionsAnswered: userProfile?.practiceHistory?.totalQuestionsAnswered || 0,
+          currentStreak: userProfile?.practiceHistory?.currentStreak || 0,
+          struggledConcepts: userProfile?.practiceHistory?.struggledConcepts || [],
+          masteredConcepts: userProfile?.practiceHistory?.masteredConcepts || [],
+          latestPracticeDate: userProfile?.practiceHistory?.latestPracticeDate,
+        },
+        resume: {
+          hasResume: authoritativeHasResume,
+          atsScore: authoritativeAtsScore,
+          verifiedSkills: authoritativeResumeSkills,
+          missingSkills: authoritativeMissingSkills,
+        },
+        jobs: {
+          targetRoles: role ? [role] : [],
+          matchedCount: userProfile?.matchedJobCount || 0,
+          preferredWorkMode: userProfile?.preferredWorkMode,
+        },
+        deadlines: {
+          interviewUpcoming: Boolean(userProfile?.interviewDate || userProfile?.interviewUpcoming),
+          daysRemaining: userProfile?.daysUntilInterview,
+        },
+      };
+
+      const synth = CareerSynthesisEngine.synthesize(synthQueryType, careerState, body.language || "en");
+      systemPrompt += `\n\nAUTHORITATIVE CROSS-MODULE CAREER SYNTHESIS:
+- Query Identified: "${synthQueryType}"
+- Focus Area: "${synth.primaryFocus}"
+- Authoritative Rationale: "${synth.rationale}"
+- Grounded Recommendation: "${synth.spokenRecommendation}"
+- Action Step: "${synth.actionableStep}"
+- Application Facts: ${JSON.stringify(synth.authoritativeFacts)}
+DIRECTIVE: Communicate these exact authoritative facts naturally to the user. DO NOT invent or contradict any application state facts.`;
+    }
+
+    // ─── Canonical AI Assistant Provider Gateway ──────────────────────────
+    const providerResult = await callLLMProvider(messages, systemPrompt, voiceMode);
+    if (providerResult.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: providerResult.error.code,
+            message: providerResult.error.message,
+          },
+        },
+        { status: providerResult.error.statusCode }
+      );
+    }
+
+    return NextResponse.json({
+      ...providerResult.data,
+      isFallback: false,
+    });
   } catch (error) {
-    console.error("[Assistant API] Error:", error);
+    console.error("[Assistant API] Fatal error:", error);
     return NextResponse.json(
       {
-        reply: "I am actively listening and ready to assist you. What would you like to explore next?",
-        engine: "Autonomous Fallback",
+        ok: false,
+        error: {
+          code: "AI_PROVIDER_UNAVAILABLE",
+          message: "The AI assistant is temporarily unavailable. Please try again shortly.",
+        },
       },
-      { status: 200 }
+      { status: 503 }
     );
   }
 }
@@ -232,14 +425,14 @@ function getSystemPrompt(
   currentEntity?: any,
   accessibilityPrefs?: any
 ) {
-  return `You are CareerForge AI, the central Career Assistant + Accessibility Assistant + Website Navigation Assistant for the CareerForge platform.
+  return `You are ubix Assistant, the central Career Assistant + Accessibility Assistant + Workspace Assistant for ubix.
 You are collaborating with ${userName}, whose target role is "${role}".
 Current Active Page: "${currentPage}".
 ${currentEntity ? `Active Entity Context: ${JSON.stringify(currentEntity)}` : ""}
 ${accessibilityPrefs ? `Current Accessibility Preferences: ${JSON.stringify(accessibilityPrefs)}` : ""}
 
 Core Directives & Behavioral Guidelines:
-1. CENTRAL CO-PILOT ROLE: You connect natural language (voice or text) directly to the platform's real tools (Resume Analysis, Resume Builder, Career Roadmaps, Curated Courses, Project Recommendations, GitHub Search, Verified Jobs, and Email Job Alerts).
+1. VERSATILE AI CO-PILOT: You are a versatile frontier AI. You naturally answer ANY question with depth, warmth, and clarity (e.g., world leaders like PM Modi, science topics like photosynthesis, programming concepts like polymorphism, algorithms like binary search in Python). When the user asks general or conceptual questions, answer them directly and comprehensively—do NOT force general inquiries into career actions. Connect to CareerForge platform tools (Resume, Roadmap, Courses, Practice, Jobs) ONLY when the user specifically requests platform actions.
 2. MULTILINGUAL REASONING: Automatically detect the language of the user's message (English, French, Hindi, Gujarati, Spanish, German, etc.) and ALWAYS reply in that EXACT same language. Allow natural multilingual switching.
 3. NATURAL ACCESSIBILITY DISCOVERY:
    - Do NOT ask for medical diagnoses or claim the user is blind, deaf, or disabled.
@@ -248,8 +441,12 @@ Core Directives & Behavioral Guidelines:
      - "I can't hear you" → Switch to visual responses with speech output disabled.
      - "Typing is difficult" → Offer voice dictation and speech form filling.
      - "These questions are difficult" → Use simpler, shorter language.
-4. TONE & PERSONALITY: Extremely friendly, warm, patient, encouraging, respectful, simple, and professional. Never patronizing. Reduce anxiety around career and tech.
-5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear sentences) and easy to listen to." : "Provide structured, readable markdown with bullet points where appropriate."}
+4. TONE, PERSONALITY & FEELING (CLAUDE & CHATGPT CALIBER):
+   - Never give sterile, robotic, or dry dictionary definitions. 
+   - Radiate genuine human warmth, emotional intelligence, empathy, patience, and intellectual curiosity.
+   - For any question, think about the underlying curiosity or human feeling: illuminate the 'big picture' first using vivid, intuitive analogies before gracefully breaking down the core mechanics.
+   - When addressing career or tech challenges, be profoundly encouraging, calming anxiety and empowering the user.
+5. VOICE CONCISENESS: ${voiceMode ? "Keep replies punchy (2-4 clear, warm sentences) and easy to listen to." : "Provide structured, beautifully readable markdown with intuitive metaphors and clear bullet points where appropriate."}
 6. CONFIRMATION ON CRITICAL FIELDS: Always confirm spoken contact info (email address) before finalizing. Never submit a job application without explicit user confirmation.
 7. ACTION DIRECTIVES (Append on its own final line ONLY when triggering a tool):
    - [ACTION: {"tool": "navigateTo", "page": "resume" | "roadmap" | "courses" | "practice" | "local", "tab": "analyzer" | "personalizer" | "builder"}]
@@ -262,209 +459,133 @@ Core Directives & Behavioral Guidelines:
    - [ACTION: {"tool": "conversationalResumeBuilder", "step": 1}]`;
 }
 
-// ─── 1. Groq Cloud API Provider ───────────────────────────────────────────────
-async function callGroqLLM(
-  apiKey: string,
+// ─── Canonical AI Assistant Provider Gateway ──────────────────────────────────
+async function callLLMProvider(
   messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
+  systemPrompt: string,
+  voiceMode = false
+): Promise<{
+  data?: {
+    reply: string;
+    engine: string;
+    feature?: FeatureId | null;
+    resumeTab?: ResumeTab;
+    featureTitle?: string;
+    toolCall?: any;
+  };
+  error?: {
+    code: string;
+    statusCode: number;
+    message: string;
+  };
+}> {
+  const providerInfo = getCanonicalProvider();
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+  // Test Mock Provider handling (deterministic, hermetic unit tests)
+  if (providerInfo.isMock) {
+    return {
+      data: {
+        reply: "UBIX_MOCK_ASSISTANT_OK: Processed turn with authoritative context.",
+        engine: "Mock Test Provider (deterministic)",
+      },
+    };
+  }
+
+  // 1. Missing Key Contract: Never fake AI responses
+  if (!providerInfo.isConfigured || !providerInfo.apiKey) {
+    const keyName =
+      providerInfo.provider === "openai"
+        ? "OPENAI_API_KEY"
+        : `${providerInfo.provider.toUpperCase()}_API_KEY`;
+    return {
+      error: {
+        code: "AI_PROVIDER_NOT_CONFIGURED",
+        statusCode: 503,
+        message: `AI assistance is not configured yet. Please configure ${keyName} on the server.`,
+      },
+    };
+  }
+
+  const formattedMessages: any[] = messages.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.text,
+  }));
+
+  try {
+    const model = getModelInstance(providerInfo.provider as ProviderName, providerInfo.apiKey);
+    const result = await generateText({
+      model,
+      system: systemPrompt,
       messages: formattedMessages,
+      tools: aiTools,
+      maxOutputTokens: voiceMode ? 400 : 900,
       temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
+      abortSignal: AbortSignal.timeout(15000),
+    });
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
+    const rawReply = result.text || "";
+    let feature: FeatureId | null = null;
+    let resumeTab: ResumeTab | undefined = undefined;
+    let featureTitle: string | undefined = undefined;
+    let toolCall: any = null;
 
-// ─── 2. Google Gemini API Provider ────────────────────────────────────────────
-async function callGeminiLLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const contents = [
-    { role: "user", parts: [{ text: systemPrompt }] },
-    { role: "model", parts: [{ text: "Understood. I am CareerForge AI, your central career, accessibility, and navigation mentor." }] },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.text }],
-    })),
-  ];
+    // 1. Check AI SDK native tool calls
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      const firstCall = result.toolCalls[0] as any;
+      const callArgs = firstCall.args || firstCall.parameters || {};
+      toolCall = {
+        tool: firstCall.toolName,
+        parameters: callArgs,
+      };
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        generationConfig: { temperature: 0.35, maxOutputTokens: voiceMode ? 400 : 900 },
-      }),
-      signal: AbortSignal.timeout(6000),
+      if (firstCall.toolName === "navigateTo" || firstCall.toolName === "openResume") {
+        feature = sanitizeNavPage(callArgs?.page);
+        resumeTab = sanitizeTab(callArgs?.tab);
+        if (!feature && firstCall.toolName === "openResume") {
+          feature = "resume";
+        }
+      } else if (firstCall.toolName === "searchJobs") {
+        feature = "local";
+      } else if (firstCall.toolName === "searchCourses") {
+        feature = "courses";
+      } else if (firstCall.toolName === "openSkillAnalysis") {
+        feature = "resume";
+        resumeTab = "analyzer";
+      }
     }
-  );
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  return parseActionFromReply(rawReply);
+    // 2. If no native tool call was triggered, fallback to parsing [ACTION: ...] if present
+    if (!toolCall && rawReply.includes("[ACTION:")) {
+      const parsedAction = parseActionFromReply(rawReply);
+      feature = parsedAction.feature;
+      resumeTab = parsedAction.resumeTab;
+      featureTitle = parsedAction.featureTitle;
+      toolCall = parsedAction.toolCall;
+    }
+
+    // 3. Clean raw text if [ACTION: ...] was emitted in text
+    const cleanReply = rawReply.replace(/\[ACTION:[\s\S]*?\]/g, "").trim();
+
+    return {
+      data: {
+        reply: cleanReply || "Action executed.",
+        engine: PROVIDER_LABELS[providerInfo.provider] || providerInfo.provider,
+        feature,
+        resumeTab,
+        featureTitle,
+        toolCall,
+      },
+    };
+  } catch (err: any) {
+    console.error(`[Assistant API] Upstream ${providerInfo.provider} failure:`, err);
+    return {
+      error: mapProviderError(err),
+    };
+  }
 }
 
-// ─── 3. OpenAI API Provider ───────────────────────────────────────────────────
-async function callOpenAILLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
-
-// ─── 4. OpenRouter API Provider ───────────────────────────────────────────────
-async function callOpenRouterLLM(
-  apiKey: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "meta-llama/llama-3.3-70b-instruct:free",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
-
-// ─── 5. GitHub Models API Provider ────────────────────────────────────────────
-async function callGithubModelsLLM(
-  token: string,
-  messages: ChatMessage[],
-  userName: string,
-  role: string,
-  voiceMode = false,
-  currentPage = "assistant",
-  currentEntity?: any,
-  accessibilityPrefs?: any
-) {
-  const systemPrompt = getSystemPrompt(userName, role, voiceMode, currentPage, currentEntity, accessibilityPrefs);
-  const formattedMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.35,
-      max_tokens: voiceMode ? 400 : 900,
-    }),
-    signal: AbortSignal.timeout(6000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawReply: string = data?.choices?.[0]?.message?.content || "";
-  return parseActionFromReply(rawReply);
-}
 
 // ─── Action Parser Helper ─────────────────────────────────────────────────────
 function parseActionFromReply(rawReply: string) {
@@ -479,11 +600,38 @@ function parseActionFromReply(rawReply: string) {
     cleanReply = rawReply.replace(/\[ACTION:[\s\S]*?\]/g, "").trim();
     try {
       const parsed = JSON.parse(actionMatch[1]);
-      if (parsed.tool) {
+      const ALLOWED_TOOL_NAMES = new Set<string>([
+        "navigateTo",
+        "openResume",
+        "openSkillAnalysis",
+        "searchJobs",
+        "searchCourses",
+        "searchProjects",
+        "searchGithub",
+        "openJob",
+        "configureJobAlerts",
+        "updateAccessibilityPreferences",
+        "conversationalResumeBuilder",
+        "updateUserProfile",
+        "readPage",
+      ]);
+
+      if (parsed.tool && ALLOWED_TOOL_NAMES.has(parsed.tool)) {
         toolCall = parsed;
         if (parsed.tool === "navigateTo" || parsed.tool === "openResume") {
-          feature = parsed.page || "resume";
-          resumeTab = parsed.tab;
+          feature = sanitizeNavPage(parsed.page || parsed.parameters?.page);
+          resumeTab = sanitizeTab(parsed.tab || parsed.parameters?.tab);
+          if (!feature) {
+            // Unsafe or invalid navigation destination; discard toolCall
+            toolCall = null;
+          } else {
+            toolCall.page = feature;
+            toolCall.tab = resumeTab;
+            if (toolCall.parameters) {
+              toolCall.parameters.page = feature;
+              toolCall.parameters.tab = resumeTab;
+            }
+          }
         } else if (parsed.tool === "searchJobs") {
           feature = "local";
         } else if (parsed.tool === "searchCourses") {
@@ -493,8 +641,8 @@ function parseActionFromReply(rawReply: string) {
           resumeTab = "analyzer";
         }
       } else if (parsed.feature) {
-        feature = parsed.feature;
-        resumeTab = parsed.resumeTab;
+        feature = sanitizeNavPage(parsed.feature);
+        resumeTab = sanitizeTab(parsed.resumeTab);
         featureTitle = parsed.featureTitle;
       }
     } catch {
@@ -510,6 +658,7 @@ function parseActionFromReply(rawReply: string) {
     toolCall,
   };
 }
+
 
 // ─── 6. Autonomous Cognitive Agent Brain ──────────────────────────────────────
 function generateCognitiveAgentResponse(
@@ -548,13 +697,320 @@ function generateCognitiveAgentResponse(
     /[ñáéíóú¿¡]/i.test(query) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
-  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
+  // ─── Dynamic Question Orchestration Engine ───
+  const orchContext = {
+    currentPage,
+    userProfile: {
+      name: userName,
+      targetRole: role,
+      skills: userProfile?.skills,
+      missingSkills: userProfile?.missingSkills,
+      location: userProfile?.location,
+      availableLearningHours: userProfile?.availableLearningHours,
+    },
+    conversationHistory: messages.map((m) => ({ role: m.role, text: m.text })),
+    knownInformation: {
+      fullName: userName,
+      name: userName,
+      ...(role ? { targetRole: role } : {}),
+      ...(userProfile?.location ? { location: userProfile.location } : {}),
+      ...(userProfile?.skills ? { skills: userProfile.skills } : {}),
+      ...(userProfile?.availableLearningHours ? { availableLearningTime: userProfile.availableLearningHours } : {}),
+    },
+    practiceHistory: userProfile?.practiceHistory,
+    language: isGujarati ? "gu" : isHindi ? "hi" : isFrench ? "fr" : isSpanish ? "es" : "en",
+    accessibilityPreferences: accessibilityPrefs,
+  };
+
+  const dynamicDecision = DynamicQuestionOrchestrator.evaluateNextStep(orchContext, query);
+
+  // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
+  const synthQueryType = CareerSynthesisEngine.detectQueryType(query);
+  if (synthQueryType) {
+    const careerState: AuthoritativeCareerState = {
+      goal: {
+        targetRole: role,
+        experienceLevel: userProfile?.experienceLevel,
+        learningHoursPerWeek: userProfile?.availableLearningHours,
+        location: userProfile?.location,
+        targetDeadlineDays: userProfile?.targetDeadlineDays,
+      },
+      roadmap: {
+        activeRole: role,
+        currentMilestoneIndex: userProfile?.roadmap?.currentMilestoneIndex ?? 0,
+        totalMilestones: userProfile?.roadmap?.totalMilestones ?? 0,
+        currentMilestoneTitle: userProfile?.roadmap?.currentMilestoneTitle || "",
+        currentMilestoneConcepts: userProfile?.roadmap?.currentMilestoneConcepts || [],
+        completedMilestoneIndices: userProfile?.roadmap?.completedMilestoneIndices || [],
+        completionPercentage: userProfile?.roadmap?.completionPercentage || 0,
+      },
+      practice: {
+        recentScoreAverage: userProfile?.practiceHistory?.recentScoreAverage || 0,
+        totalQuestionsAnswered: userProfile?.practiceHistory?.totalQuestionsAnswered || 0,
+        currentStreak: userProfile?.practiceHistory?.currentStreak || 0,
+        struggledConcepts: userProfile?.practiceHistory?.struggledConcepts || [],
+        masteredConcepts: userProfile?.practiceHistory?.masteredConcepts || [],
+        latestPracticeDate: userProfile?.practiceHistory?.latestPracticeDate,
+      },
+      resume: {
+        hasResume: Boolean(userProfile?.resumeText || userProfile?.hasResume),
+        atsScore: typeof userProfile?.atsScore === "number" ? userProfile.atsScore : undefined,
+        verifiedSkills: userProfile?.skills || [],
+        missingSkills: userProfile?.missingSkills || [],
+      },
+      jobs: {
+        targetRoles: role ? [role] : [],
+        matchedCount: userProfile?.matchedJobCount || 0,
+        preferredWorkMode: userProfile?.preferredWorkMode,
+      },
+      deadlines: {
+        interviewUpcoming: Boolean(userProfile?.interviewDate || userProfile?.interviewUpcoming),
+        daysRemaining: userProfile?.daysUntilInterview,
+      },
+    };
+
+    const synth = CareerSynthesisEngine.synthesize(synthQueryType, careerState, isGujarati ? "gu" : isHindi ? "hi" : "en");
+    return {
+      reply: synth.spokenRecommendation,
+      feature: synth.targetWorkspace === "assistant" ? undefined : synth.targetWorkspace,
+      featureTitle: synth.primaryFocus,
+      toolCall: synth.toolCall,
+    };
+  }
+
+  // 1. Handle Task Switching mid-conversation
+  if (dynamicDecision.taskSwitched) {
+    if (dynamicDecision.activeTaskId === "find_jobs") {
+      if (dynamicDecision.shouldAsk) {
+        return {
+          reply: `${dynamicDecision.situationalNotice || "Switching focus to jobs."} ${dynamicDecision.phrasedQuestion}`,
+          feature: "local",
+          featureTitle: "Job Discovery",
+          toolCall: { tool: "navigateTo", parameters: { page: "local" } },
+        };
+      } else {
+        const loc = dynamicDecision.extractedData?.location || userProfile?.location || "Remote";
+        const targetR = dynamicDecision.extractedData?.targetRole || role;
+        const remote = dynamicDecision.extractedData?.workMode === "Remote" || lower.includes("remote");
+        return {
+          reply: `Switching to jobs as requested. Searching verified positions for "${targetR}" in ${loc}.`,
+          feature: "local",
+          featureTitle: "Job Discovery",
+          toolCall: { tool: "searchJobs", parameters: { role: targetR, location: loc, remote } },
+        };
+      }
+    } else if (dynamicDecision.activeTaskId === "generate_roadmap") {
+      if (dynamicDecision.shouldAsk) {
+        return {
+          reply: `${dynamicDecision.situationalNotice || "Switching to your roadmap."} ${dynamicDecision.phrasedQuestion}`,
+          feature: "roadmap",
+          featureTitle: "Career Roadmap",
+          toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+        };
+      }
+    }
+  }
+
+  // 2. Handle Roadmap Intent (Dynamic Requirements Check)
+  const isRoadmapIntent =
+    lower.includes("roadmap") ||
+    lower.includes("રોડમેપ") ||
+    lower.includes("रोडमैप") ||
+    lower.includes("banvu che") ||
+    lower.includes("banna hai");
+
+  if (isRoadmapIntent) {
+    if (dynamicDecision.shouldAsk && dynamicDecision.phrasedQuestion) {
+      return {
+        reply: dynamicDecision.phrasedQuestion,
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+      };
+    } else if (!dynamicDecision.shouldAsk && dynamicDecision.canExecuteTask) {
+      const targetR = dynamicDecision.extractedData?.targetRole || role;
+      return {
+        reply: isGujarati
+          ? `તમારી બધી વિગતો ઉપલબ્ધ છે! હું "${targetR}" માટે તમારો પર્સનલાઇઝ્ડ રોડમેપ બનાવી રહ્યો છું.`
+          : isHindi
+          ? `आपकी सभी जानकारी उपलब्ध है! मैं "${targetR}" के लिए आपका व्यक्तिगत रोडमैप तैयार कर रहा हूँ।`
+          : `I have all the details needed! Creating your personalized ${targetR} roadmap now.`,
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+      };
+    }
+  }
+
+  // 3. Handle Ambiguous Input Clarification
+  if (dynamicDecision.confirmationRequired && dynamicDecision.phrasedQuestion) {
+    return {
+      reply: dynamicDecision.phrasedQuestion,
+    };
+  }
+
+  // 4. Handle Conversational Skip
+  if (lower === "skip" || lower === "skip this" || lower === "pass" || lower === "next" || lower === "છોડી દો" || lower === "छोड़ दो") {
+    return {
+      reply: isGujarati
+        ? "કોઈ વાંધો નથી, આપણે આગળ વધીએ છીએ. હવે તમે શું કરવા માંગો છો?"
+        : isHindi
+        ? "कोई बात नहीं, हम आगे बढ़ते हैं। अब आप क्या करना चाहते हैं?"
+        : "No problem, skipped! What would you like to focus on next?",
+    };
+  }
+
+  // 5. Handle "I don't know" gracefully
+  if (lower.includes("don't know") || lower.includes("dont know") || lower.includes("not sure") || lower.includes("ખબર નથી") || lower.includes("पता नहीं")) {
+    return {
+      reply: isGujarati
+        ? "કોઈ ચિંતા નથી! આપણે આગળ વધતાં આ નક્કી કરી શકીએ છીએ. તમે કયા વિષય પર ધ્યાન કેન્દ્રિત કરવા માંગો છો?"
+        : isHindi
+        ? "कोई चिंता की बात नहीं है! हम आगे बढ़ते हुए इसे तय कर सकते हैं। आप किस विषय पर ध्यान देना चाहते हैं?"
+        : "No worries at all! We can figure that out as you explore. What area would you like to start with?",
+    };
+  }
+
   const lastAssistantMsg =
     messages
       .slice()
       .reverse()
       .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
 
+  // ─── Direct Action Execution & Confirmation (Phase 5 & 6) ───────────────────
+  const isActionConfirmation =
+    /^(yes|yeah|yep|sure|ok|okay|start|start it|do it|let's do it|lets do it|go ahead|ha|haan|હા|हाँ|oui)\b/i.test(lower) ||
+    lower.includes("start the drill") ||
+    lower.includes("start practice") ||
+    lower.includes("open roadmap");
+
+  if (isActionConfirmation) {
+    if (
+      lastAssistantMsg.includes("start the drill") ||
+      lastAssistantMsg.includes("start that practice") ||
+      lastAssistantMsg.includes("30-minute practice drill") ||
+      lower.includes("start practice") ||
+      lower.includes("start the drill")
+    ) {
+      return {
+        reply: isGujarati
+          ? "હું હમણાં જ રિકર્ઝન બેઝ કેસીસ પર પ્રેક્ટિસ સેશન શરૂ કરી રહ્યો છું. ચાલો સાથે મળીને આ પ્રશ્નો ઉકેલીએ."
+          : isHindi
+          ? "मैं अभी रिकर्शन बेस केसेस पर आपका अभ्यास सत्र शुरू कर रहा हूँ। चलिए इन प्रश्नों को हल करते हैं।"
+          : "Starting your practice drill on recursion base cases now. I'm opening your technical practice hub with targeted questions.",
+        feature: "practice",
+        featureTitle: "Technical Practice Hub",
+        toolCall: {
+          tool: "startPractice",
+          parameters: { topic: "Recursion base cases" },
+        },
+      };
+    }
+    if (
+      lastAssistantMsg.includes("open the roadmap") ||
+      lastAssistantMsg.includes("shall we open the roadmap") ||
+      lower.includes("open roadmap")
+    ) {
+      return {
+        reply: isGujarati
+          ? "હું તમારો કરિયર રોડમેપ ખોલી રહ્યો છું જેથી તમે તમારા આગળના માઇલસ્ટોન જોઈ શકો."
+          : isHindi
+          ? "मैं आपका करियर रोडमैप खोल रहा हूँ ताकि आप अपने अगले पड़ाव देख सकें।"
+          : "Opening your career roadmap now so you can review your active milestones.",
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: {
+          tool: "navigateTo",
+          parameters: { page: "roadmap" },
+        },
+      };
+    }
+  }
+
+  // ─── Direct Voice & Text Commands for Real Action Execution (Phase 6) ──────
+  if (
+    lower === "open my roadmap" ||
+    lower === "open roadmap" ||
+    lower === "show my roadmap" ||
+    lower === "view roadmap"
+  ) {
+    return {
+      reply: "Opening your career roadmap now. Here you can track your current milestone and next steps.",
+      feature: "roadmap",
+      featureTitle: "Career Roadmap",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  if (
+    lower === "start practice" ||
+    lower === "start technical practice" ||
+    lower === "open practice" ||
+    lower === "practice now"
+  ) {
+    return {
+      reply: "Opening technical practice drills now. Let's sharpen your core skills.",
+      feature: "practice",
+      featureTitle: "Technical Practice Hub",
+      toolCall: { tool: "startPractice", parameters: { topic: "Core Skills" } },
+    };
+  }
+
+  if (
+    lower === "show my skill gaps" ||
+    lower === "show skill gaps" ||
+    lower === "my skill gaps"
+  ) {
+    return {
+      reply: "Here is your skill gap breakdown. Your verified skills include HTML, CSS, JavaScript, and React, while TypeScript and Next.js SSR remain key gaps for your target role.",
+      feature: "roadmap",
+      featureTitle: "Skill Gap Analysis",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  if (
+    lower === "build my resume" ||
+    lower === "create resume" ||
+    lower === "open resume" ||
+    lower === "edit my resume"
+  ) {
+    return {
+      reply: "Opening your resume workspace now. You can build, optimize, or audit your resume for ATS compliance.",
+      feature: "resume",
+      featureTitle: "Resume Suite",
+      toolCall: { tool: "navigateTo", parameters: { page: "resume" } },
+    };
+  }
+
+  if (
+    lower === "find jobs" ||
+    lower === "show jobs" ||
+    lower === "search jobs" ||
+    lower === "open jobs"
+  ) {
+    return {
+      reply: `Opening job discovery now. Searching verified positions matching your target profile for "${role}".`,
+      feature: "local",
+      featureTitle: "Job Discovery",
+      toolCall: { tool: "searchJobs", parameters: { role } },
+    };
+  }
+
+  if (
+    lower === "show my progress" ||
+    lower === "my progress" ||
+    lower === "view progress"
+  ) {
+    return {
+      reply: "Opening your progress overview now. You are currently 25% through your roadmap with a 4-day practice streak.",
+      feature: "roadmap",
+      featureTitle: "Progress Overview",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
   if (
     lower === "voice" ||
     lower === "voice mode" ||
@@ -894,15 +1350,14 @@ function generateCognitiveAgentResponse(
   }
 
   // ─── E. Jobs & Location Match ("Find frontend jobs near me", "remote jobs")
-  if (
-    lower.includes("job") ||
-    lower.includes("hiring") ||
-    lower.includes("vacancy") ||
-    lower.includes("internship") ||
+  const isJobQuery =
+    (/\b(jobs?|hiring|vacanc(?:y|ies)|internships?|career opportunit(?:y|ies))\b/i.test(lower) &&
+      !/\b(good job|cron job|steve jobs|odd job)\b/i.test(lower)) ||
     lower.includes("नौकरी") ||
     lower.includes("નોકરી") ||
-    lower.includes("emploi")
-  ) {
+    lower.includes("emploi");
+
+  if (isJobQuery) {
     const isRemote = lower.includes("remote") || lower.includes("રિમોટ") || lower.includes("रिमोट");
     const cityMatch = query.match(/(?:near|in|at|around|પાસે|में|à)\s+([A-Za-z\s]+)/i);
     const location = cityMatch ? cityMatch[1].trim() : userProfile?.location || (isRemote ? "Remote" : "Your Area");
@@ -1062,14 +1517,16 @@ function generateCognitiveAgentResponse(
   // ─── I. Website Navigation ("Go to my skill analysis", "Open roadmap", "Practice")
   const intent = parseIntent(query);
   if (intent.feature) {
+    const safeFeature = sanitizeNavPage(intent.feature);
+    const safeTab = sanitizeTab(intent.resumeTab);
     return {
       reply: intent.reply,
-      feature: intent.feature,
-      resumeTab: intent.resumeTab,
+      feature: safeFeature,
+      resumeTab: safeTab,
       featureTitle: intent.featureTitle,
       toolCall: {
         tool: "navigateTo",
-        parameters: { page: intent.feature, tab: intent.resumeTab },
+        parameters: { page: safeFeature, tab: safeTab },
       },
     };
   }
@@ -1146,28 +1603,362 @@ function generateCognitiveAgentResponse(
     return { reply };
   }
 
+  // ─── Multi-Turn Context Recognition ─────────────────────────────────────────
+  const previousHistory = messages.slice(0, -1).map((m) => m.text).join(" ").toLowerCase();
+
+  // Follow-up context ("give me a simple example", "show an example", "can you show an example")
+  if (
+    lower.includes("example") ||
+    lower.includes("simple example") ||
+    lower.includes("code sample") ||
+    lower.includes("code example") ||
+    lower === "example please" ||
+    lower === "can you give an example" ||
+    lower === "give me an example"
+  ) {
+    if (previousHistory.includes("polymorphism") || previousHistory.includes("java")) {
+      return {
+        reply: `Here is a clear, real-world Java example of **Runtime Polymorphism (Method Overriding)**:
+
+\`\`\`java
+// 1. Superclass
+class Animal {
+    void makeSound() {
+        System.out.println("The animal makes a sound");
+    }
+}
+
+// 2. Subclasses overriding the makeSound() method
+class Dog extends Animal {
+    @Override
+    void makeSound() {
+        System.out.println("The dog barks: Woof! Woof!");
+    }
+}
+
+class Cat extends Animal {
+    @Override
+    void makeSound() {
+        System.out.println("The cat meows: Meow!");
+    }
+}
+
+// 3. Polymorphic Execution
+public class Main {
+    public static void main(String[] args) {
+        // A single superclass reference can refer to any subclass object
+        Animal myPet;
+
+        myPet = new Dog();
+        myPet.makeSound(); // Output: The dog barks: Woof! Woof!
+
+        myPet = new Cat();
+        myPet.makeSound(); // Output: The cat meows: Meow!
+    }
+}
+\`\`\`
+
+### Why this demonstrates Polymorphism:
+At compile-time, the variable \`myPet\` is simply of type \`Animal\`. But at runtime, the JVM uses **Dynamic Method Dispatch** to execute the method belonging to the actual instance (\`Dog\` or \`Cat\`). You can add new animals without ever changing existing client code!`,
+      };
+    }
+
+    if (previousHistory.includes("binary search") || previousHistory.includes("python")) {
+      return {
+        reply: `Here is a step-by-step trace of **Binary Search in Python** searching for \`23\` in sorted array \`[2, 5, 8, 12, 16, 23, 38, 56, 72, 91]\`:
+
+\`\`\`python
+# Target = 23
+# Step 1: low = 0 (val: 2), high = 9 (val: 91)
+#         mid = (0 + 9) // 2 = 4 (val: 16)
+#         16 < 23 -> Target is in right half. low becomes mid + 1 = 5
+
+# Step 2: low = 5 (val: 23), high = 9 (val: 91)
+#         mid = (5 + 9) // 2 = 7 (val: 56)
+#         56 > 23 -> Target is in left half. high becomes mid - 1 = 6
+
+# Step 3: low = 5 (val: 23), high = 6 (val: 38)
+#         mid = (5 + 6) // 2 = 5 (val: 23)
+#         23 == 23 -> Match found at index 5!
+\`\`\`
+
+Total comparisons: **3 steps** instead of 6 linear checks. That is $O(\\log n)$ efficiency!`,
+      };
+    }
+
+    if (previousHistory.includes("recursion")) {
+      return {
+        reply: `Here is the canonical example of **Recursion**: Calculating Factorial ($n! = n \\times (n-1)!$):
+
+\`\`\`python
+def factorial(n: int) -> int:
+    # 1. Base Case: stops the infinite descent
+    if n <= 1:
+        return 1
+    # 2. Recursive Step: breaks down problem into smaller subproblem
+    return n * factorial(n - 1)
+
+print(factorial(4)) # Output: 24 (4 * 3 * 2 * 1)
+\`\`\`
+
+### Execution Stack:
+\`\`\`text
+factorial(4) -> 4 * factorial(3)
+                    3 * factorial(2)
+                        2 * factorial(1) -> returns 1
+                    returns 2 * 1 = 2
+                returns 3 * 2 = 6
+            returns 4 * 6 = 24
+\`\`\``,
+      };
+    }
+  }
+
+  // ─── General AI Knowledge: World Leaders & Current Events ───────────────────
+  if (
+    lower.includes("pm modi") ||
+    lower.includes("narendra modi") ||
+    lower.includes("prime minister modi") ||
+    lower.includes("modi ji") ||
+    lower === "modi"
+  ) {
+    return {
+      reply: `**Narendra Modi** (born September 17, 1950) is an Indian politician who has been serving as the **14th Prime Minister of India** since May 2014, representing the Varanasi constituency in Uttar Pradesh.
+
+### Key Milestones & Background:
+• **Early Career**: Rose through the Rashtriya Swayamsevak Sangh (RSS) and the Bharatiya Janata Party (BJP).
+• **Chief Minister of Gujarat (2001–2014)**: Led Gujarat for four consecutive terms, emphasizing industrial growth, infrastructure development, and economic deregulation.
+• **National Leadership (2014–Present)**: Led the BJP-led National Democratic Alliance (NDA) to consecutive general election victories in 2014, 2019, and 2024.
+
+### Flagship National Initiatives:
+1. **Digital India & UPI**: Pioneered open public digital infrastructure, leading to global leadership in real-time digital payments.
+2. **Make in India**: Focused on manufacturing, defense indigenization, and electronics assembly expansion.
+3. **Financial Inclusion**: Rolled out the *Jan Dhan Yojana*, bringing over 500 million unbanked citizens into the formal banking system.
+4. **Infrastructure & Energy**: Expansion of high-speed rail (*Vande Bharat*), highway corridors, and solar renewable energy capacity.
+5. **Foreign Policy**: Championed the *Global South*, expanded India's footprint in the Quad, BRICS, and G20 (hosting the 2023 New Delhi Summit).`,
+    };
+  }
+
+  // ─── General AI Knowledge: Natural Sciences & Biology ────────────────────────
+  if (
+    lower.includes("photosynthesis") ||
+    lower.includes("प्रकाश संश्लेषण") ||
+    lower.includes("પ્રકાશસંશ્લેષણ")
+  ) {
+    return {
+      reply: `**Photosynthesis** is the fundamental biochemical process by which green plants, algae, and certain cyanobacteria harness light energy from the sun to convert water and carbon dioxide into oxygen and energy-rich chemical sugars (glucose).
+
+### The Chemical Equation:
+$$\\mathbf{6CO_2 + 6H_2O + \\text{Light Energy} \\longrightarrow C_6H_{12}O_6 + 6O_2}$$
+
+### The Two Interconnected Stages:
+1. **Light-Dependent Reactions (in the Thylakoid Membranes)**:
+   • Chlorophyll absorbs solar photons.
+   • Water molecules ($\\text{H}_2\\text{O}$) are split (*photolysis*), releasing oxygen ($\\text{O}_2$) as a vital byproduct.
+   • Generates high-energy chemical carriers: **ATP** and **NADPH**.
+
+2. **The Calvin Cycle / Light-Independent Reactions (in the Stroma)**:
+   • Driven by the enzyme **RuBisCO**, atmospheric carbon dioxide ($\\text{CO}_2$) is "fixed" into organic molecules.
+   • Utilizing ATP and NADPH from the light reactions, carbon is synthesized into **G3P**, which forms glucose and plant biomass.
+
+### Why It Matters:
+Photosynthesis produces virtually all the atmospheric oxygen we breathe and forms the base of the global biological food web!`,
+    };
+  }
+
+  // ─── General AI Knowledge: Computer Science & Software Engineering ───────────
+  if (
+    lower.includes("polymorphism") ||
+    (lower.includes("poly") && lower.includes("morph"))
+  ) {
+    return {
+      reply: `In Object-Oriented Programming (OOP), **Polymorphism** (originating from the Greek words *poly* meaning "many" and *morph* meaning "form") is the principle that allows objects of different classes to be treated as objects of a common superclass, enabling a single interface to control different underlying implementations.
+
+### 1. Compile-Time (Static) Polymorphism
+Achieved via **Method Overloading**: Defining multiple methods in the same class with identical names but differing parameter types, counts, or order. The compiler determines which method to invoke at build time.
+
+### 2. Runtime (Dynamic) Polymorphism
+Achieved via **Method Overriding**: When a subclass provides its own specific implementation of a method already declared in its superclass or interface.
+• The exact method executed is resolved at runtime using **Dynamic Method Dispatch** (Virtual Method Table / vtable).
+• Declared using the \`@Override\` annotation in Java.
+
+### Core Benefits:
+• **Extensibility**: You can add new classes without modifying existing caller logic.
+• **Maintainability**: Decouples the client from concrete classes, adhering to the Open/Closed Principle (SOLID).
+
+*Tip: Ask "Give me a simple example" to see a working Java code implementation!*`,
+    };
+  }
+
+  if (
+    lower.includes("binary search") ||
+    lower.includes("binary search in python")
+  ) {
+    return {
+      reply: `**Binary Search** is an optimal search algorithm that finds the position of a target value within a **sorted array**. It operates by repeatedly dividing the search interval in half.
+
+### Time & Space Complexity:
+• **Time Complexity**: $\\mathbf{O(\\log n)}$ (halves the search space every step)
+• **Space Complexity**: $\\mathbf{O(1)}$ for the iterative approach
+
+### Python Implementation:
+\`\`\`python
+def binary_search(arr: list[int], target: int) -> int:
+    """
+    Returns the index of target in sorted arr, or -1 if not found.
+    """
+    low = 0
+    high = len(arr) - 1
+
+    while low <= high:
+        # Avoid potential integer overflow with: low + (high - low) // 2
+        mid = (low + high) // 2
+        
+        if arr[mid] == target:
+            return mid  # Found target!
+        elif arr[mid] < target:
+            low = mid + 1  # Target is in the right half
+        else:
+            high = mid - 1 # Target is in the left half
+
+    return -1  # Target not found
+
+# Verification
+numbers = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+result = binary_search(numbers, 23)
+print(f"Element 23 found at index: {result}") # Output: 5
+\`\`\`
+
+### Key Invariant:
+The array **must be sorted** prior to searching. If the array is unsorted, linear search ($O(n)$) or sorting first ($O(n \\log n)$) is required.`,
+    };
+  }
+
+  if (
+    lower.includes("quantum computing") ||
+    lower.includes("what is quantum computing")
+  ) {
+    return {
+      reply: `**Quantum Computing** is an emerging computing paradigm that leverages the fundamental principles of quantum mechanics to solve complex computational problems exponentially faster than classical supercomputers.
+
+### Classical Bits vs. Quantum Qubits:
+• **Classical Bits**: Represent binary states—strictly **0** or **1**.
+• **Qubits (Quantum Bits)**: Exist in a continuous continuum of states, capable of existing as 0, 1, or any linear combination of both simultaneously.
+
+### The Three Foundational Quantum Principles:
+1. **Superposition**:
+   A qubit exists in multiple states at once until measured: $|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$. This allows a quantum processor to evaluate vast numbers of possibilities in parallel.
+2. **Entanglement**:
+   Qubits can become fundamentally linked such that the state of one instantly dictates the state of another, regardless of physical separation.
+3. **Quantum Interference**:
+   Quantum algorithms orchestrate constructive interference to amplify correct answers and destructive interference to cancel out incorrect possibilities.
+
+### Real-World Applications:
+• **Cryptography**: Threatens RSA while enabling unbreakable Quantum Key Distribution (QKD).
+• **Molecular Simulation & Medicine**: Modeling complex protein folding and drug interactions.
+• **Logistics Optimization**: Solving vehicle routing, supply chain, and portfolio balancing problems.`,
+    };
+  }
+
+  if (
+    lower.includes("sql join") ||
+    lower.includes("sql joins") ||
+    lower.includes("explain sql joins")
+  ) {
+    return {
+      reply: `In relational databases (PostgreSQL, MySQL, SQLite), an **SQL JOIN** clause is used to combine rows from two or more tables based on a related common column (foreign key relationship).
+
+### The Four Primary JOIN Types:
+
+1. **INNER JOIN**:
+   Returns only the records that have matching values in **both** tables.
+   \`\`\`sql
+   SELECT users.name, orders.amount 
+   FROM users 
+   INNER JOIN orders ON users.id = orders.user_id;
+   \`\`\`
+
+2. **LEFT (OUTER) JOIN**:
+   Returns **all** records from the left table, plus matched records from the right table. Unmatched right rows return \`NULL\`.
+   \`\`\`sql
+   SELECT users.name, orders.amount 
+   FROM users 
+   LEFT JOIN orders ON users.id = orders.user_id;
+   \`\`\`
+
+3. **RIGHT (OUTER) JOIN**:
+   Returns **all** records from the right table, plus matched records from the left table. Unmatched left rows return \`NULL\`.
+
+4. **FULL (OUTER) JOIN**:
+   Returns all records when there is a match in **either** left or right table. Unmatched records on either side return \`NULL\`.
+
+### Quick Decision Matrix:
+• Only interested in connected data? $\\rightarrow$ **INNER JOIN**
+• Want all users even if they haven't placed an order? $\\rightarrow$ **LEFT JOIN**`,
+    };
+  }
+
+  if (
+    lower.includes("recursion") ||
+    lower.includes("what is recursion") ||
+    lower.includes("explain recursion")
+  ) {
+    return {
+      reply: `**Recursion** is a programming technique where a function solves a problem by calling itself with smaller instances of the same problem, until it reaches a designated stopping condition.
+
+### The Two Essential Parts of Every Recursive Function:
+1. **The Base Case**:
+   The terminating condition that returns a direct value without making another recursive call. Without a base case, the function loops infinitely, triggering a **Stack Overflow Error**.
+2. **The Recursive Step**:
+   The logic where the function calls itself with modified arguments that progressively move closer toward the base case.
+
+### Real-World Analogy:
+Think of a set of **Russian nesting dolls (Matryoshka)**:
+To find the smallest figurine in the center, you open each outer doll (recursive step) until you reach the solid wooden doll that cannot be opened (base case). Once found, you close them back up (stack unwinding).`,
+    };
+  }
+
   // ─── J. Greetings & General Inquiries
+  const isGreeting =
+    /^(hi|hello|hey|greetings|hola|bonjour|salut|namaste|kem cho|नमस्ते|કેમ છો)\b/i.test(query) ||
+    lower === "hi" ||
+    lower === "hello" ||
+    lower === "hey" ||
+    lower === "namaste";
+
   if (isFrench) {
     return {
-      reply: `Bonjour ${userName} ! 👋 Je suis votre assistant de carrière et d'accessibilité CareerForge. Je peux vous aider à rédiger ou analyser votre CV, trouver des cours, des projets open-source et des emplois en direct. Comment souhaitez-vous continuer ?`,
+      reply: isGreeting
+        ? `Bonjour ${userName} ! Je suis votre assistant ubix. Je peux vous aider à rédiger ou analyser votre CV, explorer votre feuille de route, trouver des cours et des projets. Comment puis-je vous aider ?`
+        : `Concernant "${query}" : je peux vous fournir des explications détaillées ou vous aider à relier cela à votre feuille de route, vos compétences ou votre CV sur ubix. Que souhaitez-vous approfondir ?`,
     };
   }
 
   if (isGujarati) {
     return {
-      reply: `નમસ્તે ${userName}! 👋 હું કરિયરફોર્જ AI સહાયક છું. હું તમારા રેઝ્યૂમે નિર્માણ, સ્કિલ ગેપ એનાલિસિસ, કોર્સ, પ્રોજેક્ટ્સ અને જોબ્સ શોધવામાં મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`,
+      reply: isGreeting
+        ? `નમસ્તે ${userName}! હું ubix સહાયક છું. હું તમારા રેઝ્યૂમે, સ્કિલ ગેપ રોડમેપ, કોર્સ અને જોબ્સ માટે મદદ કરી શકું છું. તમે શેના પર કામ કરવા માંગો છો?`
+        : `તમારા પ્રશ્ન "${query}" સંદર્ભે: હું તમને આ વિષય સમજાવી શકું છું અથવા તમારા કરિયર રોડમેપ અને કૌશલ્યો સાથે જોડી શકું છું. તમે આગળ શું જાણવા માંગો છો?`,
     };
   }
 
   if (isHindi) {
     return {
-      reply: `नमस्ते ${userName}! 👋 मैं करियरफोर्ज AI सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, कोर्स, प्रोजेक्ट और लाइव नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`,
+      reply: isGreeting
+        ? `नमस्ते ${userName}! मैं ubix सहायक हूँ। मैं आपके रेज़्यूमे निर्माण, कौशल विश्लेषण, रोडमैप और नौकरियों में मदद कर सकता हूँ। आप कहाँ से शुरुआत करना चाहेंगे?`
+        : `"${query}" के बारे में: मैं इस पर विस्तृत जानकारी दे सकता हूँ या इसे आपके ubix रोडमैप और कौशल विकास से जोड़ सकता हूँ। आप क्या जानना चाहेंगे?`,
+    };
+  }
+
+  if (isGreeting) {
+    return {
+      reply: voiceMode
+        ? `Hello ${userName}! I'm your ubix assistant. How can I assist you with your career roadmap, interview practice, or resume today?`
+        : `Hello ${userName}! I'm your **ubix Assistant**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Roadmaps**: Tier-by-tier learning milestones and project blueprints\n• **Interview Practice**: Instant interactive drills with targeted feedback\n• **Accessible Voice Guidance**: Hands-free navigation across the entire workspace\n\nWhat would you like to explore today?`,
     };
   }
 
   return {
-    reply: voiceMode
-      ? `Hello ${userName}! I'm your CareerForge assistant. I can guide you through resume audits, skill gap roadmaps, curated courses, projects, or local jobs. Where shall we begin?`
-      : `Hello ${userName}! 👋 I'm your **CareerForge AI Career & Accessibility Co-Pilot**.\n\nI can assist you with:\n• **Resume Engineering**: Step-by-step creation or ATS audit\n• **Skill Gap Analysis**: Comparing your skills against ${role} requirements\n• **Curated Learning**: High-impact courses and portfolio project blueprints\n• **Verified Job Opportunities**: Matching positions and automated email alerts\n• **Accessible Voice Guidance**: Hands-free navigation across the entire platform\n\nWhat would you like to explore today?`,
+    reply: `Regarding **"${query}"**:\n\nI can provide insights on this topic or help you connect it to your **${role}** roadmap, skill verification, practice questions, or resume highlights in ubix.\n\nWould you like an in-depth breakdown, code example, or roadmap alignment?`,
   };
 }

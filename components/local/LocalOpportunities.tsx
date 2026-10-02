@@ -6,6 +6,7 @@ import { useApp } from "@/lib/store";
 import type { LiveJob } from "@/app/api/jobs/route";
 import type { LocationProfile } from "@/app/api/location/route";
 import { speakText, stopSpeaking } from "@/lib/voice";
+import { Volume2, Square, Mail, Check, ArrowRight, MapPin, Bell } from "lucide-react";
 
 interface SuggestionItem {
   city: string;
@@ -28,6 +29,7 @@ export function LocalOpportunities() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationProfile | null>(null);
   const [playingJobId, setPlayingJobId] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState(false);
 
   // Email Job Alert State (LinkedIn-style)
   const [alertEmail, setAlertEmail] = useState(user?.email || "");
@@ -153,6 +155,7 @@ export function LocalOpportunities() {
     lon: number | null = currentLocation?.longitude || null
   ) => {
     setLoading(true);
+    setProviderError(false);
     try {
       const params = new URLSearchParams();
       if (role) params.set("role", role);
@@ -166,10 +169,20 @@ export function LocalOpportunities() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
+        if (data.status === "PROVIDER_FAILED") {
+          setProviderError(true);
+          setJobs([]);
+        } else {
+          setJobs(data.jobs || []);
+        }
+      } else {
+        setProviderError(true);
+        setJobs([]);
       }
     } catch (err) {
       console.error("[LocalOpportunities] Failed to fetch live jobs:", err);
+      setProviderError(true);
+      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -180,10 +193,12 @@ export function LocalOpportunities() {
     return () => {
       stopSpeaking();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRole]);
 
   useEffect(() => {
     fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeType]);
 
   const handleSearch = (e: FormEvent) => {
@@ -276,123 +291,175 @@ export function LocalOpportunities() {
     }
   };
 
-  const flatInput =
-    "w-full rounded-none border border-black bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none";
+  const inputClass =
+    "w-full rounded-xl border border-ink/15 bg-bg px-4 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors";
 
   return (
-    <Section
-      id="local"
-      eyebrow="Real-Time Job Tracker"
-      title="Live Tech Opportunities & Real-Time Alerts"
-      description="Directly connected to real-time job scrapers with live geolocation tracking, explicit Remote/On-Site classification, and direct application forms."
-    >
-      {/* Search — high-contrast flat inputs */}
-      <form onSubmit={handleSearch} className="mb-8 grid gap-4 sm:grid-cols-2">
-        <input
-          className={flatInput}
-          placeholder={`Search ${targetRole || "tech"} skills or titles`}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <div ref={dropdownRef} className="relative">
-          <input
-            className={flatInput}
-            placeholder="City (Mumbai, London, Berlin)"
-            value={locationInput}
-            onChange={(e) => handleLocationInputChange(e.target.value)}
-            onFocus={() => setShowDropdown(true)}
-          />
-          {showDropdown && (
-            <div className="absolute left-0 right-0 top-full z-50 max-h-72 overflow-y-auto border border-black bg-white">
-              <button
-                type="button"
-                onClick={autoDetectLocation}
-                disabled={detectingLocation}
-                className="block w-full border-b border-zinc-300 px-4 py-3 text-left text-xs font-bold uppercase tracking-widest hover:bg-zinc-900 hover:text-white disabled:opacity-40"
-              >
-                {detectingLocation ? "Detecting…" : "Use current location (GPS)"}
-              </button>
-              {searchingSuggestions ? (
-                <p className="px-4 py-3 text-xs text-zinc-500">Searching…</p>
-              ) : (
-                suggestions.map((item, idx) => (
-                  <button
-                    key={`${item.city}-${idx}`}
-                    type="button"
-                    onClick={() => applySelectedLocation(item)}
-                    className="block w-full border-b border-zinc-300 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-zinc-900 hover:text-white"
-                  >
-                    <span className="font-bold">{item.city}</span>
-                    <span className="text-zinc-500"> · {item.region ? `${item.region}, ` : ""}{item.country}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+    <div className="max-w-4xl mx-auto py-10 px-4 animate-slideUp">
+      <div className="mb-8 space-y-2">
+        <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+          ubix
+        </span>
+        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
+          Jobs
+        </h1>
+        <p className="text-sm text-ink/60">
+          Discover opportunities aligned with your career trajectory and skills.
+        </p>
+      </div>
+      {/* Search & Location Bar */}
+      <form onSubmit={handleSearch} className="mb-6 rounded-2xl border border-ink/10 bg-surface/40 p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="relative">
+            <input
+              className={inputClass}
+              placeholder={`Search ${targetRole || "tech"} skills or titles...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search job skills or titles"
+            />
+          </div>
+          <div ref={dropdownRef} className="relative">
+            <input
+              className={inputClass}
+              placeholder="City (Mumbai, London, San Francisco...)"
+              value={locationInput}
+              onChange={(e) => handleLocationInputChange(e.target.value)}
+              onFocus={() => setShowDropdown(true)}
+              aria-label="City or location"
+            />
+            {showDropdown && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-xl border border-ink/15 bg-bg shadow-lg">
+                <button
+                  type="button"
+                  onClick={autoDetectLocation}
+                  disabled={detectingLocation}
+                  className="flex w-full items-center gap-2 border-b border-ink/10 px-4 py-2.5 text-left text-xs font-semibold text-accent hover:bg-surface disabled:opacity-40 cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
+                  <span>{detectingLocation ? "Detecting location..." : "Use current location (GPS)"}</span>
+                </button>
+                {searchingSuggestions ? (
+                  <p className="px-4 py-2.5 text-xs text-ink/50">Searching locations...</p>
+                ) : (
+                  suggestions.map((item, idx) => (
+                    <button
+                      key={`${item.city}-${idx}`}
+                      type="button"
+                      onClick={() => applySelectedLocation(item)}
+                      className="flex w-full items-center justify-between border-b border-ink/5 px-4 py-2.5 text-left text-xs last:border-b-0 hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      <span className="font-medium text-ink">{item.city}</span>
+                      <span className="text-[11px] text-ink/40">
+                        {item.region ? `${item.region}, ` : ""}{item.country}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-4 text-xs font-black uppercase tracking-widest sm:col-span-2">
-          {(
-            [
-              { id: "all", label: "All" },
-              { id: "remote", label: "Remote" },
-              { id: "onsite", label: "On-Site" },
-              { id: "internship", label: "Internships" },
-            ] as const
-          ).map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              onClick={() => setActiveType(filter.id)}
-              className={`border border-black px-6 py-3 ${
-                activeType === filter.id ? "bg-zinc-900 text-white" : "hover:bg-zinc-900 hover:text-white"
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
+
+        {/* Filter Pills & Submit */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-ink/8">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Job type filter">
+            {(
+              [
+                { id: "all", label: "All Opportunities" },
+                { id: "remote", label: "Remote Only" },
+                { id: "onsite", label: "On-Site" },
+                { id: "internship", label: "Internships" },
+              ] as const
+            ).map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setActiveType(filter.id)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                  activeType === filter.id
+                    ? "bg-accent text-white shadow-xs"
+                    : "bg-bg text-ink/65 hover:bg-surface hover:text-ink border border-ink/10"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="border border-black bg-zinc-900 px-6 py-3 text-white hover:bg-black disabled:opacity-30"
+            className="rounded-lg bg-ink px-4 py-1.5 text-xs font-semibold text-bg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
-            {loading ? "Searching…" : "Search"}
+            {loading ? "Searching..." : "Search Jobs"}
           </button>
         </div>
       </form>
 
-      {/* Email alert */}
-      <form onSubmit={handleSubscribeAlert} className="mb-8 flex flex-wrap gap-4">
+      {/* Email Alert Banner */}
+      <form onSubmit={handleSubscribeAlert} className="mb-6 flex flex-wrap items-center gap-2.5 rounded-xl border border-ink/10 bg-surface/30 p-3 sm:p-4">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-ink/75">
+          <Bell className="w-3.5 h-3.5 text-accent" />
+          <span>Job Alert:</span>
+        </div>
         <input
           type="email"
           value={alertEmail}
           onChange={(e) => setAlertEmail(e.target.value)}
-          placeholder="Email for new-opening alerts"
-          className={`${flatInput} flex-1 min-w-[240px]`}
+          placeholder="Enter email for daily matching roles"
+          aria-label="Email address for job alerts"
+          className="flex-1 min-w-[200px] rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={sendingAlert || !alertEmail.trim()}
-          className="border border-black px-6 py-3 text-xs font-black uppercase tracking-widest hover:bg-zinc-900 hover:text-white disabled:opacity-30"
+          className="rounded-lg border border-ink/20 bg-bg px-3.5 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent transition-colors disabled:opacity-40 cursor-pointer"
         >
-          {sendingAlert ? "Activating…" : "Set Job Alert"}
+          {sendingAlert ? "Activating..." : "Subscribe"}
         </button>
       </form>
+
       {alertSuccessMsg && (
-        <p className="mb-8 border-l-2 border-black pl-4 text-xs">{alertSuccessMsg}</p>
+        <div className="mb-6 rounded-xl border border-success/30 bg-success/10 px-4 py-2.5 text-xs font-medium text-success">
+          {alertSuccessMsg}
+        </div>
       )}
 
-      {/* Status */}
-      <p className="mb-4 text-xs font-black uppercase tracking-widest">
-        {currentLocation?.formatted || locationInput || "Worldwide & Remote"} · {jobs.length} positions
-      </p>
+      {/* Results Header */}
+      <div className="mb-4 flex items-center justify-between text-xs text-ink/50">
+        <span className="flex items-center gap-1.5 font-medium text-ink/75">
+          <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span>{currentLocation?.formatted || locationInput || "Worldwide & Remote"}</span>
+        </span>
+        <span>{jobs.length} open position{jobs.length === 1 ? "" : "s"}</span>
+      </div>
 
-      {/* Tabular listing */}
+      {/* Job Listings Cards */}
       {loading ? (
-        <p className="border-t border-zinc-300 py-8 text-sm text-zinc-500">Loading listings…</p>
+        <div className="rounded-2xl border border-ink/10 bg-surface/30 p-8 text-center text-sm text-ink/50">
+          Fetching live listings...
+        </div>
+      ) : providerError ? (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+          <p className="text-sm font-medium text-red-400">
+            I couldn&apos;t retrieve live job results right now.
+          </p>
+          <p className="mt-1 text-xs text-ink/50">
+            The job feeds experienced an upstream provider interruption. You can retry your search.
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchLiveJobs(searchTerm, activeType, targetRole, locationInput)}
+            className="mt-4 rounded-lg bg-surface px-4 py-2 text-xs font-semibold text-ink hover:bg-surface/80 transition-colors cursor-pointer"
+          >
+            Retry Live Search
+          </button>
+        </div>
       ) : jobs.length === 0 ? (
-        <div className="border-t border-zinc-300 py-8">
-          <p className="text-sm text-zinc-500">
-            No active listings for &quot;{searchTerm || locationInput}&quot;.
+        <div className="rounded-2xl border border-ink/10 bg-surface/30 p-8 text-center">
+          <p className="text-sm text-ink/60">
+            No active listings found for &quot;{searchTerm || locationInput}&quot;.
           </p>
           <button
             type="button"
@@ -402,43 +469,94 @@ export function LocalOpportunities() {
               setActiveType("all");
               fetchLiveJobs("", "all", targetRole, "", "");
             }}
-            className="mt-3 text-xs font-black uppercase tracking-widest underline"
+            className="mt-3 text-xs font-semibold text-accent hover:underline cursor-pointer"
           >
-            Reset filters
+            Reset search filters
           </button>
         </div>
       ) : (
-        <div className="border-t border-zinc-300">
+        <div className="space-y-4">
           {jobs.map((job) => (
-            <div key={job.id} className="border-b border-zinc-300 py-6">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h3 className="text-lg font-black leading-snug">{job.title}</h3>
-                <p className="text-xs uppercase tracking-widest text-zinc-500">
+            <div
+              key={job.id}
+              className="rounded-2xl border border-white/[0.08] bg-surface/50 p-5 sm:p-6 transition-all hover:border-accent/30 hover:bg-surface/80 hover:shadow-[0_4px_24px_rgba(120,227,238,0.06)] group"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-display text-base sm:text-lg font-bold text-white group-hover:text-accent transition-colors">
+                  {job.title}
+                </h3>
+                <span className="rounded-full border border-white/10 bg-bg px-2.5 py-0.5 text-[10px] font-mono text-ink/70">
                   {job.workArrangementLabel || job.workArrangement}
+                </span>
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/60">
+                <span className="font-semibold text-white/90">{job.company}</span>
+                <span>·</span>
+                <span>{job.location}</span>
+                {job.salary?.formatted && (
+                  <>
+                    <span>·</span>
+                    <span className="font-mono text-accent/90">{job.salary.formatted}</span>
+                  </>
+                )}
+              </div>
+
+              <div className="my-3 border-t border-white/[0.06]" />
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-semibold">
+                  Why it matches
+                </span>
+                <p className="text-xs leading-relaxed text-ink/70 line-clamp-2">
+                  {job.descriptionSnippet}
                 </p>
               </div>
-              <p className="mt-1 text-sm">
-                <span className="font-bold">{job.company}</span> · {job.location}
-                {job.distanceKm ? ` · ${job.distanceKm} km away` : ""}
-                {job.salary?.formatted ? ` · ${job.salary.formatted}` : ""}
-              </p>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-700">
-                {job.descriptionSnippet}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-6 text-xs font-black uppercase tracking-widest">
-                <button type="button" onClick={() => handleSpeakJob(job)} className="underline">
-                  {playingJobId === job.id ? "Stop" : "Listen"}
+
+              <div className="mt-4 flex flex-wrap items-center gap-3 pt-3 border-t border-white/[0.06] text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSpeakJob(job)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-ink/70 hover:border-accent/40 hover:text-white transition-colors cursor-pointer"
+                  aria-label={`${playingJobId === job.id ? "Stop reading" : "Read aloud"} details for ${job.title}`}
+                >
+                  {playingJobId === job.id ? (
+                    <>
+                      <Square size={12} className="fill-current" />
+                      <span>Stop</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={12} />
+                      <span>Listen</span>
+                    </>
+                  )}
                 </button>
-                <button type="button" onClick={() => handleEmailJob(job)} className="underline">
-                  {emailSentJobIds[job.id] ? "Form Emailed" : "Email Form Link"}
+                <button
+                  type="button"
+                  onClick={() => handleEmailJob(job)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-ink/70 hover:border-accent/40 hover:text-white transition-colors cursor-pointer"
+                >
+                  {emailSentJobIds[job.id] ? (
+                    <>
+                      <Check size={12} className="text-success" />
+                      <span>Emailed</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={12} />
+                      <span>Email link</span>
+                    </>
+                  )}
                 </button>
                 <a
                   href={job.applyUrl || job.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-surface border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-white hover:border-accent/50 hover:text-accent transition-all"
                 >
-                  Apply →
+                  <span>View opportunity</span>
+                  <ArrowRight size={12} />
                 </a>
               </div>
             </div>
@@ -447,10 +565,9 @@ export function LocalOpportunities() {
       )}
 
       {/* Attribution footer */}
-      <p className="mt-8 border-t border-zinc-300 pt-4 text-[11px] text-zinc-500">
-        Live scraping &amp; geolocation from Google Jobs, LinkedIn, Adzuna, Arbeitnow, and Remotive.
-        Strict Remote/On-Site classification · direct registration forms · zero fees.
+      <p className="mt-8 text-[11px] text-ink/40 text-center font-mono">
+        Live aggregation &amp; reverse geolocation from verified job feeds.
       </p>
-    </Section>
+    </div>
   );
 }

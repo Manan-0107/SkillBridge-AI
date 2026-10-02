@@ -2,75 +2,110 @@
  * POST /api/resume/save
  *
  * Body: {
- *   filename:      string
+ *   filename?:     string
  *   resumeText:    string
  *   targetRole:    string
  *   analysisResult: EnhancedAnalysis
  * }
  *
- * The owning user is taken from the authenticated session (`cf_uid` cookie),
- * never from the request body — a client cannot save rows for another user.
- * `middleware.ts` already 401s requests without a session; this re-checks as
- * defense in depth.
- *
- * Returns: { success: boolean; uploadId: string | null }
+ * Saves the resume + analysis to the `resume_uploads` Supabase table.
+ * Authenticated only (userId derived strictly from session).
+ * Validates analysisResult schema and clamps ATS scores.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getUserIdByEmail, saveResumeUpload } from "@/lib/db";
-import { supabaseConfigured } from "@/lib/supabase";
+import { getAuthenticatedUserId } from "@/lib/supabase/auth";
+import { saveResumeWithUserConsistency } from "@/lib/db";
 import type { EnhancedAnalysis } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const email = cookies().get("cf_uid")?.value?.trim();
-    if (!email) {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) {
       return NextResponse.json(
-        { success: false, error: "Authentication required" },
+        { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = await getUserIdByEmail(email);
-    if (!userId && supabaseConfigured) {
-      // Session cookie present but no matching user row — treat as unauthorized.
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
       return NextResponse.json(
-        { success: false, error: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    const body = await req.json();
-    const { filename, resumeText, targetRole, analysisResult } = body as {
-      filename?: string;
-      resumeText?: string;
-      targetRole?: string;
-      analysisResult?: EnhancedAnalysis;
-    };
-
-    if (!resumeText || !targetRole || !analysisResult) {
-      return NextResponse.json(
-        { success: false, error: "resumeText, targetRole, and analysisResult are required" },
+        { success: false, error: "Invalid JSON request payload" },
         { status: 400 }
       );
     }
 
-    // userId is null only when Supabase is unconfigured (local dev) — saveResumeUpload no-ops.
-    const uploadId = await saveResumeUpload({
-      userId: userId ?? "",
-      filename: filename ?? "resume",
-      resumeText,
-      targetRole,
-      atsScore: analysisResult.overallScore,
-      matchedSkills: analysisResult.matchedSkills,
-      missingSkills: analysisResult.missingSkills,
+    const { filename, resumeText, targetRole, analysisResult } = body as {
+      filename?: string;
+      resumeText: string;
+      targetRole: string;
+      analysisResult: EnhancedAnalysis;
+    };
+
+    if (!resumeText || typeof resumeText !== "string" || !resumeText.trim()) {
+      return NextResponse.json(
+        { success: false, error: "resumeText must be a non-empty string" },
+        { status: 400 }
+      );
+    }
+
+    if (!targetRole || typeof targetRole !== "string" || !targetRole.trim()) {
+      return NextResponse.json(
+        { success: false, error: "targetRole must be a non-empty string" },
+        { status: 400 }
+      );
+    }
+
+    // Schema validation for analysisResult
+    if (
+      !analysisResult ||
+      typeof analysisResult !== "object" ||
+      typeof analysisResult.overallScore !== "number" ||
+      Number.isNaN(analysisResult.overallScore)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "analysisResult must be an object with numeric overallScore" },
+        { status: 400 }
+      );
+    }
+
+    if (!Array.isArray(analysisResult.matchedSkills) || !Array.isArray(analysisResult.missingSkills)) {
+      return NextResponse.json(
+        { success: false, error: "analysisResult must include matchedSkills and missingSkills arrays" },
+        { status: 400 }
+      );
+    }
+
+    // Clamp score to 0..100
+    const clampedScore = Math.max(0, Math.min(100, Math.round(analysisResult.overallScore)));
+
+    const result = await saveResumeWithUserConsistency({
+      userId,
+      filename: (typeof filename === "string" && filename.trim()) ? filename.trim() : "resume",
+      resumeText: resumeText.trim(),
+      targetRole: targetRole.trim(),
+      atsScore: clampedScore,
+      matchedSkills: analysisResult.matchedSkills.map(String),
+      missingSkills: analysisResult.missingSkills.map(String),
       analysisJson: analysisResult as unknown as Record<string, unknown>,
     });
 
-    return NextResponse.json({ success: true, uploadId });
+    if (result.error || !result.uploadId) {
+      return NextResponse.json(
+        { success: false, error: result.error || "Failed to persist resume upload" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, uploadId: result.uploadId });
   } catch (err) {
-    console.error("[save] Unexpected error:", err);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    console.error("[api/resume/save] Unexpected error:", err);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

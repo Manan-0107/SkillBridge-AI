@@ -1,31 +1,117 @@
 /**
  * POST /api/audio/transcribe
  *
- * Cloud Audio Transcription with Groq Cloud Whisper API (Free Tier):
+ * Cloud Audio Transcription with Groq Cloud Whisper API:
  * - Accepts multipart audio file or raw audio buffer
- * - Model: `whisper-large-v3` on Groq LPU (lightning-fast inference)
- * - Fallback to Deepgram / browser transcription
+ * - Model: `whisper-large-v3` on Groq LPU
+ * - 10MB payload size guard & sanitized error responses
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
+const MAX_AUDIO_SIZE = 10 * 1024 * 1024; // 10 MB
+
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+  const { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } = await import("@/lib/security/rateLimit");
+  const { createApiErrorResponse } = await import("@/lib/errors/apiError");
+  const { isValidAudioContainer } = await import("@/lib/security/upload");
+
+  const clientIp = getClientIp(req);
+  const rl = checkRateLimit(`transcribe:${clientIp}`, RATE_LIMIT_PRESETS.audioTranscribe);
+  if (rl.isLimited) {
+    return createApiErrorResponse(
+      "RATE_LIMITED",
+      "Too many voice transcription requests. Please wait a moment.",
+      requestId,
+      { statusCode: 429, retryable: true }
+    );
+  }
+
+  // 1. Early Content-Length boundary check before multipart parsing
+  const contentLength = Number(req.headers.get("content-length"));
+  if (contentLength && contentLength > MAX_AUDIO_SIZE) {
+    return NextResponse.json(
+      {
+        code: "PAYLOAD_TOO_LARGE",
+        message: `Audio file exceeds maximum size limit (${MAX_AUDIO_SIZE / (1024 * 1024)}MB)`,
+        retryable: false,
+        requestId,
+      },
+      { status: 413 }
+    );
+  }
+
   try {
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Failed to parse multipart form data.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
     const file = formData.get("file") as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: "Audio file is required" }, { status: 400 });
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Audio file is required",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
     }
 
-    // 10MB payload size guard for serverless memory safety
-    const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
+    if (file.size < 4) {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Audio file is empty or too small.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
     if (file.size > MAX_AUDIO_SIZE) {
       return NextResponse.json(
-        { error: "Audio file exceeds maximum size limit (10MB)" },
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Audio file exceeds maximum size limit (${MAX_AUDIO_SIZE / (1024 * 1024)}MB)`,
+          retryable: false,
+          requestId,
+        },
         { status: 413 }
+      );
+    }
+
+    const audioBytes = await file.arrayBuffer();
+    const audioBuffer = Buffer.from(audioBytes);
+
+    // 2. Magic byte / container signature verification
+    if (!isValidAudioContainer(audioBuffer)) {
+      return NextResponse.json(
+        {
+          code: "UNSUPPORTED_MEDIA",
+          message: "Invalid or unsupported audio container signature.",
+          retryable: false,
+          requestId,
+        },
+        { status: 415 }
       );
     }
 
@@ -56,7 +142,7 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (groqErr) {
-        console.warn("[Transcribe API] Groq Whisper error:", groqErr);
+        console.warn(`[Transcribe API] Groq Whisper error (${requestId}):`, groqErr);
       }
     }
 
@@ -84,7 +170,7 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (dgErr) {
-        console.warn("[Transcribe API] Deepgram error:", dgErr);
+        console.warn(`[Transcribe API] Deepgram error (${requestId}):`, dgErr);
       }
     }
 
@@ -94,9 +180,14 @@ export async function POST(req: NextRequest) {
       message: "Cloud STT keys not configured. Use browser native Web Speech API.",
     });
   } catch (error) {
-    console.error("[Transcribe API] Fatal error:", error);
+    console.error(`[Transcribe API] Fatal error (${requestId}):`, error);
     return NextResponse.json(
-      { error: "Audio transcription failed" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Audio transcription failed.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }

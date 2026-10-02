@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export interface SalaryRange {
   symbol: string;
   formatted: string;
   period: "year" | "month" | "hour";
+  isEstimated?: boolean;
+  source?: "source" | "estimated";
 }
 
 export interface AccessibilityProfile {
@@ -31,6 +34,7 @@ export interface AccessibilityProfile {
   flexibleHours: boolean;
   neurodivergentFriendly: boolean;
   tags: string[];
+  isInferred?: boolean;
 }
 
 export type WorkArrangement = "worldwide_remote" | "country_remote" | "hybrid" | "onsite";
@@ -53,7 +57,7 @@ export interface LiveJob {
   source: "LinkedIn" | "Adzuna" | "SerpApi" | "Arbeitnow" | "Remotive" | "Jobicy";
   salary: SalaryRange;
   accessibility: AccessibilityProfile;
-  distanceKm?: number;
+  distanceKm?: number | null;
   isLocalMatch?: boolean;
   isVerifiedReal: boolean;
 }
@@ -104,6 +108,8 @@ const ROLE_KEYWORDS: Record<string, string[]> = {
 };
 
 export async function GET(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
     const { searchParams } = new URL(req.url);
     const role = (searchParams.get("role") || "").toLowerCase().trim();
@@ -111,11 +117,22 @@ export async function GET(req: NextRequest) {
     const filterType = (searchParams.get("type") || "all").toLowerCase().trim();
     const locationParam = (searchParams.get("location") || "").trim();
     const countryCodeParam = (searchParams.get("countryCode") || "").toUpperCase().trim();
-    const userLat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null;
-    const userLon = searchParams.get("lon") ? parseFloat(searchParams.get("lon")!) : null;
+
+    const rawLat = searchParams.get("lat");
+    const rawLon = searchParams.get("lon");
+    const parsedLat = rawLat !== null ? parseFloat(rawLat) : null;
+    const parsedLon = rawLon !== null ? parseFloat(rawLon) : null;
+
+    const userLat = (parsedLat !== null && Number.isFinite(parsedLat) && parsedLat >= -90 && parsedLat <= 90)
+      ? parsedLat
+      : null;
+    const userLon = (parsedLon !== null && Number.isFinite(parsedLon) && parsedLon >= -180 && parsedLon <= 180)
+      ? parsedLon
+      : null;
 
     // Detect target country rule
     const countryRule = detectCountryRule(locationParam, countryCodeParam);
+
 
     // Parallel execution across 6 real live job scraping feeds
     const [
@@ -159,20 +176,15 @@ export async function GET(req: NextRequest) {
     const locationQuery = locationParam.toLowerCase();
 
     // Attach proximity distance & filter
-    const processedJobs = allJobs.map((job, idx) => {
+    const processedJobs = allJobs.map((job) => {
       const jobLoc = (job.location || "").toLowerCase();
-      let distanceKm: number | undefined = undefined;
+      let distanceKm: number | null = null;
       let isLocalMatch = false;
 
       if (locationQuery && locationQuery !== "all" && locationQuery !== "remote") {
         if (jobLoc.includes(locationQuery) || locationQuery.includes(jobLoc)) {
           isLocalMatch = true;
-          distanceKm = Math.round(1.5 + (idx % 10) * 1.2);
         }
-      }
-
-      if (userLat !== null && userLon !== null && isLocalMatch) {
-        distanceKm = distanceKm || 3.2;
       }
 
       return {
@@ -238,13 +250,32 @@ export async function GET(req: NextRequest) {
       return 0;
     });
 
+    const providerStatuses = {
+      linkedIn: linkedInResults.status,
+      adzuna: adzunaResults.status,
+      serpApi: serpApiResults.status,
+      arbeitnow: arbeitnowResults.status,
+      remotive: remotiveResults.status,
+      jobicy: jobicyResults.status,
+    };
+
+    const allFailed = [
+      linkedInResults,
+      adzunaResults,
+      serpApiResults,
+      arbeitnowResults,
+      remotiveResults,
+      jobicyResults,
+    ].every((r) => r.status === "rejected");
+
     const marketBenchmark = calculateLocalizedSalary(role || "frontend", countryRule, false);
 
     return NextResponse.json({
-      status: "success",
+      status: allFailed ? "PROVIDER_FAILED" : filtered.length > 0 ? "success" : "NO_RESULTS",
       total: filtered.length,
       locationApplied: locationParam || "Worldwide / Remote",
       country: countryRule.currency,
+      providerStatuses,
       jobs: filtered.slice(0, 40),
       marketTrends: {
         targetRole: role || "frontend",
@@ -253,12 +284,18 @@ export async function GET(req: NextRequest) {
         currencySymbol: countryRule.symbol,
         demandIndex: "High Demand (Top 10% Industry Growth)",
         remotePercentage: "78% Remote / Hybrid Available",
+        salaryIsEstimated: true,
       },
     });
   } catch (error: any) {
-    console.error("[Jobs API] Error fetching jobs:", error);
+    console.error(`[Jobs API] Error fetching jobs (${requestId}):`, error);
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch live job feeds" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch live job feeds.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }
@@ -299,7 +336,7 @@ function detectWorkArrangement(
     return {
       remote: true,
       workArrangement: "worldwide_remote",
-      workArrangementLabel: "🌐 Worldwide Remote",
+      workArrangementLabel: "Worldwide Remote",
     };
   }
 
@@ -307,7 +344,7 @@ function detectWorkArrangement(
     return {
       remote: true,
       workArrangement: "hybrid",
-      workArrangementLabel: `🔄 Hybrid (${location || "Flexible"})`,
+      workArrangementLabel: `Hybrid (${location || "Flexible"})`,
     };
   }
 
@@ -317,34 +354,34 @@ function detectWorkArrangement(
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 UK - Remote Only",
+        workArrangementLabel: "UK - Remote Only",
       };
     }
     if (loc.includes("us") || loc.includes("united states") || full.includes("us remote") || full.includes("us only")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 US - Remote Only",
+        workArrangementLabel: "US - Remote Only",
       };
     }
     if (loc.includes("india") || loc.includes("in") || full.includes("india remote")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 India - Remote",
+        workArrangementLabel: "India - Remote",
       };
     }
     if (loc.includes("germany") || loc.includes("europe") || full.includes("eu remote") || full.includes("europe only")) {
       return {
         remote: true,
         workArrangement: "country_remote",
-        workArrangementLabel: "🌐 Europe - Remote",
+        workArrangementLabel: "Europe - Remote",
       };
     }
     return {
       remote: true,
       workArrangement: "worldwide_remote",
-      workArrangementLabel: "🌐 Remote",
+      workArrangementLabel: "Remote",
     };
   }
 
@@ -352,7 +389,7 @@ function detectWorkArrangement(
   return {
     remote: false,
     workArrangement: "onsite",
-    workArrangementLabel: `🏢 On-Site (${location || "In-Office"})`,
+    workArrangementLabel: `On-Site (${location || "In-Office"})`,
   };
 }
 
@@ -416,7 +453,7 @@ async function fetchLinkedInJobs(
         accessibility: generateAccessibilityProfile(arrangement.remote, title),
         isLocalMatch: true,
         isVerifiedReal: true,
-        distanceKm: Math.round(1.2 + (i % 8) * 1.5),
+        distanceKm: null,
       });
     }
 
@@ -851,22 +888,31 @@ function calculateLocalizedSalary(
     symbol: countryRule.symbol,
     formatted,
     period: "year",
+    isEstimated: true,
+    source: "estimated",
   };
 }
 
 function generateAccessibilityProfile(remote: boolean, description = ""): AccessibilityProfile {
   const desc = (description || "").toLowerCase();
-  const screenReaderReady = true;
+  const screenReaderReady =
+    desc.includes("screen reader") ||
+    desc.includes("screen-reader") ||
+    desc.includes("assistive technology") ||
+    desc.includes("wcag") ||
+    desc.includes("aria") ||
+    desc.includes("accessible");
   const asyncFriendly = remote || desc.includes("async") || desc.includes("flexible");
-  const flexibleHours = remote || desc.includes("flexible") || desc.includes("balance");
-  const neurodivergentFriendly = desc.includes("inclusive") || desc.includes("diversity") || remote;
+  const flexibleHours = desc.includes("flexible hours") || desc.includes("flexible work") || desc.includes("balance");
+  const neurodivergentFriendly = desc.includes("inclusive") || desc.includes("diversity") || desc.includes("neurodivergent");
 
-  const tags = ["Screen-Reader Friendly"];
+  const tags: string[] = [];
+  if (screenReaderReady) tags.push("Screen-Reader Ready");
   if (asyncFriendly) tags.push("Async Remote");
   if (flexibleHours) tags.push("Flexible Hours");
   if (neurodivergentFriendly) tags.push("Assistive-Tech Accommodated");
 
-  const score = 85 + (remote ? 8 : 0) + (tags.length >= 3 ? 5 : 2);
+  const score = 70 + (remote ? 5 : 0) + (tags.length * 6);
 
   return {
     score: Math.min(score, 99),
@@ -875,6 +921,7 @@ function generateAccessibilityProfile(remote: boolean, description = ""): Access
     flexibleHours,
     neurodivergentFriendly,
     tags,
+    isInferred: true,
   };
 }
 

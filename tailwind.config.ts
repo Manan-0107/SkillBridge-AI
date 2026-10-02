@@ -2,59 +2,69 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}",
-    "./providers/**/*.{ts,tsx}",
-    "./hooks/**/*.{ts,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./providers/**/*.{js,ts,jsx,tsx,mdx}",
+    "./context/**/*.{js,ts,jsx,tsx,mdx}",
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        // ── Dark Obsidian Design System ──────────────────────────
-        paper:   "#0A0C0F",          // deep void background
-        surface: "#111418",          // card / panel surface
-        surfaceHover: "#16191E",     // hover state for panels
-        ink:     "#F0F2F5",          // primary text (near-white)
-        graphite:"#7A8494",          // secondary / muted text
-        line:    "#1E2228",          // hairline borders
-        mist:    "#161A1F",          // subtle fill (hover bg)
-        accent:  "#22D3EE",          // electric cyan accent
-        accentDim:"#0891B2",         // muted accent
-        accentGlow:"rgba(34,211,238,0.12)", // accent ambient
-        // Legacy aliases kept for component compat
-        border:  "#1E2228",
+        // ─── CareerForge Unified Dark Workspace Tokens ──────────────────────
+        bg: "#080A0D",       // primary obsidian canvas background
+        surface: "#111418",  // card/panel elevated surface
+        "surface-elevated": "#171A21", // popovers, drawers, hover states
+        "surface-sunken": "#0B0E13",   // input fields, recessed panels
+        ink: "#F3F5F7",      // primary text — crisp high-contrast cool white
+        accent: {
+          DEFAULT: "#22D3EE", // electric cyan — technical, modern & clear
+          soft: "#67E8F9",
+        },
+        info: "#38BDF8",
+        success: "#34D399",
+        danger: "#F87171",
+        // ─── Compatibility aliases ──────────────────────────────────────────
+        paper: "#080A0D",
+        graphite: "#8E95A0",
+        line: "rgba(255, 255, 255, 0.09)", // hairline border
+        muted: "#64748B",
+      },
+      borderColor: {
+        hairline: "rgba(255, 255, 255, 0.09)",
+        "hairline-subtle": "rgba(255, 255, 255, 0.05)",
+        "hairline-strong": "rgba(255, 255, 255, 0.18)",
       },
       fontFamily: {
-        display: ["var(--font-display)", "serif"],
-        body:    ["var(--font-body)", "sans-serif"],
-        mono:    ["var(--font-mono)", "monospace"],
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+      },
+      fontSize: {
+        xs: ["0.75rem", { lineHeight: "1rem" }],
+        sm: ["0.875rem", { lineHeight: "1.25rem" }],
+        base: ["1rem", { lineHeight: "1.5rem" }],
+        lg: ["1.125rem", { lineHeight: "1.75rem" }],
+        xl: ["1.25rem", { lineHeight: "1.75rem" }],
+        "2xl": ["1.5rem", { lineHeight: "2rem" }],
+        "3xl": ["1.875rem", { lineHeight: "2.25rem" }],
+        "4xl": ["2.25rem", { lineHeight: "2.75rem" }],
+      },
+      borderRadius: {
+        node: "0.875rem", // 14px
+        drawer: "1.5rem", // 24px
+        sheet: "1.75rem", // 28px
       },
       boxShadow: {
-        "glass":  "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 4px 32px 0 rgba(0,0,0,0.45)",
-        "glow-accent": "0 0 20px rgba(34,211,238,0.18)",
-        "panel":  "0 0 0 1px rgba(255,255,255,0.05), 0 8px 48px rgba(0,0,0,0.5)",
-      },
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(ellipse at center, var(--tw-gradient-stops))",
-      },
-      animation: {
-        "fade-up": "fade-up 0.4s ease both",
-        "pulse-slow": "pulse 3s ease-in-out infinite",
-        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
-      },
-      keyframes: {
-        "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 8px rgba(34,211,238,0.2)" },
-          "50%": { boxShadow: "0 0 20px rgba(34,211,238,0.5)" },
-        },
+        drawer: "0 24px 60px -12px rgba(0, 0, 0, 0.75)",
+        glow: "0 0 20px -3px rgba(245, 158, 11, 0.35)",
+        "glow-completed": "0 0 16px -3px rgba(52, 211, 153, 0.35)",
       },
     },
   },
   plugins: [],
 };
+
 export default config;

@@ -2,71 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Newsreader:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Screen reader only utility — guaranteed offscreen even before tailwind JS hydration */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border-width: 0 !important;
+}
+
+.sr-only:focus,
+.focus\:not-sr-only:focus {
+  position: fixed !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0.75rem 1rem !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  z-index: 100 !important;
+}
 
 :root {
-  --font-display: 'Newsreader', serif;
-  --font-body:    'Inter', sans-serif;
-  --font-mono:    'JetBrains Mono', monospace;
-
-  /* ── Design Tokens ────────────────────────────────────── */
-  --bg-void:       #0A0C0F;
-  --bg-surface:    #111418;
-  --bg-surface-2:  #161A1F;
-  --text-primary:  #F0F2F5;
-  --text-muted:    #7A8494;
-  --border-line:   #1E2228;
-  --accent:        #22D3EE;
-  --accent-glow:   rgba(34, 211, 238, 0.15);
-  --accent-dim:    rgba(34, 211, 238, 0.08);
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-bg: #080A0D;
+  --color-surface: #111418;
+  --color-surface-elevated: #171A21;
+  --color-ink: #F3F5F7;
+  --color-ink-muted: #8E95A0;
+  --color-accent: #22D3EE;
+  --color-accent-soft: #67E8F9;
+  --color-success: #34D399;
+  --color-info: #38BDF8;
+  --color-danger: #F87171;
 }
 
 html {
   font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
 }
 
 * {
   scroll-behavior: smooth;
-  box-sizing: border-box;
 }
 
 body {
-  background-color: var(--bg-void);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  min-height: 100vh;
+  background-color: #080A0D;
+  color: #F3F5F7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
   background-color: rgba(34, 211, 238, 0.25);
-  color: #fff;
+  color: #FFFFFF;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ── Scrollbar Styling ──────────────────────────────────── */
+/* Sleek accessible dark scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.24);
 }
 
-/* ── Application Shell ──────────────────────────────────── */
+/* visible keyboard focus, everywhere */
+:focus-visible {
+  outline: 2px solid #22D3EE;
+  outline-offset: 2px;
+}
+
+.hairline {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(16, 17, 20, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px -4px rgba(245, 158, 11, 0.2);
+}
+
+/* =========================================================
+   APPLICATION SHELL WIDTH
+   Single source of truth for how wide the app canvas is and
+   how large the outer gutters are. Every top-level container
+   (header, workspace header, feature sections, assistant
+   chat + composer) uses .app-shell, so the whole application
+   lines up on one vertical edge.
+
+   Replaces the old fixed `max-w-content` column, which left
+   large monitors with huge unused margins. Now the gutter is
+   viewport-relative (~3vw per side => ~94vw of usable canvas)
+   with a sanity cap so ultrawide displays don't stretch
+   content to unreadable line lengths.
+
+   `max()` keeps phones/tablets on the original 24px gutter,
+   so small-screen layout is unchanged.
+   ========================================================= */
 @layer components {
   .app-shell {
     width: 100%;
@@ -75,80 +130,43 @@ body {
     padding-inline: max(1.5rem, 3vw);
   }
 
-  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-
-  /* ── Glass Card ─────────────────────────────────────────── */
-  .glass-card {
-    background: rgba(17, 20, 24, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    box-shadow: 0 1px 0 0 rgba(255,255,255,0.04) inset,
-                0 4px 32px 0 rgba(0,0,0,0.45);
-  }
-
-  /* ── Accent Glow Effect ─────────────────────────────────── */
-  .accent-glow {
-    box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
-  }
-
-  /* ── Premium Input ──────────────────────────────────────── */
-  .input-dark {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text-primary);
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .input-dark:focus {
-    border-color: var(--accent);
-    background: rgba(255, 255, 255, 0.06);
-    outline: none;
-  }
-  .input-dark::placeholder {
-    color: var(--text-muted);
-  }
-
-  /* ── Navigation Active Indicator ─────────────────────────── */
-  .nav-active {
-    color: var(--text-primary) !important;
-    position: relative;
-  }
-  .nav-active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 1.5px;
-    background: var(--accent);
-    border-radius: 1px;
-  }
-
-  /* ── Typing Pulse Dots ───────────────────────────────────── */
-  .typing-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    animation: typing-bounce 1.4s ease-in-out infinite;
-  }
-  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 }
 
-/* ── Animations ─────────────────────────────────────────── */
-@keyframes typing-bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-6px); opacity: 1; }
+@keyframes dash {
+  to {
+    stroke-dashoffset: -14;
+  }
 }
 
-@keyframes fade-up {
+@keyframes slideLeft {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes shimmer {
@@ -156,29 +174,102 @@ body {
   100% { background-position: 200% 0; }
 }
 
-.animate-fade-up {
-  animation: fade-up 0.35s ease both;
+.animate-dash {
+  animation: dash 1s linear infinite;
 }
 
-/* ── Step Line (Roadmap) ─────────────────────────────────── */
+.animate-slideLeft {
+  animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-messageIn {
+  animation: messageIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================================
+   PROSE-CF: CareerForge assistant message typography
+   ========================================================= */
+.prose-cf {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #DDE2E8;
+}
+.prose-cf h1, .prose-cf h2, .prose-cf h3, .prose-cf h4 {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: #F8FAFC;
+}
+.prose-cf h1 { font-size: 1.2rem; }
+.prose-cf h2 { font-size: 1.08rem; }
+.prose-cf h3 { font-size: 0.98rem; }
+.prose-cf p { margin: 0.6em 0; }
+.prose-cf ul { list-style: disc; padding-left: 1.25rem; margin: 0.6em 0; }
+.prose-cf ol { list-style: decimal; padding-left: 1.25rem; margin: 0.6em 0; }
+.prose-cf li { margin: 0.3em 0; }
+.prose-cf code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #22D3EE;
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+  font-size: 0.84em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.prose-cf pre {
+  background: #0B0E13;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  font-size: 0.84em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.prose-cf pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: #F1F5F9;
+}
+.prose-cf a { color: #22D3EE; text-decoration: underline; text-underline-offset: 3px; }
+.prose-cf blockquote {
+  border-left: 3px solid #22D3EE;
+  padding-left: 0.9rem;
+  margin-left: 0;
+  font-style: italic;
+  color: #94A3B8;
+}
+.prose-cf strong { font-weight: 700; color: #FFFFFF; }
+.prose-cf em { font-style: italic; }
+.prose-cf hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 1.25em 0;
+}
+
+
+/* thin numbered-step connector used by the roadmap module */
 .step-line {
-  background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.06));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12));
 }
 
-/* ── Reduced Motion ─────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ATS RESUME PRINT STYLES
-   ═══════════════════════════════════════════════════════════ */
+/* =========================================================
+   ATS RESUME PRINT ONLY CSS
+   Ensures that only the resume sheet is downloaded/printed
+   and strictly fits 1 page when 1-page mode is enabled
+   ========================================================= */
 @media print {
+  /* Hide all app chrome, navigation, tabs, sidebars, and buttons */
   html, body {
     background: #FFFFFF !important;
     color: #000000 !important;
@@ -188,47 +279,132 @@ body {
     height: auto !important;
     overflow: visible !important;
   }
-  body * { visibility: hidden !important; }
-  #printable-resume, #printable-resume * { visibility: visible !important; }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make ONLY the printable resume sheet and its children visible */
+  #printable-resume,
+  #printable-resume * {
+    visibility: visible !important;
+  }
+
   #printable-resume {
     position: absolute !important;
-    left: 0 !important; top: 0 !important;
-    width: 100% !important; max-width: 100% !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
     margin: 0 !important;
     padding: 10mm 12mm !important;
-    border: none !important; box-shadow: none !important;
-    background: #FFFFFF !important; color: #111827 !important;
-    page-break-after: avoid !important; break-after: avoid !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #FFFFFF !important;
+    color: #111827 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
+
+  /* When 1-Page fit is active, strictly lock height to prevent page 2 spillover */
   #printable-resume.force-one-page {
-    max-height: 270mm !important; overflow: hidden !important;
-    page-break-after: avoid !important; break-after: avoid !important;
+    max-height: 270mm !important;
+    overflow: hidden !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
     page-break-inside: avoid !important;
   }
+
   #printable-resume.force-one-page * {
-    page-break-inside: avoid !important; break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
-  @page { size: letter portrait; margin: 0; }
-  h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
+
+  /* Page setup for standard Letter / A4 portrait */
+  @page {
+    size: letter portrait;
+    margin: 0;
+  }
+
+  /* Prevent awkward page break cuts */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   ACCESSIBILITY
-   ═══════════════════════════════════════════════════════════ */
+/* =========================================================
+   ACCESSIBILITY UTILITIES
+   ========================================================= */
 html.high-contrast,
 html.high-contrast body {
   background-color: #000000 !important;
   color: #FFFFFF !important;
 }
-html.high-contrast * { border-color: #FFFFFF !important; }
+
+html.high-contrast * {
+  border-color: #FFFFFF !important;
+}
+
 html.high-contrast button,
 html.high-contrast a,
 html.high-contrast input,
 html.high-contrast textarea {
   outline: 2px solid #FFFF00 !important;
 }
-html.large-text { font-size: 20px !important; }
-html.reduced-motion * {
-  animation: none !important;
-  transition: none !important;
+
+html.high-contrast .bg-white,
+html.high-contrast .bg-surface,
+html.high-contrast .bg-card,
+html.high-contrast .bg-bg,
+html.high-contrast .bg-paper,
+html.high-contrast .bg-mist,
+html.high-contrast .bg-paper\/90,
+html.high-contrast .bg-white\/95 {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
 }
+
+html.high-contrast .text-ink,
+html.high-contrast .text-muted,
+html.high-contrast .text-subtle,
+html.high-contrast .text-graphite,
+html.high-contrast .text-graphite\/55,
+html.high-contrast .text-graphite\/60,
+html.high-contrast .text-graphite\/80 {
+  color: #FFFFFF !important;
+}
+
+html.large-text {
+  font-size: 20px !important;
+}
+
+html.large-text button,
+html.large-text input,
+html.large-text textarea,
+html.large-text select {
+  min-height: 2.75rem;
+  font-size: 1rem !important;
+}
+
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+

@@ -5,16 +5,17 @@
  * Converts raw experience lines into high-impact Google XYZ formula bullets
  * ("Accomplished [X] as measured by [Y] by doing [Z]").
  *
- * Body: {
- *   text: string;
- *   role?: string;
- *   type?: "bullet" | "summary" | "skills";
- * }
+ * Authenticated only. Request size limited to 64KB.
+ * Validates AI output schema and gracefully falls back to deterministic heuristic generation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+const MAX_TEXT_LENGTH = 64 * 1024; // 64 KB
 
 const ACTION_VERBS: Record<string, string[]> = {
   frontend: ["Architected", "Engineered", "Optimized", "Refactored", "Spearheaded", "Implemented", "Designed", "Standardized"],
@@ -26,35 +27,90 @@ const ACTION_VERBS: Record<string, string[]> = {
 };
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body = await req.json();
-    const { text, role = "frontend", type = "bullet" } = body as {
-      text: string;
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          code: "UNAUTHORIZED",
+          message: "Authentication required to optimize resume content.",
+          retryable: false,
+          requestId,
+        },
+        { status: 401 }
+      );
+    }
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON request payload.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { text, role = "frontend", type = "bullet" } = (body || {}) as {
+      text?: string;
       role?: string;
       type?: "bullet" | "summary" | "skills";
     };
 
-    if (!text || !text.trim()) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return NextResponse.json(
+        {
+          code: "BAD_REQUEST",
+          message: "text must be a non-empty string.",
+          retryable: false,
+          requestId,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (text.length > MAX_TEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Text exceeds maximum allowed length (${MAX_TEXT_LENGTH / 1024} KB).`,
+          retryable: false,
+          requestId,
+        },
+        { status: 413 }
+      );
     }
 
     const trimmed = text.trim();
-    const verbs = ACTION_VERBS[role] || ACTION_VERBS.frontend;
+    const safeRole = typeof role === "string" ? role.toLowerCase() : "frontend";
+    const verbs = ACTION_VERBS[safeRole] || ACTION_VERBS.frontend;
     const randomVerb = verbs[Math.floor(Math.random() * verbs.length)];
 
-    // ─── 1. Try Free Multi-Model Engine for AI Optimization ───────────────────
-    const optimized = await runAiOptimization(trimmed, role, type);
+    // 1. Try Free Multi-Model Engine for AI Optimization
+    const optimized = await runAiOptimization(trimmed, safeRole, type);
     if (optimized) {
       return NextResponse.json(optimized);
     }
 
-    // ─── 2. Fallback Heuristic Optimization (Google XYZ Formula) ──────────────
-    const fallbackVariants = generateHeuristicVariants(trimmed, role, randomVerb, type);
+    // 2. Fallback Heuristic Optimization (Google XYZ Formula)
+    const fallbackVariants = generateHeuristicVariants(trimmed, safeRole, randomVerb, type);
     return NextResponse.json(fallbackVariants);
   } catch (error) {
-    console.error("[Optimize API] Error:", error);
+    console.error(`[Optimize API] Error (${requestId}):`, error);
     return NextResponse.json(
-      { error: "Internal optimization error" },
+      {
+        code: "INTERNAL_ERROR",
+        message: "Failed to optimize resume content.",
+        retryable: true,
+        requestId,
+      },
       { status: 500 }
     );
   }
@@ -62,7 +118,7 @@ export async function POST(req: NextRequest) {
 
 // ─── AI Bullet / Summary Optimizer Engine ─────────────────────────────────────
 async function runAiOptimization(text: string, role: string, type: string) {
-  const prompt = `You are a Principal Resume Evaluator at Google/Meta.
+  const prompt = `You are a Principal Resume Evaluator.
 Rewrite and optimize the following ${type} for a ${role} resume.
 Follow the Google XYZ formula: "Accomplished [X] as measured by [Y] by doing [Z]".
 Make it punchy, metric-driven, and ATS-compliant.
@@ -78,63 +134,38 @@ Respond ONLY with valid JSON in this exact structure:
     "Alternative 2 (leadership & architecture focused)"
   ],
   "atsKeywordsAdded": ["keyword1", "keyword2", "keyword3"],
-  "scoreImprovement": "+24% ATS Parser Legibility"
+  "scoreImprovement": "Enhanced action-verb framing and quantified clarity (AI Suggestion)"
 }`;
 
-  // Try GitHub Models / Open-Source endpoint
-  const token = process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN;
-  if (token && token.trim().length > 5) {
-    try {
-      const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: prompt }],
-          model: "gpt-4o-mini",
-          temperature: 0.3,
-          max_tokens: 500,
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content || "";
-        const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-        return JSON.parse(clean);
-      }
-    } catch {
-      // fallback
-    }
-  }
-
-  // Try Free Pollinations AI endpoint
   try {
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        model: "openai",
-        seed: 42,
-      }),
-      signal: AbortSignal.timeout(6000),
+    const { generateAIResponse } = await import("@/lib/ai/centralProvider");
+    const aiResult = await generateAIResponse({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      maxTokens: 500,
+      timeoutMs: 8000,
     });
 
-    if (res.ok) {
-      const raw = await res.text();
-      const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(clean);
-      if (parsed.optimized) return parsed;
-    }
-  } catch {
-    // fallback
+    const raw = aiResult.text || "";
+    const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(clean);
+    if (isValidOptimization(parsed)) return parsed;
+  } catch (aiErr) {
+    console.warn("[optimize] AI optimization note:", aiErr);
   }
 
   return null;
+}
+
+function isValidOptimization(parsed: any): boolean {
+  return (
+    parsed &&
+    typeof parsed === "object" &&
+    typeof parsed.optimized === "string" &&
+    parsed.optimized.trim().length > 0 &&
+    Array.isArray(parsed.alternatives) &&
+    Array.isArray(parsed.atsKeywordsAdded)
+  );
 }
 
 // ─── Fallback Heuristic Generation ────────────────────────────────────────────

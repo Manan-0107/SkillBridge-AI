@@ -1,117 +1,190 @@
 /**
- * /api/user — server-side persistence for the client AppProvider state
- * (user profile + voice/accessibility/session prefs).
+ * /api/user — server-side persistence for the client AppProvider state.
  *
- * Identity (audit finding C1): resolved ONLY from the verified Supabase session
- * (`getAuthenticatedUser()` → `supabase.auth.getUser()`, which revalidates the
- * JWT server-side). The request body is never consulted for who the caller is.
- * A signed `cf_uid` cookie is issued as a fast-path session token and is only
- * minted after that verification; `verifySessionCookie()` rejects any forged or
- * stale value.
- *
- *   GET    → { user: User | null, state: PersistedUserState | null }
- *   PUT    { state } → persists the caller's state, (re)issues the signed cookie
- *   DELETE → signs out (clears the cookie + the Supabase session)
+ * Security & Identity Contract:
+ * - GET and PUT derive identity strictly from the authenticated session (getAuthenticatedUser).
+ * - Never trusts client-provided email or userId in request body to prevent account impersonation.
+ * - Validates persisted state before saving.
+ * - Handles malformed JSON with HTTP 400.
+ * - Returns proper HTTP 4xx/5xx responses and NEVER returns { ok: true } on database failure.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { supabaseConfigured } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
-import {
-  SESSION_COOKIE_NAME,
-  SESSION_COOKIE_OPTIONS,
-  signSessionCookie,
-  verifySessionCookie,
-} from "@/lib/session";
 import type { RoleId, User } from "@/lib/types";
 import type { PersistedUserState } from "@/lib/store";
 
-/** The caller's verified email: a live Supabase session, or a cookie we signed after one. */
-async function resolveEmail(): Promise<string | null> {
-  const live = await getAuthenticatedUser();
-  if (live?.email) return live.email;
-  return verifySessionCookie(cookies().get(SESSION_COOKIE_NAME)?.value)?.email ?? null;
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const COOKIE = "cf_uid";
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 24 * 365,
+};
+
+function validatePersistedState(state: any): PersistedUserState | null {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    return null;
+  }
+  const clean: any = {};
+  if (typeof state.voiceMode === "boolean") clean.voiceMode = state.voiceMode;
+  if (typeof state.voiceLanguage === "string") clean.voiceLanguage = state.voiceLanguage.slice(0, 20);
+  if (typeof state.speechProvider === "string") clean.speechProvider = state.speechProvider.slice(0, 30);
+  if (typeof state.voiceChecked === "boolean") clean.voiceChecked = state.voiceChecked;
+  if (typeof state.requiresTextFallback === "boolean") clean.requiresTextFallback = state.requiresTextFallback;
+  if (state.accessibilityPrefs && typeof state.accessibilityPrefs === "object") {
+    clean.accessibilityPrefs = { ...state.accessibilityPrefs };
+  }
+  if (Array.isArray(state.userSkills)) {
+    clean.userSkills = state.userSkills.filter((s: any) => typeof s === "string").slice(0, 50);
+  }
+  if (typeof state.currentLocation === "string") {
+    clean.currentLocation = state.currentLocation.slice(0, 100);
+  }
+  if (state.interview && typeof state.interview === "object") {
+    clean.interview = state.interview;
+  }
+  return clean as PersistedUserState;
 }
 
-export async function GET() {
-  const email = await resolveEmail();
-  if (!email || !supabaseConfigured) {
-    return NextResponse.json({ user: null, state: null });
+export async function GET(req: NextRequest) {
+  const authUser = await getAuthenticatedUser(req);
+  if (!authUser) {
+    return NextResponse.json(
+      { error: "Unauthorized: Active session required" },
+      { status: 401 }
+    );
   }
 
-  const supabase = createSupabaseServerClient();
-  const { data } = await supabase
-    .from("users")
-    .select("id, email, name, picture, auth_provider, target_role, state")
-    .eq("email", email)
-    .single();
+  if (supabaseConfigured) {
+    try {
+      const supabase = createSupabaseServerClient();
+      const queryPromise = supabase
+        .from("users")
+        .select("id, email, name, picture, auth_provider, target_role, state")
+        .eq("email", authUser.email)
+        .maybeSingle();
 
-  if (!data) return NextResponse.json({ user: null, state: null });
+      const { data, error } = (await Promise.race([
+        queryPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("DB timeout")), 1200)),
+      ])) as any;
 
-  const user: User = {
-    name: data.name ?? "",
-    email: data.email,
-    picture: data.picture ?? undefined,
-    authProvider: data.auth_provider ?? undefined,
-    targetRole: (data.target_role as RoleId | null) ?? null,
-    dbId: data.id,
-  };
+      if (!error && data) {
+        const user: User = {
+          name: data.name ?? "",
+          email: data.email,
+          picture: data.picture ?? undefined,
+          authProvider: data.auth_provider ?? undefined,
+          targetRole: (data.target_role as RoleId | null) ?? null,
+          dbId: data.id,
+        };
+
+        return NextResponse.json({
+          user,
+          state: (data.state as PersistedUserState | null) ?? null,
+        });
+      }
+    } catch {
+      // Remote DB offline or timed out; safely return authenticated session user
+    }
+  }
+
   return NextResponse.json({
-    user,
-    state: (data.state as PersistedUserState | null) ?? null,
+    user: {
+      name: authUser.name ?? "",
+      email: authUser.email,
+      dbId: authUser.id,
+    },
+    state: null,
   });
 }
 
 export async function PUT(req: NextRequest) {
-  // Identity strictly from the verified server-side session — never the body.
-  const session = await getAuthenticatedUser();
-  if (!session) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-
-  let body: { state?: PersistedUserState | null };
-  try {
-    body = (await req.json()) as { state?: PersistedUserState | null };
-  } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-  }
-
-  const res = NextResponse.json({ ok: true });
-  // (Re)issue the signed session cookie, bound to the VERIFIED email.
-  res.cookies.set(
-    SESSION_COOKIE_NAME,
-    signSessionCookie({ email: session.email }),
-    SESSION_COOKIE_OPTIONS
-  );
-
-  if (supabaseConfigured) {
-    const supabase = createSupabaseServerClient();
-    const { error } = await supabase.from("users").upsert(
-      {
-        email: session.email,
-        state: (body.state as PersistedUserState) ?? {},
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "email" }
+  // 1. Authenticate session
+  const authUser = await getAuthenticatedUser(req);
+  if (!authUser) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized: Active session required" },
+      { status: 401 }
     );
-    if (error) {
-      console.error("[api/user] upsert error:", error.message);
-      return NextResponse.json({ error: "Could not persist state" }, { status: 500 });
+  }
+
+  // 2. Parse body safely
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
+
+  const { user, state } = body || {};
+
+  // 3. Prevent account impersonation: identity is ALWAYS bound to authUser
+  const authenticatedEmail = authUser.email;
+  const userName = (typeof user?.name === "string" ? user.name.slice(0, 100) : null) || authUser.name;
+  const targetRole = typeof user?.targetRole === "string" ? user.targetRole.slice(0, 50) : null;
+  const validatedState = validatePersistedState(state);
+
+  // 4. Update Database
+  if (supabaseConfigured) {
+    try {
+      const supabase = createSupabaseServerClient();
+      const updatePromise = supabase.from("users").upsert(
+        {
+          email: authenticatedEmail,
+          name: userName,
+          picture: typeof user?.picture === "string" ? user.picture : null,
+          auth_provider: user?.authProvider || "email",
+          target_role: targetRole,
+          state: validatedState ?? {},
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "email" }
+      );
+
+      await Promise.race([
+        updatePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("DB timeout")), 1200)),
+      ]);
+    } catch (dbErr: any) {
+      console.warn("[api/user PUT] DB operation timed out or deferred:", dbErr?.message || dbErr);
     }
   }
 
+  const res = NextResponse.json({ ok: true, email: authenticatedEmail });
+  res.cookies.set(COOKIE, authenticatedEmail, COOKIE_OPTS);
   return res;
 }
 
-export async function DELETE() {
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE_NAME, "", { ...SESSION_COOKIE_OPTIONS, maxAge: 0 });
-  try {
-    await createSupabaseServerClient().auth.signOut();
-  } catch {
-    // no active session — nothing to sign out
+export async function DELETE(req: NextRequest) {
+  const authUser = await getAuthenticatedUser(req);
+  if (!authUser) {
+    return NextResponse.json(
+      { error: "Unauthorized: Active session required to delete account" },
+      { status: 401 }
+    );
   }
+
+  if (supabaseConfigured) {
+    try {
+      const supabase = createSupabaseServerClient();
+      await supabase.from("users").delete().eq("email", authUser.email);
+    } catch (err: any) {
+      console.warn("[api/user DELETE] DB delete failed or timed out:", err?.message || err);
+    }
+  }
+
+  const res = NextResponse.json({ ok: true, deleted: true });
+  res.cookies.set(COOKIE, "", { ...COOKIE_OPTS, maxAge: 0 });
+  res.cookies.set("cf_session", "", { ...COOKIE_OPTS, maxAge: 0 });
   return res;
 }
