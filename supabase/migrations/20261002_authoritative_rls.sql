@@ -6,15 +6,22 @@
 -- Scope:
 -- 1. Identity relationship between auth.users and public.users (auth_user_id bridge)
 -- 2. Authoritative identity consistency audit & safe legacy backfill
--- 3. Hardened SECURITY DEFINER ownership verification function (fixed search_path & restricted EXECUTE)
--- 4. Strict cross-user data isolation for users, resumes, practice, roadmaps, telemetry
--- 5. Public read-only policy for domain-specific RAG vector collections
--- 6. Service-role isolation for backend administrative operations
+-- 3. Hardened private.is_owner() SECURITY DEFINER helper (schema-isolated, fixed search_path)
+-- 4. Database-level ownership immutability triggers (prevent ID/auth_user_id tampering)
+-- 5. Strict cross-user data isolation for users, resumes, practice, roadmaps, telemetry
+-- 6. Explicit PostgreSQL privilege grants and revokes (least privilege)
+-- 7. Public read-only policy for domain-specific RAG vector collections
+-- 8. Service-role isolation for backend administrative operations
 -- ==============================================================================
 
--- ─── 1. Extensions ────────────────────────────────────────────────────────────
+-- ─── 1. Extensions & Schemas ──────────────────────────────────────────────────
 create extension if not exists "pgcrypto";
 create extension if not exists "vector";
+
+-- Private schema for internal security definer functions (hidden from PostgREST API)
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+grant usage on schema private to authenticated, service_role;
 
 -- ─── 2. Users Table Schema & Identity Bridge ──────────────────────────────────
 create table if not exists public.users (
@@ -34,10 +41,10 @@ create table if not exists public.users (
 alter table public.users add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
 alter table public.users add column if not exists state jsonb not null default '{}'::jsonb;
 
--- Ensure an index exists on auth_user_id for high-performance join and uniqueness lookup
+-- Ensure an index exists on auth_user_id for high-performance join and lookup
 create index if not exists users_auth_user_id_idx on public.users(auth_user_id);
 
--- ─── 3. Authoritative Identity Consistency Audit & Safe Backfill ──────────────
+-- ─── 3. Authoritative Identity Consistency Audit & Safe Legacy Backfill ───────
 -- Audits existing production users, detects missing/duplicate/conflicting accounts in auth.users,
 -- verifies pre-existing auth_user_id mappings, and safely links unmapped rows.
 do $$
@@ -312,141 +319,145 @@ alter table public.roadmap_nodes enable row level security;
 alter table public.resume_heuristic_embeddings enable row level security;
 alter table public.job_embeddings enable row level security;
 
--- ─── 10. Hardened SECURITY DEFINER Ownership Verification Function ───────────
--- Hardened against search_path injection; explicitly qualifies public.users;
--- Permanently authorizes via auth.uid() = public.users.auth_user_id.
--- Transitional email fallback is strictly limited to unmapped legacy rows during migration.
-create or replace function public.is_owner(record_user_id uuid)
+-- ─── 10. Private Schema SECURITY DEFINER Ownership Function ───────────────────
+-- Hardened against search_path injection; hidden from PostgREST schema;
+-- Answers strictly: Does record_user_id belong to auth.uid()?
+-- Permanent authoritative mechanism: auth.uid() = public.users.auth_user_id.
+-- No email-based authorization.
+create or replace function private.is_owner(record_user_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, pg_temp
+stable
+set search_path = ''
 as $$
 begin
   return exists (
     select 1
     from public.users
     where public.users.id = record_user_id
-      and (
-        -- Permanent Authoritative Mechanism
-        (public.users.auth_user_id is not null and public.users.auth_user_id = auth.uid())
-        or
-        -- Transitional Migration Bridge Only (Bypassed once auth_user_id is populated)
-        (public.users.auth_user_id is null and public.users.email = (auth.jwt() ->> 'email'))
-      )
+      and public.users.auth_user_id = auth.uid()
   );
 end;
 $$;
 
--- Explicitly harden function execution privileges:
--- Revoke default public execution; grant exclusively to authenticated sessions.
-revoke all on function public.is_owner(uuid) from public;
-grant execute on function public.is_owner(uuid) to authenticated;
+-- Restrict function execution: only authenticated sessions through RLS
+revoke all on function private.is_owner(uuid) from public;
+revoke all on function private.is_owner(uuid) from anon;
+grant execute on function private.is_owner(uuid) to authenticated;
 
--- ─── 11. Users Table RLS Policies ─────────────────────────────────────────────
--- SELECT: Allows authenticated users to view their own profile.
+-- ─── 11. Database-Level Ownership Immutability Triggers ───────────────────────
+-- Prevents clients or malicious queries from mutating public.users.id or auth_user_id
+create or replace function private.protect_user_identity_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.id <> old.id then
+    raise exception 'Cannot mutate public.users.id';
+  end if;
+  if new.auth_user_id is distinct from old.auth_user_id then
+    raise exception 'Cannot mutate public.users.auth_user_id';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_protect_user_identity_mutation on public.users;
+create trigger trg_protect_user_identity_mutation
+  before update on public.users
+  for each row execute function private.protect_user_identity_mutation();
+
+-- ─── 12. Users Table RLS Policies ─────────────────────────────────────────────
+-- SELECT: Authenticated users can read strictly their own profile
 drop policy if exists "users_select_owner_policy" on public.users;
 create policy "users_select_owner_policy" on public.users
   for select to authenticated
-  using (
-    (auth_user_id is not null and auth_user_id = auth.uid())
-    or
-    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
-  );
+  using (auth_user_id = auth.uid());
 
--- INSERT: Enforces that new profiles are strictly tied to the caller's auth.uid().
+-- INSERT: Enforces that newly inserted profiles are strictly tied to caller's auth.uid()
 drop policy if exists "users_insert_owner_policy" on public.users;
 create policy "users_insert_owner_policy" on public.users
   for insert to authenticated
-  with check (
-    auth_user_id = auth.uid()
-  );
+  with check (auth_user_id = auth.uid());
 
--- UPDATE: Permits updates to caller's own record; enforces auth_user_id = auth.uid().
+-- UPDATE: Permits updates only to caller's own record; enforces auth_user_id = auth.uid()
 drop policy if exists "users_update_owner_policy" on public.users;
 create policy "users_update_owner_policy" on public.users
   for update to authenticated
-  using (
-    (auth_user_id is not null and auth_user_id = auth.uid())
-    or
-    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
-  )
-  with check (
-    auth_user_id = auth.uid()
-  );
+  using (auth_user_id = auth.uid())
+  with check (auth_user_id = auth.uid());
 
--- DELETE: Permits deletion only of caller's own record.
+-- DELETE: Permits deletion only of caller's own record
 drop policy if exists "users_delete_owner_policy" on public.users;
 create policy "users_delete_owner_policy" on public.users
   for delete to authenticated
-  using (
-    (auth_user_id is not null and auth_user_id = auth.uid())
-    or
-    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
-  );
+  using (auth_user_id = auth.uid());
 
--- ─── 12. User-Scoped Tables RLS Policies (Resumes, Practice, Roadmaps, Telemetry)
+-- ─── 13. User-Scoped Tables RLS Policies (Resumes, Practice, Roadmaps, Telemetry)
 -- Resume Uploads
 drop policy if exists "resumes_select_owner_policy" on public.resume_uploads;
 create policy "resumes_select_owner_policy" on public.resume_uploads
-  for select to authenticated using (public.is_owner(user_id));
+  for select to authenticated using (private.is_owner(user_id));
 
 drop policy if exists "resumes_insert_owner_policy" on public.resume_uploads;
 create policy "resumes_insert_owner_policy" on public.resume_uploads
-  for insert to authenticated with check (public.is_owner(user_id));
+  for insert to authenticated with check (private.is_owner(user_id));
 
 drop policy if exists "resumes_update_owner_policy" on public.resume_uploads;
 create policy "resumes_update_owner_policy" on public.resume_uploads
-  for update to authenticated using (public.is_owner(user_id)) with check (public.is_owner(user_id));
+  for update to authenticated using (private.is_owner(user_id)) with check (private.is_owner(user_id));
 
 drop policy if exists "resumes_delete_owner_policy" on public.resume_uploads;
 create policy "resumes_delete_owner_policy" on public.resume_uploads
-  for delete to authenticated using (public.is_owner(user_id));
+  for delete to authenticated using (private.is_owner(user_id));
 
 -- Practice History
 drop policy if exists "practice_select_owner_policy" on public.practice_history;
 create policy "practice_select_owner_policy" on public.practice_history
-  for select to authenticated using (public.is_owner(user_id));
+  for select to authenticated using (private.is_owner(user_id));
 
 drop policy if exists "practice_insert_owner_policy" on public.practice_history;
 create policy "practice_insert_owner_policy" on public.practice_history
-  for insert to authenticated with check (public.is_owner(user_id));
+  for insert to authenticated with check (private.is_owner(user_id));
 
 drop policy if exists "practice_update_owner_policy" on public.practice_history;
 create policy "practice_update_owner_policy" on public.practice_history
-  for update to authenticated using (public.is_owner(user_id)) with check (public.is_owner(user_id));
+  for update to authenticated using (private.is_owner(user_id)) with check (private.is_owner(user_id));
 
 drop policy if exists "practice_delete_owner_policy" on public.practice_history;
 create policy "practice_delete_owner_policy" on public.practice_history
-  for delete to authenticated using (public.is_owner(user_id));
+  for delete to authenticated using (private.is_owner(user_id));
 
 -- Roadmaps
 drop policy if exists "roadmaps_select_owner_policy" on public.roadmaps;
 create policy "roadmaps_select_owner_policy" on public.roadmaps
-  for select to authenticated using (public.is_owner(user_id));
+  for select to authenticated using (private.is_owner(user_id));
 
 drop policy if exists "roadmaps_insert_owner_policy" on public.roadmaps;
 create policy "roadmaps_insert_owner_policy" on public.roadmaps
-  for insert to authenticated with check (public.is_owner(user_id));
+  for insert to authenticated with check (private.is_owner(user_id));
 
 drop policy if exists "roadmaps_update_owner_policy" on public.roadmaps;
 create policy "roadmaps_update_owner_policy" on public.roadmaps
-  for update to authenticated using (public.is_owner(user_id)) with check (public.is_owner(user_id));
+  for update to authenticated using (private.is_owner(user_id)) with check (private.is_owner(user_id));
 
 drop policy if exists "roadmaps_delete_owner_policy" on public.roadmaps;
 create policy "roadmaps_delete_owner_policy" on public.roadmaps
-  for delete to authenticated using (public.is_owner(user_id));
+  for delete to authenticated using (private.is_owner(user_id));
 
--- Telemetry Events
+-- Telemetry Events (Append-only for client events)
 drop policy if exists "telemetry_select_owner_policy" on public.telemetry_events;
 create policy "telemetry_select_owner_policy" on public.telemetry_events
-  for select to authenticated using (public.is_owner(user_id));
+  for select to authenticated using (private.is_owner(user_id));
 
 drop policy if exists "telemetry_insert_owner_policy" on public.telemetry_events;
 create policy "telemetry_insert_owner_policy" on public.telemetry_events
-  for insert to authenticated with check (public.is_owner(user_id));
+  for insert to authenticated with check (private.is_owner(user_id));
 
--- ─── 13. Public RAG Vector Collections RLS Policies ───────────────────────────
+-- ─── 14. Public RAG Vector Collections RLS Policies ───────────────────────────
 -- Public domain collections are read-only to all clients (authenticated and anonymous)
 drop policy if exists "rag_courses_public_read" on public.course_embeddings;
 create policy "rag_courses_public_read" on public.course_embeddings for select to authenticated, anon using (true);
@@ -472,3 +483,32 @@ create policy "rag_resume_heuristics_service_write" on public.resume_heuristic_e
 
 drop policy if exists "rag_jobs_service_write" on public.job_embeddings;
 create policy "rag_jobs_service_write" on public.job_embeddings for all to service_role using (true) with check (true);
+
+-- ─── 15. Explicit PostgreSQL Table Privileges (Least Privilege) ───────────────
+-- Revoke all permissions on private user tables from anon and public
+revoke all on table public.users from anon, public;
+revoke all on table public.resume_uploads from anon, public;
+revoke all on table public.practice_history from anon, public;
+revoke all on table public.roadmaps from anon, public;
+revoke all on table public.telemetry_events from anon, public;
+
+-- Grant required permissions to authenticated users
+grant select, insert, update, delete on table public.users to authenticated;
+grant select, insert, update, delete on table public.resume_uploads to authenticated;
+grant select, insert, update, delete on table public.practice_history to authenticated;
+grant select, insert, update, delete on table public.roadmaps to authenticated;
+grant select, insert on table public.telemetry_events to authenticated;
+
+-- Grant public read-only access to domain RAG knowledge collections
+revoke insert, update, delete on table public.course_embeddings from anon, authenticated, public;
+revoke insert, update, delete on table public.roadmap_nodes from anon, authenticated, public;
+revoke insert, update, delete on table public.resume_heuristic_embeddings from anon, authenticated, public;
+revoke insert, update, delete on table public.job_embeddings from anon, authenticated, public;
+
+grant select on table public.course_embeddings to anon, authenticated;
+grant select on table public.roadmap_nodes to anon, authenticated;
+grant select on table public.resume_heuristic_embeddings to anon, authenticated;
+grant select on table public.job_embeddings to anon, authenticated;
+
+-- Grant full administrative rights on all tables to service_role
+grant all on all tables in schema public to service_role;
