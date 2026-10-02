@@ -430,6 +430,7 @@ async function callLLMProvider(
       tools: aiTools,
       maxOutputTokens: voiceMode ? 400 : 900,
       temperature: 0.35,
+      maxRetries: 0,
       abortSignal: AbortSignal.timeout(15000),
     });
 
