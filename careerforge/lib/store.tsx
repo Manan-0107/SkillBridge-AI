@@ -614,6 +614,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setTargetRole = (role: RoleId) => {
     if (!user) return;
+    if ((role as any) === "__SKIPPED__" || (role as any) === "__DONT_KNOW__") return;
     const updated = { ...user, targetRole: role };
     persist(updated);
     // Sync role to DB

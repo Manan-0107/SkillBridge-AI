@@ -1139,9 +1139,25 @@ function generateChatTitle(prompt: string): string {
               }).catch(() => {});
             } catch {}
           }
-          if (updatedRole) {
+          if (updatedRole && updatedRole !== "__SKIPPED__" && updatedRole !== "__DONT_KNOW__") {
             setTargetRole(updatedRole);
           }
+        } else if (data.toolCall.tool === "startPractice") {
+          const topic = data.toolCall.parameters?.topic || "Technical Practice";
+          showToast(`Starting practice drill: ${topic}`);
+          window.dispatchEvent(new CustomEvent("careerforge:start-practice", { detail: { topic } }));
+          setTimeout(() => {
+            executeRedirect("practice");
+          }, 1500);
+        } else if (data.toolCall.tool === "navigateTo" && data.toolCall.parameters?.page) {
+          const target = data.toolCall.parameters.page as FeatureId;
+          setTimeout(() => {
+            executeRedirect(target);
+          }, 1500);
+        } else if (data.toolCall.tool === "searchJobs") {
+          setTimeout(() => {
+            executeRedirect("local");
+          }, 1500);
         }
       }
 
@@ -1219,12 +1235,24 @@ function generateChatTitle(prompt: string): string {
       }
 
       setBusy(false);
-      if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
-        setRedirectCountdown(3);
-        const timer = setTimeout(() => {
-          executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
-        }, 3200);
-        setActiveTimer(timer);
+      if (hasFeature && data.feature && !data.toolCall) {
+        const lowerPrompt = userMsgText.toLowerCase();
+        if (
+          lowerPrompt.startsWith("open") ||
+          lowerPrompt.startsWith("take me to") ||
+          lowerPrompt.startsWith("go to") ||
+          lowerPrompt.startsWith("show") ||
+          lowerPrompt.startsWith("view") ||
+          lowerPrompt.startsWith("start") ||
+          lowerPrompt === "yes" ||
+          lowerPrompt === "sure"
+        ) {
+          setRedirectCountdown(3);
+          const timer = setTimeout(() => {
+            executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
+          }, 3200);
+          setActiveTimer(timer);
+        }
       }
     } catch (err: any) {
       console.error("[AssistantHome] LLM call error:", err);

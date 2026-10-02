@@ -29,6 +29,7 @@ export function LocalOpportunities() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationProfile | null>(null);
   const [playingJobId, setPlayingJobId] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState(false);
 
   // Email Job Alert State (LinkedIn-style)
   const [alertEmail, setAlertEmail] = useState(user?.email || "");
@@ -154,6 +155,7 @@ export function LocalOpportunities() {
     lon: number | null = currentLocation?.longitude || null
   ) => {
     setLoading(true);
+    setProviderError(false);
     try {
       const params = new URLSearchParams();
       if (role) params.set("role", role);
@@ -167,10 +169,20 @@ export function LocalOpportunities() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
+        if (data.status === "PROVIDER_FAILED") {
+          setProviderError(true);
+          setJobs([]);
+        } else {
+          setJobs(data.jobs || []);
+        }
+      } else {
+        setProviderError(true);
+        setJobs([]);
       }
     } catch (err) {
       console.error("[LocalOpportunities] Failed to fetch live jobs:", err);
+      setProviderError(true);
+      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -427,6 +439,22 @@ export function LocalOpportunities() {
       {loading ? (
         <div className="rounded-2xl border border-ink/10 bg-surface/30 p-8 text-center text-sm text-ink/50">
           Fetching live listings...
+        </div>
+      ) : providerError ? (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+          <p className="text-sm font-medium text-red-400">
+            I couldn&apos;t retrieve live job results right now.
+          </p>
+          <p className="mt-1 text-xs text-ink/50">
+            The job feeds experienced an upstream provider interruption. You can retry your search.
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchLiveJobs(searchTerm, activeType, targetRole, locationInput)}
+            className="mt-4 rounded-lg bg-surface px-4 py-2 text-xs font-semibold text-ink hover:bg-surface/80 transition-colors cursor-pointer"
+          >
+            Retry Live Search
+          </button>
         </div>
       ) : jobs.length === 0 ? (
         <div className="rounded-2xl border border-ink/10 bg-surface/30 p-8 text-center">

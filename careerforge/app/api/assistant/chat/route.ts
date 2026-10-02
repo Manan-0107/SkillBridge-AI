@@ -829,13 +829,13 @@ function generateCognitiveAgentResponse(
       .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
 
   // ─── Direct Action Execution & Confirmation (Phase 5 & 6) ───────────────────
-  const isAffirmative =
+  const isActionConfirmation =
     /^(yes|yeah|yep|sure|ok|okay|start|start it|do it|let's do it|lets do it|go ahead|ha|haan|હા|हाँ|oui)\b/i.test(lower) ||
     lower.includes("start the drill") ||
     lower.includes("start practice") ||
     lower.includes("open roadmap");
 
-  if (isAffirmative) {
+  if (isActionConfirmation) {
     if (
       lastAssistantMsg.includes("start the drill") ||
       lastAssistantMsg.includes("start that practice") ||
