@@ -23,10 +23,10 @@ export function CareerContextPanel({
 
   // Compute Career Readiness score based on verified skills and gaps
   const readinessStats = useMemo(() => {
-    const verifiedCount = userSkills.length || 6;
-    const gapCount = missingSkills.length || 3;
+    const verifiedCount = userSkills.length;
+    const gapCount = missingSkills.length;
     const totalCount = verifiedCount + gapCount;
-    const percent = Math.min(100, Math.round((verifiedCount / totalCount) * 100));
+    const percent = totalCount > 0 ? Math.min(100, Math.round((verifiedCount / totalCount) * 100)) : 0;
 
     return {
       percent,
@@ -36,22 +36,13 @@ export function CareerContextPanel({
     };
   }, [userSkills, missingSkills]);
 
-  // Default skill gaps if not populated
+  // Authoritative skill gaps (no synthetic defaults)
   const displayGaps = useMemo(() => {
     if (missingSkills && missingSkills.length > 0) {
       return missingSkills.slice(0, 5);
     }
-    if (currentRole === "frontend") {
-      return ["TypeScript & Generics", "React 19 & Server Components", "Core Web Vitals"];
-    }
-    if (currentRole === "backend") {
-      return ["Distributed Caching (Redis)", "Database Indexing & Locks", "gRPC & Protobuf"];
-    }
-    if (currentRole === "devops") {
-      return ["Kubernetes Helm Charts", "Terraform Infrastructure as Code", "CI/CD Security Scanning"];
-    }
-    return ["System Architecture", "Performance Optimization", "Automated Testing"];
-  }, [missingSkills, currentRole]);
+    return [];
+  }, [missingSkills]);
 
   return (
     <aside
@@ -157,37 +148,43 @@ export function CareerContextPanel({
           </div>
 
           <div className="divide-y divide-ink/8">
-            {displayGaps.map((gap, index) => (
-              <div
-                key={index}
-                className="py-2.5 first:pt-0 last:pb-0 space-y-1.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-ink truncate">
-                    {gap}
-                  </span>
-                  <span className="text-[9px] font-semibold text-accent/80 shrink-0">
-                    High Impact
-                  </span>
+            {displayGaps.length > 0 ? (
+              displayGaps.map((gap, index) => (
+                <div
+                  key={index}
+                  className="py-2.5 first:pt-0 last:pb-0 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-ink truncate">
+                      {gap}
+                    </span>
+                    <span className="text-[9px] font-semibold text-accent/80 shrink-0">
+                      High Impact
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onSendPrompt(`Explain ${gap} step-by-step with practical production examples for my role.`)}
+                      className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
+                    >
+                      Teach Me
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate("practice")}
+                      className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
+                    >
+                      Drill Concept
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSendPrompt(`Explain ${gap} step-by-step with practical production examples for my role.`)}
-                    className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
-                  >
-                    Teach Me
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("practice")}
-                    className="rounded-lg border border-ink/10 bg-transparent px-2.5 py-1 text-[10px] font-medium text-ink/70 hover:text-ink hover:border-accent/35 transition-colors cursor-pointer"
-                  >
-                    Drill Concept
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-ink/50 py-3 text-center">
+                No skill gaps identified yet. Upload or audit your resume to detect gaps.
+              </p>
+            )}
           </div>
         </div>
 

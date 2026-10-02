@@ -210,11 +210,19 @@ export async function POST(req: NextRequest) {
 
     const lastMessage = messages[messages.length - 1]?.text || "";
     const userName = authUser.name || userProfile?.name || authUser.email.split("@")[0];
-    const role = targetRole || userProfile?.targetRole || "Software Engineer";
+    const { getAuthoritativeCareerSnapshot, toAuthoritativeCareerState } = await import(
+      "@/lib/ai/orchestrator/authoritativeCareerState"
+    );
+    const careerSnapshot = await getAuthoritativeCareerSnapshot(authUser.id, authUser.email);
+    const role =
+      careerSnapshot.targetRole.status === "KNOWN" && careerSnapshot.targetRole.currentValue
+        ? careerSnapshot.targetRole.currentValue
+        : targetRole || "Software Engineering";
+
 
 
     // ─── Scoped RAG Domain Retrieval (Courses, Roadmap, Resume, Jobs) ─────────
-    const ragResult = await getScopedRagContext(lastMessage, role);
+    const ragResult = await getScopedRagContext(authUser.id, lastMessage, role);
     let systemPrompt = getSystemPrompt(
       userName,
       role,
@@ -233,9 +241,9 @@ export async function POST(req: NextRequest) {
       userProfile: {
         name: userName,
         email: authUser.email,
-        targetRole: role,
-        skills: userProfile?.skills,
-        missingSkills: userProfile?.missingSkills,
+        targetRole: careerSnapshot.targetRole.currentValue || undefined,
+        skills: careerSnapshot.skills.currentValue || [],
+        missingSkills: careerSnapshot.missingSkills.currentValue || [],
         location: userProfile?.location,
       },
       conversationHistory: messages.map((m) => ({
@@ -245,9 +253,9 @@ export async function POST(req: NextRequest) {
       knownInformation: {
         fullName: userName,
         name: userName,
-        ...(userProfile?.targetRole ? { targetRole: userProfile.targetRole } : {}),
+        ...(careerSnapshot.targetRole.currentValue ? { targetRole: careerSnapshot.targetRole.currentValue } : {}),
         ...(userProfile?.location ? { location: userProfile.location } : {}),
-        ...(userProfile?.skills ? { skills: userProfile.skills } : {}),
+        ...(careerSnapshot.skills.currentValue?.length ? { skills: careerSnapshot.skills.currentValue } : {}),
       },
       language: body.language || body.conversationLanguageState?.detectedLanguage || "en",
       accessibilityPreferences: accessibilityPrefs,
@@ -268,67 +276,8 @@ export async function POST(req: NextRequest) {
     // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
     const synthQueryType = CareerSynthesisEngine.detectQueryType(lastMessage);
     if (synthQueryType) {
-      let authoritativeResumeSkills = userProfile?.skills || [];
-      let authoritativeMissingSkills = userProfile?.missingSkills || [];
-      let authoritativeAtsScore = typeof userProfile?.atsScore === "number" ? userProfile.atsScore : undefined;
-      let authoritativeHasResume = Boolean(userProfile?.resumeText || userProfile?.hasResume);
-
-      // Verify against database if user is authenticated
-      if (authUser?.id) {
-        try {
-          const { getUserResumes } = await import("@/lib/db");
-          const dbResumes = await getUserResumes(authUser.id);
-          if (dbResumes && dbResumes.length > 0) {
-            const latest = dbResumes[0];
-            authoritativeHasResume = true;
-            if (typeof latest.ats_score === "number") authoritativeAtsScore = latest.ats_score;
-            if (Array.isArray(latest.matched_skills)) authoritativeResumeSkills = latest.matched_skills;
-            if (Array.isArray(latest.missing_skills)) authoritativeMissingSkills = latest.missing_skills;
-          }
-        } catch {}
-      }
-
-      const careerState: AuthoritativeCareerState = {
-        goal: {
-          targetRole: role,
-          experienceLevel: userProfile?.experienceLevel,
-          learningHoursPerWeek: userProfile?.availableLearningHours,
-          location: userProfile?.location,
-          targetDeadlineDays: userProfile?.targetDeadlineDays,
-        },
-        roadmap: {
-          activeRole: role,
-          currentMilestoneIndex: userProfile?.roadmap?.currentMilestoneIndex ?? 0,
-          totalMilestones: userProfile?.roadmap?.totalMilestones ?? 0,
-          currentMilestoneTitle: userProfile?.roadmap?.currentMilestoneTitle || "",
-          currentMilestoneConcepts: userProfile?.roadmap?.currentMilestoneConcepts || [],
-          completedMilestoneIndices: userProfile?.roadmap?.completedMilestoneIndices || [],
-          completionPercentage: userProfile?.roadmap?.completionPercentage || 0,
-        },
-        practice: {
-          recentScoreAverage: userProfile?.practiceHistory?.recentScoreAverage || 0,
-          totalQuestionsAnswered: userProfile?.practiceHistory?.totalQuestionsAnswered || 0,
-          currentStreak: userProfile?.practiceHistory?.currentStreak || 0,
-          struggledConcepts: userProfile?.practiceHistory?.struggledConcepts || [],
-          masteredConcepts: userProfile?.practiceHistory?.masteredConcepts || [],
-          latestPracticeDate: userProfile?.practiceHistory?.latestPracticeDate,
-        },
-        resume: {
-          hasResume: authoritativeHasResume,
-          atsScore: authoritativeAtsScore,
-          verifiedSkills: authoritativeResumeSkills,
-          missingSkills: authoritativeMissingSkills,
-        },
-        jobs: {
-          targetRoles: role ? [role] : [],
-          matchedCount: userProfile?.matchedJobCount || 0,
-          preferredWorkMode: userProfile?.preferredWorkMode,
-        },
-        deadlines: {
-          interviewUpcoming: Boolean(userProfile?.interviewDate || userProfile?.interviewUpcoming),
-          daysRemaining: userProfile?.daysUntilInterview,
-        },
-      };
+      // Deterministically derive authoritative state strictly from server snapshot
+      const careerState = toAuthoritativeCareerState(careerSnapshot);
 
       const synth = CareerSynthesisEngine.synthesize(synthQueryType, careerState, body.language || "en");
       systemPrompt += `\n\nAUTHORITATIVE CROSS-MODULE CAREER SYNTHESIS:
@@ -359,6 +308,12 @@ DIRECTIVE: Communicate these exact authoritative facts naturally to the user. DO
     return NextResponse.json({
       ...providerResult.data,
       isFallback: false,
+      careerStateSnapshot: {
+        userId: authUser.id,
+        targetRole: careerSnapshot.targetRole.currentValue,
+        status: careerSnapshot.targetRole.status,
+        lastUpdated: careerSnapshot.lastUpdated,
+      },
     });
   } catch (error) {
     console.error("[Assistant API] Fatal error:", error);

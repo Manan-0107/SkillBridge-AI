@@ -13,3 +13,4 @@ export * from "./dynamicExtractor";
 export * from "./adaptiveAssessment";
 export * from "./dynamicQuestionOrchestrator";
 export * from "./careerStateSynthesis";
+export * from "./authoritativeCareerState";

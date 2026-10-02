@@ -188,8 +188,8 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const role = state.goal.targetRole || "Software Engineering";
-    const milestoneTitle = state.roadmap.currentMilestoneTitle || "Core Fundamentals";
+    const role = state.goal.targetRole;
+    const milestoneTitle = state.roadmap.currentMilestoneTitle;
     const milestoneConcepts = state.roadmap.currentMilestoneConcepts || [];
     const struggled = state.practice.struggledConcepts || [];
     const deadline = state.deadlines;
@@ -199,19 +199,42 @@ export class CareerSynthesisEngine {
       milestoneConcepts.some((c) => s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase()))
     ) || (struggled.length > 0 ? struggled[0] : null);
 
-    let focusItem = activeStruggle || milestoneConcepts[0] || "Foundational Drills";
+    // If user has no roadmap milestone and no struggle, advise establishing one
+    if (!milestoneTitle && !activeStruggle && state.roadmap.totalMilestones === 0) {
+      const spoken = role
+        ? `To plan your daily focus for ${role}, you don't have an active career roadmap or practice history configured yet. Let's open the Roadmap Suite to generate your milestone plan.`
+        : "You don't have an active career roadmap or target role configured yet. Would you like to set your target track and generate a roadmap?";
+
+      return {
+        queryType: "daily_focus",
+        primaryFocus: "Roadmap Setup",
+        rationale: "No active roadmap or practice history found in authoritative state.",
+        spokenRecommendation: spoken,
+        targetWorkspace: "roadmap",
+        actionableStep: "Create career roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+        authoritativeFacts: {
+          targetRole: role || null,
+          hasRoadmap: false,
+          practiceQuestions: state.practice.totalQuestionsAnswered,
+        },
+      };
+    }
+
+    const effectiveTitle = milestoneTitle || "Current Milestone";
+    const focusItem = activeStruggle || milestoneConcepts[0] || (role ? `${role} Core Skills` : "Core Skills");
     let rationale = "";
     let spoken = "";
 
     if (activeStruggle) {
-      rationale = `Current roadmap milestone is "${milestoneTitle}", and recent practice shows repeated difficulty in "${activeStruggle}".`;
+      rationale = `Current roadmap milestone is "${effectiveTitle}", and recent practice shows repeated difficulty in "${activeStruggle}".`;
       if (deadline?.interviewUpcoming) {
         rationale += ` You have an upcoming interview in ${deadline.daysRemaining} days, making this the highest priority.`;
       }
-      spoken = `Today, focus on ${focusItem}. You've been struggling with ${focusItem} in recent practice, and it is part of your current roadmap milestone "${milestoneTitle}". I recommend a 30-minute practice drill first, followed by two coding questions. Want me to start the drill?`;
+      spoken = `Today, focus on ${focusItem}. You've been struggling with ${focusItem} in recent practice, and it is part of your current roadmap milestone "${effectiveTitle}". I recommend a 30-minute practice drill first, followed by two coding questions. Want me to start the drill?`;
     } else {
-      rationale = `Current roadmap milestone "${milestoneTitle}" has upcoming milestones with 0 practice deficits.`;
-      spoken = `Today, focus on "${milestoneTitle}" for your ${role} path. You've completed earlier prerequisites with solid accuracy. Let's tackle ${focusItem} with an interactive lesson and drill. Shall we open the roadmap?`;
+      rationale = `Current roadmap milestone "${effectiveTitle}" has upcoming milestones with 0 practice deficits.`;
+      spoken = `Today, focus on "${effectiveTitle}"${role ? ` for your ${role} path` : ""}. You've completed earlier prerequisites with solid accuracy. Let's tackle ${focusItem} with an interactive lesson and drill. Shall we open the roadmap?`;
     }
 
     return {
@@ -220,13 +243,13 @@ export class CareerSynthesisEngine {
       rationale,
       spokenRecommendation: spoken,
       targetWorkspace: activeStruggle ? "practice" : "roadmap",
-      actionableStep: activeStruggle ? `Start 30-minute drill on ${focusItem}` : `Advance ${milestoneTitle} milestone`,
+      actionableStep: activeStruggle ? `Start 30-minute drill on ${focusItem}` : `Advance ${effectiveTitle} milestone`,
       toolCall: activeStruggle
         ? { tool: "startPractice", parameters: { topic: focusItem } }
         : { tool: "navigateTo", parameters: { page: "roadmap" } },
       authoritativeFacts: {
-        targetRole: role,
-        milestoneTitle,
+        targetRole: role || null,
+        milestoneTitle: effectiveTitle,
         activeStruggle,
         interviewDeadline: deadline?.daysRemaining ?? null,
       },
@@ -238,22 +261,43 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const role = state.goal.targetRole || "Software Engineer";
-    const currentMilestone = state.roadmap.currentMilestoneTitle || "Core Skills";
-    const concepts = state.roadmap.currentMilestoneConcepts.join(", ") || currentMilestone;
+    const role = state.goal.targetRole;
+    const currentMilestone = state.roadmap.currentMilestoneTitle;
+    const concepts = state.roadmap.currentMilestoneConcepts.length > 0
+      ? state.roadmap.currentMilestoneConcepts.join(", ")
+      : "";
 
-    const spoken = `You're learning "${currentMilestone}" (${concepts}) because it is a direct prerequisite for ${role} production standards and technical interviews. Mastering these concepts bridges the gap between basic coding and the architectural problem-solving hiring managers test for.`;
+    if (!currentMilestone || state.roadmap.totalMilestones === 0) {
+      return {
+        queryType: "why_learning",
+        primaryFocus: "Roadmap Alignment",
+        rationale: "No active milestone found to explain.",
+        spokenRecommendation: "You don't have an active roadmap milestone configured yet. Once you generate a roadmap, I can explain how each milestone and technical skill maps directly to industry hiring benchmarks.",
+        targetWorkspace: "roadmap",
+        actionableStep: "Generate career roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+        authoritativeFacts: {
+          hasMilestone: false,
+          role: role || null,
+        },
+      };
+    }
+
+    const roleText = role ? `${role} production standards and technical interviews` : "production standards and technical interviews";
+    const spoken = concepts
+      ? `You're learning "${currentMilestone}" (${concepts}) because it is a direct prerequisite for ${roleText}. Mastering these concepts bridges the gap between basic coding and the architectural problem-solving hiring managers test for.`
+      : `You're learning "${currentMilestone}" because it is a direct prerequisite for ${roleText}. Mastering this milestone bridges the gap between theory and production problem-solving.`;
 
     return {
       queryType: "why_learning",
       primaryFocus: currentMilestone,
-      rationale: `Mapped milestone "${currentMilestone}" directly to job market core competencies for "${role}".`,
+      rationale: `Mapped milestone "${currentMilestone}" directly to job market core competencies${role ? ` for "${role}"` : ""}.`,
       spokenRecommendation: spoken,
       targetWorkspace: "courses",
       actionableStep: `Review curated ${currentMilestone} syllabus`,
       toolCall: { tool: "searchCourses", parameters: { topic: currentMilestone } },
       authoritativeFacts: {
-        role,
+        role: role || null,
         currentMilestone,
         concepts: state.roadmap.currentMilestoneConcepts,
       },
@@ -265,15 +309,35 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const struggled = state.practice.struggledConcepts;
-    const missing = state.resume.missingSkills;
+    const struggled = state.practice.struggledConcepts || [];
+    const missing = state.resume.missingSkills || [];
     const scoreAvg = state.practice.recentScoreAverage;
 
     const allWeaknesses = Array.from(new Set([...struggled, ...missing]));
+
+    // Check if user has zero practice and zero resume gap data
+    if (state.practice.totalQuestionsAnswered === 0 && missing.length === 0) {
+      return {
+        queryType: "weakness_analysis",
+        primaryFocus: "No Recorded Weaknesses",
+        rationale: "Zero practice questions answered and no resume gap audit available.",
+        spokenRecommendation: "I don't have any practice history or resume skill gap data recorded for your account yet. Complete a practice drill or upload your resume so I can identify your specific technical weak areas.",
+        targetWorkspace: "practice",
+        actionableStep: "Start initial practice assessment",
+        toolCall: { tool: "startPractice", parameters: {} },
+        authoritativeFacts: {
+          totalQuestionsAnswered: 0,
+          struggledConcepts: [],
+          missingSkills: [],
+        },
+      };
+    }
+
     const primary = allWeaknesses[0] || "None identified yet";
+    const scoreText = state.practice.totalQuestionsAnswered > 0 ? `average score: ${scoreAvg}%` : "no practice questions answered yet";
 
     const spoken = allWeaknesses.length > 0
-      ? `Based on your practice telemetry (average score: ${scoreAvg}%) and resume audit, your primary weak areas are ${allWeaknesses.slice(0, 3).join(", ")}. In practice, you've lost accuracy on ${struggled.join(", ") || "challenging edge cases"}, while your resume currently lacks ${missing.join(", ") || "documented production experience"}.`
+      ? `Based on your practice telemetry (${scoreText}) and resume audit, your primary weak areas are ${allWeaknesses.slice(0, 3).join(", ")}. In practice, you've lost accuracy on ${struggled.join(", ") || "challenging edge cases"}, while your resume currently lacks ${missing.join(", ") || "documented production experience"}.`
       : `Based on your telemetry, you have no recorded critical deficits. Your average practice accuracy is ${scoreAvg}%, and all required milestone competencies have passed verification.`;
 
     return {
@@ -297,9 +361,30 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const struggled = state.practice.struggledConcepts;
-    const milestoneConcepts = state.roadmap.currentMilestoneConcepts;
-    const nextTopic = struggled[0] || milestoneConcepts[0] || "Data Structures";
+    const struggled = state.practice.struggledConcepts || [];
+    const milestoneConcepts = state.roadmap.currentMilestoneConcepts || [];
+    const nextTopic = struggled[0] || milestoneConcepts[0];
+
+    if (!nextTopic) {
+      const topicFallback = state.goal.targetRole ? `${state.goal.targetRole} Fundamentals` : "Practice Drill";
+      const spoken = state.practice.totalQuestionsAnswered === 0
+        ? "You haven't completed any practice questions yet. Would you like me to open the Practice Lab to begin your first diagnostic drill?"
+        : "You have no active struggle areas recorded. Would you like to select a topic from our practice lab to start your next drill?";
+
+      return {
+        queryType: "next_practice",
+        primaryFocus: topicFallback,
+        rationale: "No recorded practice errors or active milestone topics found in authoritative state.",
+        spokenRecommendation: spoken,
+        targetWorkspace: "practice",
+        actionableStep: "Open Practice Lab",
+        toolCall: { tool: "startPractice", parameters: {} },
+        authoritativeFacts: {
+          nextTopic: null,
+          totalQuestionsAnswered: state.practice.totalQuestionsAnswered,
+        },
+      };
+    }
 
     const spoken = `You should practice ${nextTopic} next. It directly reinforces your current milestone while correcting recent errors detected during practice. Would you like me to open a focused 5-question drill?`;
 
@@ -325,8 +410,25 @@ export class CareerSynthesisEngine {
   ): CareerSynthesisResult {
     const currentIdx = state.roadmap.currentMilestoneIndex;
     const title = state.roadmap.currentMilestoneTitle;
-    const isCompleted = state.roadmap.completedMilestoneIndices.includes(currentIdx);
     const percent = state.roadmap.completionPercentage;
+
+    if (!title || state.roadmap.totalMilestones === 0) {
+      return {
+        queryType: "milestone_completion",
+        primaryFocus: "Roadmap Creation",
+        rationale: "No roadmap milestones configured in authoritative state.",
+        spokenRecommendation: "You don't have an active career roadmap yet. You can generate one in the Roadmap Suite to track your milestone completion.",
+        targetWorkspace: "roadmap",
+        actionableStep: "Create career roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+        authoritativeFacts: {
+          hasMilestone: false,
+          completionPercentage: 0,
+        },
+      };
+    }
+
+    const isCompleted = state.roadmap.completedMilestoneIndices.includes(currentIdx);
 
     const spoken = isCompleted
       ? `Yes! You have completed all lessons and practice benchmarks for "${title}". Your overall roadmap is now ${percent}% complete. Ready to begin your next milestone?`
@@ -354,23 +456,40 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const struggled = state.practice.struggledConcepts;
+    const struggled = state.practice.struggledConcepts || [];
     const currentMilestone = state.roadmap.currentMilestoneTitle;
 
+    if (state.practice.totalQuestionsAnswered === 0) {
+      return {
+        queryType: "update_roadmap_from_practice",
+        primaryFocus: currentMilestone || "Practice Required",
+        rationale: "No practice history exists to adapt roadmap pacing.",
+        spokenRecommendation: "You haven't completed any practice questions yet, so there is no practice data to adjust your roadmap pacing. Once you complete a few drills, I can calibrate your milestones automatically.",
+        targetWorkspace: "practice",
+        actionableStep: "Complete a practice drill",
+        toolCall: { tool: "startPractice", parameters: {} },
+        authoritativeFacts: {
+          totalQuestionsAnswered: 0,
+          currentMilestone: currentMilestone || null,
+        },
+      };
+    }
+
+    const effectiveMilestone = currentMilestone || "your current stage";
     const spoken = struggled.length > 0
-      ? `I've updated your roadmap pacing. Because you encountered friction with ${struggled.slice(0, 2).join(" and ")}, I've inserted dedicated reinforcement checkpoints into "${currentMilestone}" before you proceed to advanced stages. Let's review the adjusted roadmap!`
+      ? `I've updated your roadmap pacing. Because you encountered friction with ${struggled.slice(0, 2).join(" and ")}, I've inserted dedicated reinforcement checkpoints into "${effectiveMilestone}" before you proceed to advanced stages. Let's review the adjusted roadmap!`
       : `Your practice accuracy is consistently high (${state.practice.recentScoreAverage}%). I've optimized your roadmap schedule to accelerate you directly to production project milestones.`;
 
     return {
       queryType: "update_roadmap_from_practice",
-      primaryFocus: currentMilestone,
+      primaryFocus: effectiveMilestone,
       rationale: `Adapted milestone sequencing based on ${struggled.length} active struggle points.`,
       spokenRecommendation: spoken,
       targetWorkspace: "roadmap",
       actionableStep: `View adaptive roadmap adjustments`,
       toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
       authoritativeFacts: {
-        currentMilestone,
+        currentMilestone: effectiveMilestone,
         struggledConcepts: struggled,
       },
     };
@@ -381,11 +500,28 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const role = state.goal.targetRole || "Frontend Developer";
+    const role = state.goal.targetRole || "Software Engineering";
     const mastered = state.practice.masteredConcepts.length > 0
       ? state.practice.masteredConcepts
       : state.resume.verifiedSkills;
     const loc = state.goal.location || "Remote";
+
+    if (mastered.length === 0) {
+      return {
+        queryType: "jobs_matching_learned",
+        primaryFocus: role,
+        rationale: "No verified skills recorded in authoritative state.",
+        spokenRecommendation: "You haven't recorded any verified skills or completed roadmap milestones yet. Complete a few lessons or verify your skills in the Practice Lab, and I will match active job openings directly to what you've learned.",
+        targetWorkspace: "practice",
+        actionableStep: "Verify skills through practice",
+        toolCall: { tool: "startPractice", parameters: {} },
+        authoritativeFacts: {
+          role,
+          masteredSkills: [],
+          location: loc,
+        },
+      };
+    }
 
     const spoken = `Searching verified ${role} positions matching the skills you've completed (${mastered.slice(0, 3).join(", ")}). I found ${state.jobs.matchedCount > 0 ? state.jobs.matchedCount : "active"} opportunities in ${loc} that fit your current stage without requiring unlearned technologies.`;
 
@@ -410,8 +546,8 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const masteredInPractice = state.practice.masteredConcepts;
-    const resumeSkills = state.resume.verifiedSkills;
+    const masteredInPractice = state.practice.masteredConcepts || [];
+    const resumeSkills = state.resume.verifiedSkills || [];
 
     // Skills user mastered in practice but hasn't put on resume
     const missingOnResume = masteredInPractice.filter(
@@ -423,19 +559,21 @@ export class CareerSynthesisEngine {
         queryType: "resume_reflection",
         primaryFocus: "Resume Creation",
         rationale: "No resume on file to audit against practice skills.",
-        spokenRecommendation: "You haven't uploaded or built a resume yet in ubix. Would you like me to open the Resume Builder so you can create one with your verified skills?",
+        spokenRecommendation: "You haven't uploaded or built a resume yet in UBIX. I don't have an ATS score or resume skills on file. Would you like me to open the Resume Builder so you can create one with your verified skills?",
         targetWorkspace: "resume",
         actionableStep: "Create new resume",
         toolCall: { tool: "openResume", parameters: { tab: "builder" } },
         authoritativeFacts: {
           hasResume: false,
           masteredInPractice,
+          atsScore: null,
         },
       };
     }
 
-    const currentAtsText = typeof state.resume.atsScore === "number" ? `above its current ${state.resume.atsScore}%` : "towards 80%+";
-    const verifiedAtsText = typeof state.resume.atsScore === "number" ? `with a strong ${state.resume.atsScore}% ATS rating` : "with strong market relevance";
+    const hasAts = typeof state.resume.atsScore === "number";
+    const currentAtsText = hasAts ? `above its current ${state.resume.atsScore}%` : "towards 80%+";
+    const verifiedAtsText = hasAts ? `with a strong ${state.resume.atsScore}% ATS rating` : "though I don't have an ATS score calculated for your current resume yet";
 
     const spoken = missingOnResume.length > 0
       ? `Your resume is currently lagging behind your actual skills. You have proven mastery in ${missingOnResume.join(", ")} during practice, but they are not yet listed on your active resume. Adding them will raise your ATS score ${currentAtsText}. Would you like me to update your resume draft?`
@@ -462,9 +600,9 @@ export class CareerSynthesisEngine {
     state: AuthoritativeCareerState,
     lang: string
   ): CareerSynthesisResult {
-    const role = state.goal.targetRole || "Software Engineer";
-    const struggled = state.practice.struggledConcepts;
-    const missingSkills = state.resume.missingSkills;
+    const role = state.goal.targetRole || "target";
+    const struggled = state.practice.struggledConcepts || [];
+    const missingSkills = state.resume.missingSkills || [];
     const ats = state.resume.atsScore;
 
     const criticalImprovements: string[] = [];
@@ -477,12 +615,14 @@ export class CareerSynthesisEngine {
     if (typeof ats === "number" && ats < 80) {
       criticalImprovements.push(`boost your ATS compliance score from ${ats}% to 80%+`);
     } else if (ats === undefined || !state.resume.hasResume) {
-      criticalImprovements.push("upload or build a verified resume in the Resume Suite");
+      criticalImprovements.push("upload or build a verified resume in the Resume Suite to calculate your ATS score");
     }
+
+    const atsText = typeof ats === "number" ? `your resume ATS score is strong (${ats}%)` : "you don't have an ATS score calculated yet";
 
     const spoken = criticalImprovements.length > 0
       ? `Before applying to ${role} openings, there are ${criticalImprovements.length} key priorities: ${criticalImprovements.join(", ")}. Tackling these first will significantly increase your interview conversion rate.`
-      : `You're in prime condition to apply for ${role} roles! Your practice scores are strong, your resume ATS score is high (${ats ?? 85}%), and your core milestones are verified. Let's review live openings!`;
+      : `You're in prime condition to apply for ${role} roles! Your practice scores are strong, ${atsText}, and your core milestones are verified. Let's review live openings!`;
 
     return {
       queryType: "pre_application_improvements",
@@ -497,7 +637,7 @@ export class CareerSynthesisEngine {
       authoritativeFacts: {
         role,
         criticalImprovements,
-        atsScore: ats,
+        atsScore: ats ?? null,
       },
     };
   }

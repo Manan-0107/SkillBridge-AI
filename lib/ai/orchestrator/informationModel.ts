@@ -110,6 +110,27 @@ export function evaluateRequirementStatus(
     };
   }
 
+  // Check structured field statuses first (no sentinel string values)
+  const explicitStatus = context.knownInformation?._fieldStatuses?.[req.key];
+  if (explicitStatus === "SKIPPED") {
+    return {
+      ...req,
+      currentValue: null,
+      status: "SKIPPED",
+      confidence: 0,
+      source: "user_input",
+    };
+  }
+  if (explicitStatus === "UNKNOWN") {
+    return {
+      ...req,
+      currentValue: null,
+      status: "UNKNOWN",
+      confidence: 0,
+      source: "default",
+    };
+  }
+
   // Check direct known overrides first
   if (known[req.key] !== undefined && known[req.key] !== null) {
     if (known[req.key] === "__SKIPPED__") {

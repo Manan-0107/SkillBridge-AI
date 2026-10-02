@@ -1736,7 +1736,7 @@ function generateChatTitle(prompt: string): string {
                     className="inline-flex items-center gap-2 text-xs font-medium text-ink/60 hover:text-accent transition-colors group cursor-pointer"
                   >
                     <span className="font-mono text-[10px] text-accent">●</span>
-                    <span>Continue your journey: {user?.targetRole ? `${user.targetRole.charAt(0).toUpperCase() + user.targetRole.slice(1)} Architecture (68%)` : "Frontend Architecture (68%)"}</span>
+                    <span>Continue your journey: {user?.targetRole ? `${user.targetRole.charAt(0).toUpperCase() + user.targetRole.slice(1)} Career Track` : "Career Roadmap"}</span>
                     <span className="transform group-hover:translate-x-0.5 transition-transform text-accent">→</span>
                   </button>
 

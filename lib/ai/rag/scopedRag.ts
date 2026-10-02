@@ -15,6 +15,7 @@
 import { parseIntent, FeatureId } from "../../intent";
 import { courseCatalog, roadmaps } from "../../data";
 import { RoleId } from "../../types";
+import { wrapUntrustedData } from "../centralProvider";
 
 export type ScopedDomain = "courses" | "roadmap" | "resume" | "jobs";
 
@@ -193,9 +194,43 @@ function searchLocalCorpus(query: string, corpus: RagMatch[], limit = 4): RagMat
 
 // ─── Main Scoped RAG Retrieval Engine ─────────────────────────────────────────
 export async function getScopedRagContext(
-  query: string,
-  targetRole?: string
+  arg1: string | null | undefined,
+  arg2?: string,
+  arg3?: string
 ): Promise<ScopedRagResult> {
+  let userId: string | null | undefined;
+  let query: string;
+  let targetRole: string | undefined;
+
+  if (arg3 !== undefined) {
+    // Called as (userId, query, targetRole)
+    userId = arg1;
+    query = arg2 || "";
+    targetRole = arg3;
+  } else if (arg1 === null || arg1 === undefined) {
+    // Called as (null | undefined, query)
+    userId = arg1;
+    query = arg2 || "";
+    targetRole = undefined;
+  } else {
+    // Check if arg1 is a userId pattern
+    if (
+      typeof arg1 === "string" &&
+      (arg1.startsWith("usr-") ||
+        arg1.startsWith("user-") ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(arg1))
+    ) {
+      userId = arg1;
+      query = arg2 || "";
+      targetRole = undefined;
+    } else {
+      // Called as (query, targetRole)
+      userId = undefined;
+      query = arg1 || "";
+      targetRole = arg2;
+    }
+  }
+
   const domain = classifyScopedDomain(query);
 
   // General knowledge queries strictly bypass RAG
@@ -238,6 +273,7 @@ export async function getScopedRagContext(
         value: query,
       });
 
+      // Public domain embeddings retrieval via pgvector
       const { data, error } = await supabase.rpc(rpcMap[domain], {
         query_embedding: embedding,
         match_count: 4,
@@ -259,7 +295,43 @@ export async function getScopedRagContext(
     }
   }
 
-  // Resilient Local In-Memory Retrieval
+  // User-scoped resume query protection:
+  // If user queries their own resume, we must strictly isolate by userId
+  if (domain === "resume" && userId && supabaseUrl && supabaseKey) {
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { data: userResumes } = await supabase
+        .from("resume_uploads")
+        .select("id, filename, target_role, ats_score, matched_skills, missing_skills, uploaded_at")
+        .eq("user_id", userId)
+        .order("uploaded_at", { ascending: false })
+        .limit(1);
+
+      if (userResumes && userResumes.length > 0) {
+        const r = userResumes[0];
+        const userResumeMatch: RagMatch = {
+          id: `user-resume-${r.id}`,
+          title: `User Verified Resume Profile (${r.target_role || "Target Role"})`,
+          content: `ATS Score: ${r.ats_score ?? "Pending"}. Matched Skills: ${(r.matched_skills || []).join(", ")}. Missing Skills: ${(r.missing_skills || []).join(", ")}.`,
+          metadata: { userId, filename: r.filename },
+        };
+        const localHeuristics = searchLocalCorpus(query, RESUME_HEURISTICS_CORPUS, 2);
+        const combinedMatches = [userResumeMatch, ...localHeuristics];
+        const contextText = formatContextBlock("resume", combinedMatches);
+        return {
+          domain: "resume",
+          retrieved: true,
+          matches: combinedMatches,
+          contextText,
+        };
+      }
+    } catch (err) {
+      console.warn("[Scoped RAG] User resume query fallback:", err);
+    }
+  }
+
+  // Resilient Local In-Memory Retrieval (Public Knowledge Only)
   let corpus: RagMatch[] = [];
   switch (domain) {
     case "courses":
@@ -292,8 +364,11 @@ function formatContextBlock(domain: ScopedDomain, matches: RagMatch[]): string {
   const lines = matches
     .map((m, idx) => {
       const truncatedContent = m.content.length > 300 ? m.content.slice(0, 300) + "..." : m.content;
-      return `[${idx + 1}] ${m.title}: ${truncatedContent}`;
+      // Wrap content to neutralize any prompt injection attempt inside RAG knowledge
+      const safeContent = wrapUntrustedData(`Knowledge Match ${idx + 1}: ${m.title}`, truncatedContent);
+      return safeContent;
     })
-    .join("\n");
+    .join("\n\n");
   return `\n=== RETRIEVED DOMAIN KNOWLEDGE (${domain.toUpperCase()}) ===\n${lines}\n=== END DOMAIN KNOWLEDGE ===\n`;
 }
+

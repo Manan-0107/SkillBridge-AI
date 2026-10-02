@@ -88,15 +88,25 @@ export class DynamicQuestionOrchestrator {
       },
     };
 
-    // If user skipped, mark the active requirement as skipped
+    const updatedFieldStatuses: Record<string, any> = {
+      ...(context.knownInformation?._fieldStatuses || {}),
+    };
+
+    // If user skipped, record status as SKIPPED and set value to null (no sentinel string value)
     if (extraction.isSkip && context.knownInformation?.activePromptKey) {
-      updatedKnown[context.knownInformation.activePromptKey] = "__SKIPPED__";
+      const activeKey = context.knownInformation.activePromptKey;
+      updatedFieldStatuses[activeKey] = "SKIPPED";
+      updatedKnown[activeKey] = null;
     }
 
-    // If user said "I don't know", mark as uncertain
+    // If user said "I don't know", record status as UNKNOWN and set value to null (no sentinel string value)
     if (extraction.isUnknownOrDontKnow && context.knownInformation?.activePromptKey) {
-      updatedKnown[context.knownInformation.activePromptKey] = "__DONT_KNOW__";
+      const activeKey = context.knownInformation.activePromptKey;
+      updatedFieldStatuses[activeKey] = "UNKNOWN";
+      updatedKnown[activeKey] = null;
     }
+
+    updatedKnown._fieldStatuses = updatedFieldStatuses;
 
     const resolvedLang = extraction.detectedLanguage || context.language || "en";
 

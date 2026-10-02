@@ -240,7 +240,8 @@ export function runAllScenarios() {
     },
   };
   const skipDecision = DynamicQuestionOrchestrator.evaluateNextStep(skipContext, "Skip this");
-  assert.equal(skipDecision.updatedContext.knownInformation?.availableLearningTime, "__SKIPPED__");
+  assert.equal(skipDecision.updatedContext.knownInformation?.availableLearningTime, null);
+  assert.equal(skipDecision.updatedContext.knownInformation?._fieldStatuses?.availableLearningTime, "SKIPPED");
   assert.equal(skipDecision.canExecuteTask, true, "Skipping non-critical requirement allows execution");
   results["Scenario 10: Graceful Requirement Skip"] = true;
 
@@ -256,7 +257,8 @@ export function runAllScenarios() {
     },
   };
   const dontKnowDecision = DynamicQuestionOrchestrator.evaluateNextStep(dontKnowContext, "I don't know");
-  assert.equal(dontKnowDecision.updatedContext.knownInformation?.experienceLevel, "__DONT_KNOW__");
+  assert.equal(dontKnowDecision.updatedContext.knownInformation?.experienceLevel, null);
+  assert.equal(dontKnowDecision.updatedContext.knownInformation?._fieldStatuses?.experienceLevel, "UNKNOWN");
   results["Scenario 11: Uncertain Knowledge Handling"] = true;
 
   // =========================================================================
