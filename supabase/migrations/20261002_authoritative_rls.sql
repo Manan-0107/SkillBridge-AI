@@ -2,12 +2,14 @@
 -- Supabase Migration: Authoritative Row-Level Security (RLS) & Identity Mapping
 -- ==============================================================================
 -- Migration Date: 2026-10-02
--- Status: STAGING READY TO APPLY
+-- Status: PRODUCTION READY — HARDENED (Pending Manual SQL Editor Execution)
 -- Scope:
 -- 1. Identity relationship between auth.users and public.users (auth_user_id bridge)
--- 2. Strict cross-user data isolation for users, resumes, practice, roadmaps, telemetry
--- 3. Public read-only policy for domain-specific RAG vector collections
--- 4. Service-role isolation for backend administrative operations
+-- 2. Authoritative identity consistency audit & safe legacy backfill
+-- 3. Hardened SECURITY DEFINER ownership verification function (fixed search_path & restricted EXECUTE)
+-- 4. Strict cross-user data isolation for users, resumes, practice, roadmaps, telemetry
+-- 5. Public read-only policy for domain-specific RAG vector collections
+-- 6. Service-role isolation for backend administrative operations
 -- ==============================================================================
 
 -- ─── 1. Extensions ────────────────────────────────────────────────────────────
@@ -28,11 +30,182 @@ create table if not exists public.users (
   updated_at    timestamptz not null default now()
 );
 
--- Ensure columns exist if table was pre-existing
+-- Ensure additive columns exist if table was pre-existing (non-destructive)
 alter table public.users add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
 alter table public.users add column if not exists state jsonb not null default '{}'::jsonb;
 
--- ─── 3. Resume Uploads Table Schema ───────────────────────────────────────────
+-- Ensure an index exists on auth_user_id for high-performance join and uniqueness lookup
+create index if not exists users_auth_user_id_idx on public.users(auth_user_id);
+
+-- ─── 3. Authoritative Identity Consistency Audit & Safe Backfill ──────────────
+-- Audits existing production users, detects missing/duplicate/conflicting accounts in auth.users,
+-- verifies pre-existing auth_user_id mappings, and safely links unmapped rows.
+do $$
+declare
+  v_total_users int;
+  v_unmapped_users int;
+  v_pre_existing_mapped int;
+  v_invalid_auth_fk int;
+  v_duplicate_auth_mappings int;
+  v_email_mismatch_count int;
+  v_duplicate_auth_emails int;
+  v_duplicate_public_emails int;
+  v_missing_auth_matches int;
+  v_post_unmapped int;
+  v_post_invalid_fk int;
+  v_distinct_auth_ids int;
+  v_rec record;
+begin
+  select count(*) into v_total_users from public.users;
+  select count(*) into v_unmapped_users from public.users where auth_user_id is null;
+  select count(*) into v_pre_existing_mapped from public.users where auth_user_id is not null;
+
+  raise notice 'Starting identity audit: % total users (% mapped, % unmapped)',
+    v_total_users, v_pre_existing_mapped, v_unmapped_users;
+
+  -- ---------------------------------------------------------------------------
+  -- PHASE A: Audit Pre-Existing Non-Null auth_user_id Values
+  -- ---------------------------------------------------------------------------
+  if v_pre_existing_mapped > 0 then
+    -- A1. Verify all existing auth_user_id exist in auth.users
+    select count(*) into v_invalid_auth_fk
+    from public.users pu
+    where pu.auth_user_id is not null
+      and not exists (select 1 from auth.users au where au.id = pu.auth_user_id);
+
+    if v_invalid_auth_fk > 0 then
+      for v_rec in (
+        select pu.id, pu.email, pu.auth_user_id
+        from public.users pu
+        where pu.auth_user_id is not null
+          and not exists (select 1 from auth.users au where au.id = pu.auth_user_id)
+      ) loop
+        raise notice 'Dangling auth_user_id in public.users: user_id=%, email=%, auth_user_id=%',
+          v_rec.id, v_rec.email, v_rec.auth_user_id;
+      end loop;
+      raise exception 'ABORT: % public.users record(s) contain auth_user_id not present in auth.users.', v_invalid_auth_fk;
+    end if;
+
+    -- A2. Verify 1:1 mapping (no auth.users record maps to more than one public.users record)
+    select count(*) into v_duplicate_auth_mappings
+    from (
+      select auth_user_id
+      from public.users
+      where auth_user_id is not null
+      group by auth_user_id
+      having count(*) > 1
+    ) dups;
+
+    if v_duplicate_auth_mappings > 0 then
+      raise exception 'ABORT: Duplicate pre-existing auth_user_id mappings detected in public.users.';
+    end if;
+
+    -- A3. Detect identity divergence: public.users.auth_user_id = auth.users.id but email differs
+    select count(*) into v_email_mismatch_count
+    from public.users pu
+    join auth.users au on pu.auth_user_id = au.id
+    where lower(pu.email) <> lower(au.email);
+
+    if v_email_mismatch_count > 0 then
+      for v_rec in (
+        select pu.id, pu.email as public_email, au.email as auth_email, pu.auth_user_id
+        from public.users pu
+        join auth.users au on pu.auth_user_id = au.id
+        where lower(pu.email) <> lower(au.email)
+      ) loop
+        raise notice 'Identity email mismatch: public_user=%, auth_user_id=%, public_email=%, auth_email=%',
+          v_rec.id, v_rec.auth_user_id, v_rec.public_email, v_rec.auth_email;
+      end loop;
+      raise exception 'ABORT: Detected % record(s) where auth_user_id matches auth.users.id but email differs. Halting to prevent identity ambiguity.', v_email_mismatch_count;
+    end if;
+  end if;
+
+  -- ---------------------------------------------------------------------------
+  -- PHASE B: Audit Unmapped Legacy Rows (auth_user_id IS NULL)
+  -- ---------------------------------------------------------------------------
+  if v_unmapped_users > 0 then
+    -- B1. Detect duplicate normalized emails in public.users
+    select count(*) into v_duplicate_public_emails
+    from (
+      select lower(email) from public.users group by lower(email) having count(*) > 1
+    ) dups;
+
+    if v_duplicate_public_emails > 0 then
+      raise exception 'ABORT: Duplicate email addresses detected within public.users.';
+    end if;
+
+    -- B2. Detect duplicate accounts in auth.users matching unmapped public.users emails
+    select count(*) into v_duplicate_auth_emails
+    from (
+      select lower(email) as norm_email
+      from auth.users
+      where lower(email) in (select lower(email) from public.users where auth_user_id is null)
+      group by lower(email)
+      having count(*) > 1
+    ) dups;
+
+    if v_duplicate_auth_emails > 0 then
+      raise exception 'ABORT: Ambiguity detected — duplicate accounts in auth.users share the same email address.';
+    end if;
+
+    -- B3. Detect unmapped public.users missing from auth.users
+    select count(*) into v_missing_auth_matches
+    from public.users pu
+    where pu.auth_user_id is null
+      and not exists (
+        select 1 from auth.users au where lower(au.email) = lower(pu.email)
+      );
+
+    if v_missing_auth_matches > 0 then
+      for v_rec in (
+        select id, email from public.users pu
+        where pu.auth_user_id is null
+          and not exists (select 1 from auth.users au where lower(au.email) = lower(pu.email))
+      ) loop
+        raise notice 'Unmatched production public.user: id=%, email=%', v_rec.id, v_rec.email;
+      end loop;
+      raise exception 'ABORT: % public.users record(s) have no corresponding record in auth.users.', v_missing_auth_matches;
+    end if;
+
+    -- B4. Safe Backfill: populate auth_user_id strictly where currently null
+    update public.users pu
+    set auth_user_id = au.id,
+        updated_at = now()
+    from auth.users au
+    where lower(pu.email) = lower(au.email)
+      and pu.auth_user_id is null;
+  end if;
+
+  -- ---------------------------------------------------------------------------
+  -- PHASE C: Post-Backfill Integrity Verification
+  -- ---------------------------------------------------------------------------
+  -- C1. Verify every single public.users record now has an auth_user_id
+  select count(*) into v_post_unmapped from public.users where auth_user_id is null;
+  if v_post_unmapped > 0 then
+    raise exception 'ABORT: Post-backfill check failed — % user(s) remain unmapped.', v_post_unmapped;
+  end if;
+
+  -- C2. Verify every auth_user_id resolves to a valid auth.users row
+  select count(*) into v_post_invalid_fk
+  from public.users pu
+  where not exists (select 1 from auth.users au where au.id = pu.auth_user_id);
+  if v_post_invalid_fk > 0 then
+    raise exception 'ABORT: Post-backfill check failed — % auth_user_id value(s) do not exist in auth.users.', v_post_invalid_fk;
+  end if;
+
+  -- C3. Verify 1:1 strict uniqueness
+  select count(distinct auth_user_id) into v_distinct_auth_ids from public.users;
+  if v_distinct_auth_ids <> v_total_users then
+    raise exception 'ABORT: Post-backfill check failed — auth_user_id is not 1:1 unique across public.users.';
+  end if;
+
+  raise notice 'Identity audit and backfill completed successfully: all % user(s) strictly mapped.', v_total_users;
+end $$;
+
+-- Enforce uniqueness on auth_user_id across public.users
+create unique index if not exists users_auth_user_id_unique_idx on public.users(auth_user_id);
+
+-- ─── 4. Resume Uploads Table Schema ───────────────────────────────────────────
 create table if not exists public.resume_uploads (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.users(id) on delete cascade,
@@ -46,7 +219,7 @@ create table if not exists public.resume_uploads (
   uploaded_at     timestamptz not null default now()
 );
 
--- ─── 4. Practice History Table Schema ─────────────────────────────────────────
+-- ─── 5. Practice History Table Schema ─────────────────────────────────────────
 create table if not exists public.practice_history (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.users(id) on delete cascade,
@@ -59,7 +232,7 @@ create table if not exists public.practice_history (
   completed_at    timestamptz not null default now()
 );
 
--- ─── 5. Roadmaps Table Schema ─────────────────────────────────────────────────
+-- ─── 6. Roadmaps Table Schema ─────────────────────────────────────────────────
 create table if not exists public.roadmaps (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.users(id) on delete cascade,
@@ -72,7 +245,7 @@ create table if not exists public.roadmaps (
   updated_at      timestamptz not null default now()
 );
 
--- ─── 6. Telemetry Events Table Schema ─────────────────────────────────────────
+-- ─── 7. Telemetry Events Table Schema ─────────────────────────────────────────
 create table if not exists public.telemetry_events (
   id              uuid primary key default gen_random_uuid(),
   event_id        text unique not null,
@@ -82,7 +255,7 @@ create table if not exists public.telemetry_events (
   received_at     timestamptz not null default now()
 );
 
--- ─── 7. Public RAG Vector Collections ─────────────────────────────────────────
+-- ─── 8. Public RAG Vector Collections ─────────────────────────────────────────
 create table if not exists public.course_embeddings (
   id text primary key,
   title text not null,
@@ -128,7 +301,7 @@ create table if not exists public.job_embeddings (
   created_at timestamptz default now()
 );
 
--- ─── 8. Enable Row Level Security (RLS) ───────────────────────────────────────
+-- ─── 9. Enable Row Level Security (RLS) ───────────────────────────────────────
 alter table public.users enable row level security;
 alter table public.resume_uploads enable row level security;
 alter table public.practice_history enable row level security;
@@ -139,41 +312,80 @@ alter table public.roadmap_nodes enable row level security;
 alter table public.resume_heuristic_embeddings enable row level security;
 alter table public.job_embeddings enable row level security;
 
--- ─── 9. Users Table RLS Policies ──────────────────────────────────────────────
+-- ─── 10. Hardened SECURITY DEFINER Ownership Verification Function ───────────
+-- Hardened against search_path injection; explicitly qualifies public.users;
+-- Permanently authorizes via auth.uid() = public.users.auth_user_id.
+-- Transitional email fallback is strictly limited to unmapped legacy rows during migration.
+create or replace function public.is_owner(record_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  return exists (
+    select 1
+    from public.users
+    where public.users.id = record_user_id
+      and (
+        -- Permanent Authoritative Mechanism
+        (public.users.auth_user_id is not null and public.users.auth_user_id = auth.uid())
+        or
+        -- Transitional Migration Bridge Only (Bypassed once auth_user_id is populated)
+        (public.users.auth_user_id is null and public.users.email = (auth.jwt() ->> 'email'))
+      )
+  );
+end;
+$$;
+
+-- Explicitly harden function execution privileges:
+-- Revoke default public execution; grant exclusively to authenticated sessions.
+revoke all on function public.is_owner(uuid) from public;
+grant execute on function public.is_owner(uuid) to authenticated;
+
+-- ─── 11. Users Table RLS Policies ─────────────────────────────────────────────
+-- SELECT: Allows authenticated users to view their own profile.
 drop policy if exists "users_select_owner_policy" on public.users;
 create policy "users_select_owner_policy" on public.users
   for select to authenticated
-  using (auth.uid() = auth_user_id or email = (auth.jwt() ->> 'email'));
+  using (
+    (auth_user_id is not null and auth_user_id = auth.uid())
+    or
+    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
+  );
 
+-- INSERT: Enforces that new profiles are strictly tied to the caller's auth.uid().
 drop policy if exists "users_insert_owner_policy" on public.users;
 create policy "users_insert_owner_policy" on public.users
   for insert to authenticated
-  with check (auth.uid() = auth_user_id or email = (auth.jwt() ->> 'email'));
+  with check (
+    auth_user_id = auth.uid()
+  );
 
+-- UPDATE: Permits updates to caller's own record; enforces auth_user_id = auth.uid().
 drop policy if exists "users_update_owner_policy" on public.users;
 create policy "users_update_owner_policy" on public.users
   for update to authenticated
-  using (auth.uid() = auth_user_id or email = (auth.jwt() ->> 'email'))
-  with check (auth.uid() = auth_user_id or email = (auth.jwt() ->> 'email'));
+  using (
+    (auth_user_id is not null and auth_user_id = auth.uid())
+    or
+    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
+  )
+  with check (
+    auth_user_id = auth.uid()
+  );
 
+-- DELETE: Permits deletion only of caller's own record.
 drop policy if exists "users_delete_owner_policy" on public.users;
 create policy "users_delete_owner_policy" on public.users
   for delete to authenticated
-  using (auth.uid() = auth_user_id or email = (auth.jwt() ->> 'email'));
-
--- ─── 10. User-Scoped Tables RLS Policies (Resumes, Practice, Roadmaps, Telemetry)
--- Helper function to verify user ownership
-create or replace function public.is_owner(record_user_id uuid)
-returns boolean as $$
-begin
-  return exists (
-    select 1 from public.users
-    where id = record_user_id
-      and (auth_user_id = auth.uid() or email = (auth.jwt() ->> 'email'))
+  using (
+    (auth_user_id is not null and auth_user_id = auth.uid())
+    or
+    (auth_user_id is null and email = (auth.jwt() ->> 'email'))
   );
-end;
-$$ language plpgsql security definer;
 
+-- ─── 12. User-Scoped Tables RLS Policies (Resumes, Practice, Roadmaps, Telemetry)
 -- Resume Uploads
 drop policy if exists "resumes_select_owner_policy" on public.resume_uploads;
 create policy "resumes_select_owner_policy" on public.resume_uploads
@@ -234,7 +446,7 @@ drop policy if exists "telemetry_insert_owner_policy" on public.telemetry_events
 create policy "telemetry_insert_owner_policy" on public.telemetry_events
   for insert to authenticated with check (public.is_owner(user_id));
 
--- ─── 11. Public RAG Vector Collections RLS Policies ───────────────────────────
+-- ─── 13. Public RAG Vector Collections RLS Policies ───────────────────────────
 -- Public domain collections are read-only to all clients (authenticated and anonymous)
 drop policy if exists "rag_courses_public_read" on public.course_embeddings;
 create policy "rag_courses_public_read" on public.course_embeddings for select to authenticated, anon using (true);
