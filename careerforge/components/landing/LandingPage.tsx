@@ -351,7 +351,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
               Why a connected system changes everything
             </h2>
             <p className="mt-4 text-[#8B9096] text-sm sm:text-base leading-relaxed font-sans">
-              Most career tools exist in isolated silos. When tools don't communicate, candidates waste months on the wrong courses, submit misaligned resumes, and discover skill deficiencies only after rejection.
+              Most career tools exist in isolated silos. When tools don&apos;t communicate, candidates waste months on the wrong courses, submit misaligned resumes, and discover skill deficiencies only after rejection.
             </p>
           </Reveal>
 

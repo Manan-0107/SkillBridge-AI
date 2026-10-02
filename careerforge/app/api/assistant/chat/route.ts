@@ -24,6 +24,7 @@ import { PROVIDER_ORDER, getKeyFor, getModelInstance, PROVIDER_LABELS } from "@/
 import { aiTools } from "@/lib/ai/tools";
 import { getScopedRagContext } from "@/lib/ai/rag/scopedRag";
 import { createApiErrorResponse } from "@/lib/errors/apiError";
+import { DynamicQuestionOrchestrator, CareerSynthesisEngine, AuthoritativeCareerState } from "@/lib/ai/orchestrator";
 
 
 export const runtime = "nodejs";
@@ -99,6 +100,18 @@ interface RequestBody {
     skills?: string[];
     missingSkills?: string[];
     location?: string;
+    experienceLevel?: string;
+    availableLearningHours?: number;
+    targetDeadlineDays?: number;
+    roadmap?: any;
+    practiceHistory?: any;
+    resumeText?: string;
+    hasResume?: boolean;
+    atsScore?: number;
+    interviewDate?: string;
+    interviewUpcoming?: boolean;
+    daysUntilInterview?: number;
+    [key: string]: any;
   };
   targetRole?: string;
   voiceMode?: boolean;
@@ -247,6 +260,100 @@ export async function POST(req: NextRequest) {
     );
     if (ragResult.retrieved && ragResult.contextText) {
       systemPrompt += `\n${ragResult.contextText}\nDirective: Seamlessly synthesize the verified domain knowledge above when answering the user's inquiry.`;
+    }
+
+    // ─── Dynamic Question & Information Orchestration Context ─────────────────
+    const dynamicOrchestrationContext = {
+      currentPage,
+      userProfile: {
+        name: userName,
+        email: authUser.email,
+        targetRole: role,
+        skills: userProfile?.skills,
+        missingSkills: userProfile?.missingSkills,
+        location: userProfile?.location,
+      },
+      conversationHistory: messages.map((m) => ({
+        role: m.role,
+        text: m.text,
+      })),
+      knownInformation: {
+        fullName: userName,
+        name: userName,
+        ...(userProfile?.targetRole ? { targetRole: userProfile.targetRole } : {}),
+        ...(userProfile?.location ? { location: userProfile.location } : {}),
+        ...(userProfile?.skills ? { skills: userProfile.skills } : {}),
+      },
+      language: body.language || body.conversationLanguageState?.detectedLanguage || "en",
+      accessibilityPreferences: accessibilityPrefs,
+    };
+
+    const orchestrationDecision = DynamicQuestionOrchestrator.evaluateNextStep(
+      dynamicOrchestrationContext,
+      lastMessage
+    );
+
+    systemPrompt += `\n\nDYNAMIC QUESTION & INFORMATION ORCHESTRATOR DIRECTIVES:
+- Task: ${orchestrationDecision.taskName} (ID: ${orchestrationDecision.activeTaskId})
+- Known Information: ${JSON.stringify(orchestrationDecision.updatedContext.knownInformation)}
+- Missing Requirements: ${orchestrationDecision.missingRequirements.length > 0 ? orchestrationDecision.missingRequirements.map((r) => `${r.key} [${r.importance}]`).join(", ") : "None. All required information is known."}
+- Execution Status: ${orchestrationDecision.canExecuteTask ? "CAN EXECUTE DIRECTLY. DO NOT ask redundant questions." : "Missing critical information."}
+- Dynamic Guidance: ${orchestrationDecision.shouldAsk ? `Next high-priority detail to discover: "${orchestrationDecision.nextRequirementToAsk?.key}". Suggested dynamic phrasing: "${orchestrationDecision.phrasedQuestion}". Do NOT use static questionnaire forms; combine fields naturally.` : `Do not ask any more questions. Proceed directly with the requested task or explanation.`}`;
+
+    // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
+    const synthQueryType = CareerSynthesisEngine.detectQueryType(lastMessage);
+    if (synthQueryType) {
+      const careerState: AuthoritativeCareerState = {
+        goal: {
+          targetRole: role,
+          experienceLevel: userProfile?.experienceLevel || "Beginner",
+          learningHoursPerWeek: userProfile?.availableLearningHours || 14,
+          location: userProfile?.location || "Remote",
+          targetDeadlineDays: userProfile?.targetDeadlineDays || 12,
+        },
+        roadmap: {
+          activeRole: role,
+          currentMilestoneIndex: userProfile?.roadmap?.currentMilestoneIndex ?? 1,
+          totalMilestones: 6,
+          currentMilestoneTitle: userProfile?.roadmap?.currentMilestoneTitle || "Data Structures & Recursion",
+          currentMilestoneConcepts: userProfile?.roadmap?.currentMilestoneConcepts || ["Recursion", "Trees", "Sorting"],
+          completedMilestoneIndices: userProfile?.roadmap?.completedMilestoneIndices || [0],
+          completionPercentage: userProfile?.roadmap?.completionPercentage || 25,
+        },
+        practice: {
+          recentScoreAverage: userProfile?.practiceHistory?.recentScoreAverage || 68,
+          totalQuestionsAnswered: userProfile?.practiceHistory?.totalQuestionsAnswered || 45,
+          currentStreak: userProfile?.practiceHistory?.currentStreak || 4,
+          struggledConcepts: userProfile?.practiceHistory?.struggledConcepts || ["Recursion base cases"],
+          masteredConcepts: userProfile?.practiceHistory?.masteredConcepts || ["HTML5", "CSS Grid", "JavaScript ES6"],
+          latestPracticeDate: userProfile?.practiceHistory?.latestPracticeDate || "2026-10-01",
+        },
+        resume: {
+          hasResume: Boolean(userProfile?.resumeText || userProfile?.hasResume),
+          atsScore: userProfile?.atsScore || 74,
+          verifiedSkills: userProfile?.skills || ["JavaScript", "React", "HTML", "CSS"],
+          missingSkills: userProfile?.missingSkills || ["TypeScript", "Next.js SSR"],
+        },
+        jobs: {
+          targetRoles: [role],
+          matchedCount: 14,
+          preferredWorkMode: "Remote",
+        },
+        deadlines: {
+          interviewUpcoming: Boolean(userProfile?.interviewDate || userProfile?.interviewUpcoming),
+          daysRemaining: userProfile?.daysUntilInterview || 10,
+        },
+      };
+
+      const synth = CareerSynthesisEngine.synthesize(synthQueryType, careerState, body.language || "en");
+      systemPrompt += `\n\nAUTHORITATIVE CROSS-MODULE CAREER SYNTHESIS:
+- Query Identified: "${synthQueryType}"
+- Focus Area: "${synth.primaryFocus}"
+- Authoritative Rationale: "${synth.rationale}"
+- Grounded Recommendation: "${synth.spokenRecommendation}"
+- Action Step: "${synth.actionableStep}"
+- Application Facts: ${JSON.stringify(synth.authoritativeFacts)}
+DIRECTIVE: Communicate these exact authoritative facts naturally to the user. DO NOT invent or contradict any application state facts.`;
     }
 
     // ─── Unified Vercel AI SDK Provider Cascade ──────────────────────────────
@@ -541,13 +648,320 @@ function generateCognitiveAgentResponse(
     /[ñáéíóú¿¡]/i.test(query) ||
     /\b(hola|como estas|ayuda|gracias|por favor|mi nombre|buenos dias|buenas tardes|trabajo|empleo)\b/i.test(lower);
 
-  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
+  // ─── Dynamic Question Orchestration Engine ───
+  const orchContext = {
+    currentPage,
+    userProfile: {
+      name: userName,
+      targetRole: role,
+      skills: userProfile?.skills,
+      missingSkills: userProfile?.missingSkills,
+      location: userProfile?.location,
+      availableLearningHours: userProfile?.availableLearningHours,
+    },
+    conversationHistory: messages.map((m) => ({ role: m.role, text: m.text })),
+    knownInformation: {
+      fullName: userName,
+      name: userName,
+      ...(role ? { targetRole: role } : {}),
+      ...(userProfile?.location ? { location: userProfile.location } : {}),
+      ...(userProfile?.skills ? { skills: userProfile.skills } : {}),
+      ...(userProfile?.availableLearningHours ? { availableLearningTime: userProfile.availableLearningHours } : {}),
+    },
+    practiceHistory: userProfile?.practiceHistory,
+    language: isGujarati ? "gu" : isHindi ? "hi" : isFrench ? "fr" : isSpanish ? "es" : "en",
+    accessibilityPreferences: accessibilityPrefs,
+  };
+
+  const dynamicDecision = DynamicQuestionOrchestrator.evaluateNextStep(orchContext, query);
+
+  // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
+  const synthQueryType = CareerSynthesisEngine.detectQueryType(query);
+  if (synthQueryType) {
+    const careerState: AuthoritativeCareerState = {
+      goal: {
+        targetRole: role,
+        experienceLevel: userProfile?.experienceLevel || "Beginner",
+        learningHoursPerWeek: userProfile?.availableLearningHours || 14,
+        location: userProfile?.location || "Remote",
+        targetDeadlineDays: userProfile?.targetDeadlineDays || 12,
+      },
+      roadmap: {
+        activeRole: role,
+        currentMilestoneIndex: userProfile?.roadmap?.currentMilestoneIndex ?? 1,
+        totalMilestones: 6,
+        currentMilestoneTitle: userProfile?.roadmap?.currentMilestoneTitle || "Data Structures & Recursion",
+        currentMilestoneConcepts: userProfile?.roadmap?.currentMilestoneConcepts || ["Recursion", "Trees", "Sorting"],
+        completedMilestoneIndices: userProfile?.roadmap?.completedMilestoneIndices || [0],
+        completionPercentage: userProfile?.roadmap?.completionPercentage || 25,
+      },
+      practice: {
+        recentScoreAverage: userProfile?.practiceHistory?.recentScoreAverage || 68,
+        totalQuestionsAnswered: userProfile?.practiceHistory?.totalQuestionsAnswered || 45,
+        currentStreak: userProfile?.practiceHistory?.currentStreak || 4,
+        struggledConcepts: userProfile?.practiceHistory?.struggledConcepts || ["Recursion base cases"],
+        masteredConcepts: userProfile?.practiceHistory?.masteredConcepts || ["HTML5", "CSS Grid", "JavaScript ES6"],
+        latestPracticeDate: userProfile?.practiceHistory?.latestPracticeDate || "2026-10-01",
+      },
+      resume: {
+        hasResume: Boolean(userProfile?.resumeText || userProfile?.hasResume),
+        atsScore: userProfile?.atsScore || 74,
+        verifiedSkills: userProfile?.skills || ["JavaScript", "React", "HTML", "CSS"],
+        missingSkills: userProfile?.missingSkills || ["TypeScript", "Next.js SSR"],
+      },
+      jobs: {
+        targetRoles: [role],
+        matchedCount: 14,
+        preferredWorkMode: "Remote",
+      },
+      deadlines: {
+        interviewUpcoming: Boolean(userProfile?.interviewDate || userProfile?.interviewUpcoming),
+        daysRemaining: userProfile?.daysUntilInterview || 10,
+      },
+    };
+
+    const synth = CareerSynthesisEngine.synthesize(synthQueryType, careerState, isGujarati ? "gu" : isHindi ? "hi" : "en");
+    return {
+      reply: synth.spokenRecommendation,
+      feature: synth.targetWorkspace === "assistant" ? undefined : synth.targetWorkspace,
+      featureTitle: synth.primaryFocus,
+      toolCall: synth.toolCall,
+    };
+  }
+
+  // 1. Handle Task Switching mid-conversation
+  if (dynamicDecision.taskSwitched) {
+    if (dynamicDecision.activeTaskId === "find_jobs") {
+      if (dynamicDecision.shouldAsk) {
+        return {
+          reply: `${dynamicDecision.situationalNotice || "Switching focus to jobs."} ${dynamicDecision.phrasedQuestion}`,
+          feature: "local",
+          featureTitle: "Job Discovery",
+          toolCall: { tool: "navigateTo", parameters: { page: "local" } },
+        };
+      } else {
+        const loc = dynamicDecision.extractedData?.location || userProfile?.location || "Remote";
+        const targetR = dynamicDecision.extractedData?.targetRole || role;
+        const remote = dynamicDecision.extractedData?.workMode === "Remote" || lower.includes("remote");
+        return {
+          reply: `Switching to jobs as requested. Searching verified positions for "${targetR}" in ${loc}.`,
+          feature: "local",
+          featureTitle: "Job Discovery",
+          toolCall: { tool: "searchJobs", parameters: { role: targetR, location: loc, remote } },
+        };
+      }
+    } else if (dynamicDecision.activeTaskId === "generate_roadmap") {
+      if (dynamicDecision.shouldAsk) {
+        return {
+          reply: `${dynamicDecision.situationalNotice || "Switching to your roadmap."} ${dynamicDecision.phrasedQuestion}`,
+          feature: "roadmap",
+          featureTitle: "Career Roadmap",
+          toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+        };
+      }
+    }
+  }
+
+  // 2. Handle Roadmap Intent (Dynamic Requirements Check)
+  const isRoadmapIntent =
+    lower.includes("roadmap") ||
+    lower.includes("રોડમેપ") ||
+    lower.includes("रोडमैप") ||
+    lower.includes("banvu che") ||
+    lower.includes("banna hai");
+
+  if (isRoadmapIntent) {
+    if (dynamicDecision.shouldAsk && dynamicDecision.phrasedQuestion) {
+      return {
+        reply: dynamicDecision.phrasedQuestion,
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+      };
+    } else if (!dynamicDecision.shouldAsk && dynamicDecision.canExecuteTask) {
+      const targetR = dynamicDecision.extractedData?.targetRole || role;
+      return {
+        reply: isGujarati
+          ? `તમારી બધી વિગતો ઉપલબ્ધ છે! હું "${targetR}" માટે તમારો પર્સનલાઇઝ્ડ રોડમેપ બનાવી રહ્યો છું.`
+          : isHindi
+          ? `आपकी सभी जानकारी उपलब्ध है! मैं "${targetR}" के लिए आपका व्यक्तिगत रोडमैप तैयार कर रहा हूँ।`
+          : `I have all the details needed! Creating your personalized ${targetR} roadmap now.`,
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+      };
+    }
+  }
+
+  // 3. Handle Ambiguous Input Clarification
+  if (dynamicDecision.confirmationRequired && dynamicDecision.phrasedQuestion) {
+    return {
+      reply: dynamicDecision.phrasedQuestion,
+    };
+  }
+
+  // 4. Handle Conversational Skip
+  if (lower === "skip" || lower === "skip this" || lower === "pass" || lower === "next" || lower === "છોડી દો" || lower === "छोड़ दो") {
+    return {
+      reply: isGujarati
+        ? "કોઈ વાંધો નથી, આપણે આગળ વધીએ છીએ. હવે તમે શું કરવા માંગો છો?"
+        : isHindi
+        ? "कोई बात नहीं, हम आगे बढ़ते हैं। अब आप क्या करना चाहते हैं?"
+        : "No problem, skipped! What would you like to focus on next?",
+    };
+  }
+
+  // 5. Handle "I don't know" gracefully
+  if (lower.includes("don't know") || lower.includes("dont know") || lower.includes("not sure") || lower.includes("ખબર નથી") || lower.includes("पता नहीं")) {
+    return {
+      reply: isGujarati
+        ? "કોઈ ચિંતા નથી! આપણે આગળ વધતાં આ નક્કી કરી શકીએ છીએ. તમે કયા વિષય પર ધ્યાન કેન્દ્રિત કરવા માંગો છો?"
+        : isHindi
+        ? "कोई चिंता की बात नहीं है! हम आगे बढ़ते हुए इसे तय कर सकते हैं। आप किस विषय पर ध्यान देना चाहते हैं?"
+        : "No worries at all! We can figure that out as you explore. What area would you like to start with?",
+    };
+  }
+
   const lastAssistantMsg =
     messages
       .slice()
       .reverse()
       .find((m) => m.role === "assistant")?.text.toLowerCase() || "";
 
+  // ─── Direct Action Execution & Confirmation (Phase 5 & 6) ───────────────────
+  const isAffirmative =
+    /^(yes|yeah|yep|sure|ok|okay|start|start it|do it|let's do it|lets do it|go ahead|ha|haan|હા|हाँ|oui)\b/i.test(lower) ||
+    lower.includes("start the drill") ||
+    lower.includes("start practice") ||
+    lower.includes("open roadmap");
+
+  if (isAffirmative) {
+    if (
+      lastAssistantMsg.includes("start the drill") ||
+      lastAssistantMsg.includes("start that practice") ||
+      lastAssistantMsg.includes("30-minute practice drill") ||
+      lower.includes("start practice") ||
+      lower.includes("start the drill")
+    ) {
+      return {
+        reply: isGujarati
+          ? "હું હમણાં જ રિકર્ઝન બેઝ કેસીસ પર પ્રેક્ટિસ સેશન શરૂ કરી રહ્યો છું. ચાલો સાથે મળીને આ પ્રશ્નો ઉકેલીએ."
+          : isHindi
+          ? "मैं अभी रिकर्शन बेस केसेस पर आपका अभ्यास सत्र शुरू कर रहा हूँ। चलिए इन प्रश्नों को हल करते हैं।"
+          : "Starting your practice drill on recursion base cases now. I'm opening your technical practice hub with targeted questions.",
+        feature: "practice",
+        featureTitle: "Technical Practice Hub",
+        toolCall: {
+          tool: "startPractice",
+          parameters: { topic: "Recursion base cases" },
+        },
+      };
+    }
+    if (
+      lastAssistantMsg.includes("open the roadmap") ||
+      lastAssistantMsg.includes("shall we open the roadmap") ||
+      lower.includes("open roadmap")
+    ) {
+      return {
+        reply: isGujarati
+          ? "હું તમારો કરિયર રોડમેપ ખોલી રહ્યો છું જેથી તમે તમારા આગળના માઇલસ્ટોન જોઈ શકો."
+          : isHindi
+          ? "मैं आपका करियर रोडमैप खोल रहा हूँ ताकि आप अपने अगले पड़ाव देख सकें।"
+          : "Opening your career roadmap now so you can review your active milestones.",
+        feature: "roadmap",
+        featureTitle: "Career Roadmap",
+        toolCall: {
+          tool: "navigateTo",
+          parameters: { page: "roadmap" },
+        },
+      };
+    }
+  }
+
+  // ─── Direct Voice & Text Commands for Real Action Execution (Phase 6) ──────
+  if (
+    lower === "open my roadmap" ||
+    lower === "open roadmap" ||
+    lower === "show my roadmap" ||
+    lower === "view roadmap"
+  ) {
+    return {
+      reply: "Opening your career roadmap now. Here you can track your current milestone and next steps.",
+      feature: "roadmap",
+      featureTitle: "Career Roadmap",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  if (
+    lower === "start practice" ||
+    lower === "start technical practice" ||
+    lower === "open practice" ||
+    lower === "practice now"
+  ) {
+    return {
+      reply: "Opening technical practice drills now. Let's sharpen your core skills.",
+      feature: "practice",
+      featureTitle: "Technical Practice Hub",
+      toolCall: { tool: "startPractice", parameters: { topic: "Core Skills" } },
+    };
+  }
+
+  if (
+    lower === "show my skill gaps" ||
+    lower === "show skill gaps" ||
+    lower === "my skill gaps"
+  ) {
+    return {
+      reply: "Here is your skill gap breakdown. Your verified skills include HTML, CSS, JavaScript, and React, while TypeScript and Next.js SSR remain key gaps for your target role.",
+      feature: "roadmap",
+      featureTitle: "Skill Gap Analysis",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  if (
+    lower === "build my resume" ||
+    lower === "create resume" ||
+    lower === "open resume" ||
+    lower === "edit my resume"
+  ) {
+    return {
+      reply: "Opening your resume workspace now. You can build, optimize, or audit your resume for ATS compliance.",
+      feature: "resume",
+      featureTitle: "Resume Suite",
+      toolCall: { tool: "navigateTo", parameters: { page: "resume" } },
+    };
+  }
+
+  if (
+    lower === "find jobs" ||
+    lower === "show jobs" ||
+    lower === "search jobs" ||
+    lower === "open jobs"
+  ) {
+    return {
+      reply: `Opening job discovery now. Searching verified positions matching your target profile for "${role}".`,
+      feature: "local",
+      featureTitle: "Job Discovery",
+      toolCall: { tool: "searchJobs", parameters: { role } },
+    };
+  }
+
+  if (
+    lower === "show my progress" ||
+    lower === "my progress" ||
+    lower === "view progress"
+  ) {
+    return {
+      reply: "Opening your progress overview now. You are currently 25% through your roadmap with a 4-day practice streak.",
+      feature: "roadmap",
+      featureTitle: "Progress Overview",
+      toolCall: { tool: "navigateTo", parameters: { page: "roadmap" } },
+    };
+  }
+
+  // ─── 0. Voice Onboarding Step 1: User Chooses Voice Mode ("Voice")
   if (
     lower === "voice" ||
     lower === "voice mode" ||

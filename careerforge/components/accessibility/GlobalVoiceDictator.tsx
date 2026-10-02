@@ -1800,7 +1800,7 @@ function GlobalVoiceDictatorInner() {
         askAiAssistant(clean, detectedLang);
       }
     },
-    [askAiAssistant, resolveTargetElement, setTargetRole, setUserSkills, setVoiceLanguage, showStatus, speakAndListen, user]
+    [askAiAssistant, mintInteractionToken, resolveTargetElement, setTargetRole, setUserSkills, setVoiceLanguage, showStatus, speakAndListen, user]
   );
 
   useEffect(() => {
@@ -1869,7 +1869,7 @@ function GlobalVoiceDictatorInner() {
       showStatus("Voice Assistant Active", 3500);
       speakAndListen(welcomeBack);
     }
-  }, [setVoiceMode, showStatus, speakAndListen, user]);
+  }, [mintInteractionToken, setVoiceMode, showStatus, speakAndListen, user]);
 
   const stopVoiceDictation = useCallback(() => {
     playAccessibleChime("stop");
@@ -1887,13 +1887,13 @@ function GlobalVoiceDictatorInner() {
     showStatus("Voice assistant paused", 2000);
   }, [showStatus]);
 
-  const toggleVoiceDictation = () => {
+  const toggleVoiceDictation = useCallback(() => {
     if (active) {
       stopVoiceDictation();
     } else {
       startVoiceDictation();
     }
-  };
+  }, [active, startVoiceDictation, stopVoiceDictation]);
 
   // Voice activation is explicit: the control below, keyboard shortcut, or
   // an accessible input dispatches this event after the user asks for voice.

@@ -181,10 +181,12 @@ export function LocalOpportunities() {
     return () => {
       stopSpeaking();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRole]);
 
   useEffect(() => {
     fetchLiveJobs(searchTerm, activeType, targetRole, locationInput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeType]);
 
   const handleSearch = (e: FormEvent) => {

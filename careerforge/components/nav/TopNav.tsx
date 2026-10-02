@@ -95,6 +95,7 @@ export function TopNav({
           <GoogleTranslateWidget />
           {user?.picture ? (
             <div className="relative hidden sm:block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={user.picture}
                 alt=""

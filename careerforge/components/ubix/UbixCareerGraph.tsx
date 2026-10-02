@@ -162,24 +162,6 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedNode(null);
-        setHoveredNode(null);
-        setIsCoreExpanded(false);
-      } else if (e.key >= "1" && e.key <= "7") {
-        const index = parseInt(e.key, 10) - 1;
-        if (CAREER_NODES[index]) {
-          handleSelectNode(CAREER_NODES[index].id);
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   // Intro sequence orchestration
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -244,6 +226,24 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     },
     [onNodeSelect]
   );
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedNode(null);
+        setHoveredNode(null);
+        setIsCoreExpanded(false);
+      } else if (e.key >= "1" && e.key <= "7") {
+        const index = parseInt(e.key, 10) - 1;
+        if (CAREER_NODES[index]) {
+          handleSelectNode(CAREER_NODES[index].id);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSelectNode]);
 
   // Auto-tour idle timer
   useEffect(() => {

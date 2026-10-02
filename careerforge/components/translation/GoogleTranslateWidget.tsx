@@ -2,13 +2,15 @@
 
 import React, { useEffect } from "react";
 
-export function GoogleTranslateWidget() {
+export function GoogleTranslateWidget({ id = "google_translate_element" }: { id?: string }) {
   useEffect(() => {
     const win = typeof window !== "undefined" ? (window as any) : null;
     if (!win) return;
 
+    const initFnName = id === "google_translate_element" ? "googleTranslateElementInit" : `googleTranslateElementInit_${id}`;
+
     // Define the global callback expected by Google Translate script
-    win.googleTranslateElementInit = () => {
+    win[initFnName] = () => {
       if (win.google?.translate?.TranslateElement) {
         new win.google.translate.TranslateElement(
           {
@@ -16,7 +18,7 @@ export function GoogleTranslateWidget() {
             layout: win.google.translate.TranslateElement.InlineLayout?.SIMPLE || 0,
             autoDisplay: false,
           },
-          "google_translate_element"
+          id
         );
       }
     };
@@ -27,19 +29,19 @@ export function GoogleTranslateWidget() {
       const script = document.createElement("script");
       script.id = "google-translate-script";
       script.type = "text/javascript";
-      script.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+      script.src = `//translate.google.com/translate_a/element.js?cb=${initFnName}`;
       script.async = true;
       document.body.appendChild(script);
     } else if (win.google?.translate?.TranslateElement) {
-      win.googleTranslateElementInit();
+      win[initFnName]();
     }
-  }, []);
+  }, [id]);
 
   return (
     <div className="inline-flex items-center" title="Website Translation">
       {/* Standard Google Website Translator Container */}
       <div
-        id="google_translate_element"
+        id={id}
         className="google-translate-container text-xs inline-block"
       />
     </div>

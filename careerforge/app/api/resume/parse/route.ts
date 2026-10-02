@@ -94,9 +94,44 @@ export async function POST(req: NextRequest) {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const pdfParse = require("pdf-parse");
-        const data = await pdfParse(buffer);
-        const text = (data.text || "").trim();
+        const pdfModule = require("pdf-parse");
+        let text = "";
+        let pages = 1;
+
+        if (typeof pdfModule === "function") {
+          const data = await pdfModule(buffer);
+          text = (data.text || "").trim();
+          pages = data.numpages || 1;
+        } else if (pdfModule?.PDFParse) {
+          try {
+            if (!(globalThis as any).pdfjsWorker) {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { pathToFileURL } = require("url");
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const fs = require("fs");
+              const workerPath = path.resolve(process.cwd(), "node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs");
+              if (fs.existsSync(workerPath)) {
+                const dynamicImport = new Function("u", "return import(u)");
+                (globalThis as any).pdfjsWorker = await dynamicImport(pathToFileURL(workerPath).href);
+              }
+            }
+          } catch (workerInitErr) {
+            console.warn("[Resume Parse] Worker initialization note:", workerInitErr);
+          }
+
+          const parser = new pdfModule.PDFParse({ data: buffer });
+          try {
+            const data = await parser.getText();
+            text = (data.text || "").trim();
+            pages = data.total || 1;
+          } finally {
+            await parser.destroy();
+          }
+        } else if (typeof pdfModule?.default === "function") {
+          const data = await pdfModule.default(buffer);
+          text = (data.text || "").trim();
+          pages = data.numpages || 1;
+        }
 
         if (!text) {
           return createApiErrorResponse(
@@ -111,7 +146,7 @@ export async function POST(req: NextRequest) {
           success: true,
           text,
           filename: sanitizedName,
-          pages: data.numpages,
+          pages,
         });
       } catch (pdfErr) {
         console.error(`[Resume Parse] PDF parsing failed (${requestId}):`, pdfErr);

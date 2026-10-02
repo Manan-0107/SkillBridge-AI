@@ -71,13 +71,16 @@ export function FocusTrap({
 
     document.addEventListener("keydown", handleKeyDown);
 
+    const returnTarget = returnFocusRef?.current;
+    const prevTarget = previouslyFocusedElementRef.current;
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       // Return focus to previous trigger or provided ref
-      if (returnFocusRef?.current) {
-        returnFocusRef.current.focus();
-      } else if (previouslyFocusedElementRef.current) {
-        previouslyFocusedElementRef.current.focus();
+      if (returnTarget) {
+        returnTarget.focus();
+      } else if (prevTarget) {
+        prevTarget.focus();
       }
     };
   }, [isActive, onEscape, returnFocusRef]);

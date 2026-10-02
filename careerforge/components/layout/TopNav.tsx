@@ -166,7 +166,7 @@ export function TopNav() {
 
             {/* Language widget — small */}
             <div className="hidden sm:block scale-90 origin-right opacity-80 hover:opacity-100 transition-opacity">
-              <GoogleTranslateWidget />
+              <GoogleTranslateWidget id="google_translate_element_desktop" />
             </div>
 
             {/* Profile or Sign In */}
@@ -182,6 +182,7 @@ export function TopNav() {
                   className="flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 hover:border-white/[0.2] hover:bg-white/[0.08] transition-all duration-150 cursor-pointer"
                 >
                   {user?.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={user.picture}
                       alt=""
@@ -253,13 +254,13 @@ export function TopNav() {
                 )}
               </div>
             ) : (
-              <button
-                type="button"
+              <Link
+                href="/"
                 onClick={() => handleNavClick("assistant")}
                 className="flex items-center gap-1.5 rounded-full bg-accent text-white px-3.5 py-1.5 text-xs font-semibold hover:bg-accent-soft transition-all shadow-sm cursor-pointer"
               >
                 Sign In
-              </button>
+              </Link>
             )}
 
             {/* Mobile hamburger */}
@@ -309,7 +310,7 @@ export function TopNav() {
 
             <div className="mt-2 pt-2 border-t border-ink/8">
               <div className="px-3 pb-2 flex items-center gap-2">
-                <GoogleTranslateWidget />
+                <GoogleTranslateWidget id="google_translate_element_mobile" />
               </div>
             </div>
           </div>

@@ -32,7 +32,7 @@ export const DEFAULT_VAD_CONFIG: VADConfig = {
   voiceHoldMs: 400,
 };
 
-import { isSpeechSynthesisSupported, stopSpeaking, speakText } from "@/lib/voice";
+import { isSpeechSynthesisSupported, stopSpeaking, speakText } from "../voice.ts";
 
 
 export type StateListener = (

@@ -203,7 +203,7 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
       const fallback = colorPalettes.find((c) => currentTemplate.supportedColors.includes(c.id)) || colorPalettes[0];
       setSelectedColor(fallback);
     }
-  }, [selectedTemplate, currentTemplate]);
+  }, [selectedTemplate, currentTemplate, selectedColor.id]);
 
   // Dedicated Print / Download PDF Handler (Ensuring 1-Page PDF output)
   const handleDownloadPdf = () => {

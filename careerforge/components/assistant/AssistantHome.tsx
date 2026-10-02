@@ -23,6 +23,7 @@ import {
 } from "@/lib/speech/questionFlow";
 import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
+import { DynamicQuestionOrchestrator, extractFromUtterance } from "@/lib/ai/orchestrator";
 import { ShareModal } from "./ShareModal";
 import { CareerContextPanel } from "./CareerContextPanel";
 import dynamic from "next/dynamic";
@@ -205,6 +206,14 @@ export function AssistantHome({
     setVoiceStatus((prev) => (prev === "error" || prev === "recovering" ? prev : "idle"));
   }, [clearSilenceTimers]);
 
+  const stopAllVoice = useCallback(() => {
+    stopSpeaking();
+    stopListening();
+    isAISpeakingRef.current = false;
+    setSpeakingMsgId(null);
+    setLiveSpokenText(null);
+  }, [stopListening]);
+
   const startSilenceAutoSendCountdown = useCallback(() => {
     clearSilenceTimers();
 
@@ -279,15 +288,38 @@ export function AssistantHome({
             return;
           }
 
-          // ── Extract the Actual Clean Answer based on Question Type ──
+          // ── Verbal Interruption or Task Switch Check ──
+          const intentCheck = extractFromUtterance(transcript);
+          if (intentCheck.isInterruption || intentCheck.taskSwitchTo) {
+            if (isAISpeakingRef.current || speakingMsgId) {
+              stopSpeaking();
+              isAISpeakingRef.current = false;
+              setSpeakingMsgId(null);
+              setLiveSpokenText(null);
+            }
+            activeQuestionRef.current = null;
+            setActiveQuestion(null);
+          }
+
+          // ── Extract Answer or Preserve Raw Intent ──
+          let cleanAnswer = transcript.trim();
           const currentQ = activeQuestionRef.current;
-          const targetType = currentQ?.answerType || currentQ?.expectedType || "free_text";
-          const langForExtraction = voiceLanguage !== "auto" ? voiceLanguage : detected || "en";
+          if (
+            currentQ &&
+            !intentCheck.isInterruption &&
+            !intentCheck.taskSwitchTo &&
+            !intentCheck.isWhyQuestion &&
+            !intentCheck.isSkip &&
+            !intentCheck.isUnknownOrDontKnow &&
+            !intentCheck.isHelpRequest
+          ) {
+            const targetType = currentQ?.answerType || currentQ?.expectedType || "free_text";
+            const langForExtraction = voiceLanguage !== "auto" ? voiceLanguage : detected || "en";
+            const extraction = extractAnswerFromTranscript(transcript, targetType, langForExtraction);
+            cleanAnswer = extraction.extractedAnswer || transcript.trim();
+          }
 
-          const extraction = extractAnswerFromTranscript(transcript, targetType, langForExtraction);
-          const cleanAnswer = extraction.extractedAnswer || transcript.trim();
-
-          // ── Put ONLY the Extracted Clean Answer into Existing Input Box ──
+          // ── Put Extracted / Intent Text into Existing Input Box ──
           setInput(cleanAnswer);
           inputRef.current = cleanAnswer;
 
@@ -333,7 +365,7 @@ export function AssistantHome({
     }
 
     speechControllerRef.current = controller;
-  }, [clearSilenceTimers, setVoiceLanguage, setVoiceMode, speakingMsgId, startSilenceAutoSendCountdown, voiceLang, voiceLanguage]);
+  }, [clearSilenceTimers, setVoiceLanguage, setVoiceMode, speakingMsgId, startSilenceAutoSendCountdown, stopAllVoice, voiceLang, voiceLanguage]);
 
   const toggleListening = useCallback(() => {
     if (listening) {
@@ -389,14 +421,6 @@ export function AssistantHome({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
-
-  const stopAllVoice = () => {
-    stopSpeaking();
-    stopListening();
-    isAISpeakingRef.current = false;
-    setSpeakingMsgId(null);
-    setLiveSpokenText(null);
-  };
 
   // ─── Global FloatingControlBar / Alt+V Mic Toggle Sync ─────────────────────
   useEffect(() => {
@@ -599,7 +623,7 @@ function generateChatTitle(prompt: string): string {
       id: "intro-1",
       role: "assistant",
       time: now,
-      text: "How can I help you today?",
+      text: "Hello! I'm UBIX, your career navigation and workspace copilot. I can help you build custom learning roadmaps, practice technical interviews, tailor your resume, and discover verified job matches. To get us started, what career path or technical role are you looking to pursue?",
     };
   };
 
@@ -795,16 +819,30 @@ function generateChatTitle(prompt: string): string {
     // ── Turn-Taking Question Validation & 3-Attempt Fallback ──
     const currentQ = activeQuestionRef.current;
     if (currentQ && !currentQ.answered && userMsgText) {
-      const valResult = validateUserAnswer(
-        userMsgText,
-        currentQ.expectedType,
-        voiceLanguage !== "auto" ? voiceLanguage : "en"
-      );
+      const intentCheck = extractFromUtterance(userMsgText);
 
-      if (!valResult.valid) {
-        currentQ.attempts += 1;
-        setActiveQuestion({ ...currentQ });
-        activeQuestionRef.current = { ...currentQ };
+      // Handle user interruption or task-switching mid-question: release question cleanly
+      if (intentCheck.isInterruption || intentCheck.taskSwitchTo) {
+        currentQ.answered = true;
+        setActiveQuestion(null);
+        activeQuestionRef.current = null;
+      } else if (intentCheck.isSkip || intentCheck.isUnknownOrDontKnow) {
+        currentQ.answered = true;
+        setActiveQuestion(null);
+        activeQuestionRef.current = null;
+      } else if (intentCheck.isWhyQuestion || intentCheck.isHelpRequest) {
+        // Explaining "Why" or asking for "Help" must never penalize the user with a retry attempt
+      } else {
+        const valResult = validateUserAnswer(
+          userMsgText,
+          currentQ.expectedType,
+          voiceLanguage !== "auto" ? voiceLanguage : "en"
+        );
+
+        if (!valResult.valid) {
+          currentQ.attempts += 1;
+          setActiveQuestion({ ...currentQ });
+          activeQuestionRef.current = { ...currentQ };
 
         if (currentQ.attempts >= 3) {
           // ── 3-ATTEMPT RULE: AUTOMATIC TEXT FALLBACK ──
@@ -911,51 +949,63 @@ function generateChatTitle(prompt: string): string {
         setActiveQuestion({ ...currentQ });
         activeQuestionRef.current = { ...currentQ };
 
-        if (currentQ.id === "onboarding_name") {
-          const nextQ: QuestionState = {
-            id: "onboarding_career",
-            question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
-            answerType: "job_role",
-            expectedType: "job_role",
-            attempts: 0,
-            maxAttempts: 3,
-            answered: false,
-          };
-          setActiveQuestion(nextQ);
-          activeQuestionRef.current = nextQ;
-        } else if (currentQ.id === "onboarding_career") {
+        if (currentQ.id === "onboarding_career" || currentQ.id === "targetRole") {
           setTargetRole(valResult.value);
+        }
+
+        const dynamicDecision = DynamicQuestionOrchestrator.evaluateNextStep(
+          {
+            currentPage: "assistant",
+            userProfile: {
+              name: user?.name,
+              email: user?.email,
+              targetRole: user?.targetRole || (currentQ.id === "targetRole" || currentQ.id === "onboarding_career" ? valResult.value : undefined),
+              skills: userSkills,
+              missingSkills,
+              location: currentLocation || undefined,
+            },
+            knownInformation: {
+              ...(user?.name ? { fullName: user.name, name: user.name } : {}),
+              ...(user?.targetRole ? { targetRole: user.targetRole } : {}),
+              ...(currentQ.id ? { [currentQ.id]: valResult.value } : {}),
+            },
+            language: voiceLanguage !== "auto" ? voiceLanguage : voiceLang !== "auto" ? voiceLang : "en",
+          },
+          userMsgText
+        );
+
+        if (dynamicDecision.shouldAsk && dynamicDecision.nextRequirementToAsk) {
+          const nextReq = dynamicDecision.nextRequirementToAsk;
+          const expectedTypeMap: Record<string, ExpectedAnswerType> = {
+            fullName: "name",
+            name: "name",
+            email: "email",
+            targetRole: "job_role",
+            location: "location",
+            availableLearningTime: "short_text",
+            experienceLevel: "short_text",
+            practiceTopic: "short_text",
+            workMode: "choice",
+          };
+
           const nextQ: QuestionState = {
-            id: "onboarding_has_resume",
-            question: "Do you already have a resume?",
-            answerType: "yes_no",
-            expectedType: "yes_no",
+            id: nextReq.key,
+            question: dynamicDecision.phrasedQuestion || `Could you tell me your ${nextReq.description}?`,
+            answerType: expectedTypeMap[nextReq.key] || "short_text",
+            expectedType: expectedTypeMap[nextReq.key] || "short_text",
             attempts: 0,
             maxAttempts: 3,
             answered: false,
           };
           setActiveQuestion(nextQ);
           activeQuestionRef.current = nextQ;
-        } else if (currentQ.id === "onboarding_has_resume") {
-          if (valResult.value === true) {
-            setActiveQuestion(null);
-            activeQuestionRef.current = null;
-          } else {
-            const nextQ: QuestionState = {
-              id: "resume_step_1",
-              question: "Let's build your resume together! What is your full name?",
-              answerType: "name",
-              expectedType: "name",
-              attempts: 0,
-              maxAttempts: 3,
-              answered: false,
-            };
-            setActiveQuestion(nextQ);
-            activeQuestionRef.current = nextQ;
-          }
+        } else {
+          setActiveQuestion(null);
+          activeQuestionRef.current = null;
         }
       }
     }
+  }
 
     let fullPromptForLlm = userMsgText;
     if (docInfo) {

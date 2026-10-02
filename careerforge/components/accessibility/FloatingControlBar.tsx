@@ -111,6 +111,34 @@ export function FloatingControlBar() {
     } catch {}
   }, [settings]);
 
+  const announceToScreenReader = useCallback((msg: string) => {
+    setAriaAnnouncement(msg);
+  }, []);
+
+  const toggleAssistant = useCallback(() => {
+    if (isDeafProfile) return;
+
+    if (voiceConsentStatus === "denied") {
+      setPermissionBlockedNotice(true);
+      return;
+    }
+
+    if (voiceState === "listening" || voiceState === "processing") {
+      setVoiceState("idle");
+      setLiveCaption("");
+      if (settings.soundEffects) playAccessibleChime("stop");
+      announceToScreenReader("Voice assistant stopped.");
+      window.dispatchEvent(new CustomEvent("careerforge:toggle-mic", { detail: { active: false } }));
+    } else {
+      setVoiceState("listening");
+      setSpeakerLabel("You");
+      setLiveCaption("Listening... Speak your command or question.");
+      if (settings.soundEffects) playAccessibleChime("start");
+      announceToScreenReader("Voice assistant listening. Speak now.");
+      window.dispatchEvent(new CustomEvent("careerforge:toggle-mic", { detail: { active: true } }));
+    }
+  }, [announceToScreenReader, isDeafProfile, settings.soundEffects, voiceConsentStatus, voiceState]);
+
   // Global hotkey: Alt + V or Option + V toggles voice assistant (only if not deaf profile)
   useEffect(() => {
     if (isDeafProfile) return;
@@ -127,7 +155,7 @@ export function FloatingControlBar() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [settingsOpen, voiceState, isDeafProfile]);
+  }, [isDeafProfile, settingsOpen, toggleAssistant]);
 
   // Listen to custom window events from voice pipeline
   useEffect(() => {
@@ -167,35 +195,7 @@ export function FloatingControlBar() {
       window.removeEventListener("careerforge:caption" as any, handleCaptionUpdate);
       window.removeEventListener("careerforge:amplitude" as any, handleAmplitude);
     };
-  }, [settings.soundEffects]);
-
-  const announceToScreenReader = (msg: string) => {
-    setAriaAnnouncement(msg);
-  };
-
-  const toggleAssistant = () => {
-    if (isDeafProfile) return;
-
-    if (voiceConsentStatus === "denied") {
-      setPermissionBlockedNotice(true);
-      return;
-    }
-
-    if (voiceState === "listening" || voiceState === "processing") {
-      setVoiceState("idle");
-      setLiveCaption("");
-      if (settings.soundEffects) playAccessibleChime("stop");
-      announceToScreenReader("Voice assistant stopped.");
-      window.dispatchEvent(new CustomEvent("careerforge:toggle-mic", { detail: { active: false } }));
-    } else {
-      setVoiceState("listening");
-      setSpeakerLabel("You");
-      setLiveCaption("Listening... Speak your command or question.");
-      if (settings.soundEffects) playAccessibleChime("start");
-      announceToScreenReader("Voice assistant listening. Speak now.");
-      window.dispatchEvent(new CustomEvent("careerforge:toggle-mic", { detail: { active: true } }));
-    }
-  };
+  }, [settings.soundEffects, announceToScreenReader]);
 
   const captionSizeClass =
     settings.captionSize === "xlarge"

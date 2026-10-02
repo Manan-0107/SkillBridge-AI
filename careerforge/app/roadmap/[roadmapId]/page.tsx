@@ -93,27 +93,6 @@ export default function RoadmapDetailPage() {
     };
   }, [roadmapId, loadProgress]);
 
-  // Voice Action Listener: handle "mark [node] complete"
-  useEffect(() => {
-    const handleVoiceAction = (e: CustomEvent<{ action: string; node?: string }>) => {
-      if (e.detail?.action === "mark_complete" && e.detail.node && documentData) {
-        const cleanTarget = e.detail.node.toLowerCase().trim();
-        const targetNode = documentData.nodes.find(
-          (n) =>
-            n.title.toLowerCase() === cleanTarget ||
-            n.id.toLowerCase() === cleanTarget ||
-            n.title.toLowerCase().includes(cleanTarget)
-        );
-        if (targetNode) {
-          handleToggleStatus(targetNode.id);
-        }
-      }
-    };
-    window.addEventListener("careerforge:roadmap-voice-action" as any, handleVoiceAction);
-    return () =>
-      window.removeEventListener("careerforge:roadmap-voice-action" as any, handleVoiceAction);
-  }, [documentData]);
-
   const handleToggleStatus = useCallback(
     (nodeId: string) => {
       const progressKey = buildStorageKey(roadmapId, "progress");
@@ -147,6 +126,27 @@ export default function RoadmapDetailPage() {
     },
     [roadmapId]
   );
+
+  // Voice Action Listener: handle "mark [node] complete"
+  useEffect(() => {
+    const handleVoiceAction = (e: CustomEvent<{ action: string; node?: string }>) => {
+      if (e.detail?.action === "mark_complete" && e.detail.node && documentData) {
+        const cleanTarget = e.detail.node.toLowerCase().trim();
+        const targetNode = documentData.nodes.find(
+          (n) =>
+            n.title.toLowerCase() === cleanTarget ||
+            n.id.toLowerCase() === cleanTarget ||
+            n.title.toLowerCase().includes(cleanTarget)
+        );
+        if (targetNode) {
+          handleToggleStatus(targetNode.id);
+        }
+      }
+    };
+    window.addEventListener("careerforge:roadmap-voice-action" as any, handleVoiceAction);
+    return () =>
+      window.removeEventListener("careerforge:roadmap-voice-action" as any, handleVoiceAction);
+  }, [documentData, handleToggleStatus]);
 
   // Sync status filters to URL query
   const handleStatusToggle = useCallback((status: StatusFilter) => {
