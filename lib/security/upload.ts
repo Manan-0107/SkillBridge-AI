@@ -24,6 +24,17 @@ export function isPdf(buffer: Buffer): boolean {
   return buffer.length >= 5 && buffer.subarray(0, 5).toString("ascii") === "%PDF-";
 }
 
+export const MAX_RESUME_TEXT_LENGTH = 64 * 1024; // 64 KB canonical limit
+export const MAX_PDF_PAGES = 15; // 15 pages max
+export const MAX_ZIP_ENTRIES = 300; // max entry count in DOCX archive
+export const MAX_ZIP_UNCOMPRESSED_BYTES = 30 * 1024 * 1024; // 30 MB max uncompressed
+export const MAX_ZIP_COMPRESSION_RATIO = 100; // 100:1 max ratio
+
+export interface ZipSafetyResult {
+  safe: boolean;
+  error?: string;
+}
+
 export function isDocx(buffer: Buffer): boolean {
   return (
     buffer.length >= 4 &&
@@ -32,6 +43,126 @@ export function isDocx(buffer: Buffer): boolean {
     buffer[2] === 0x03 &&
     buffer[3] === 0x04
   );
+}
+
+/**
+ * Validates in-memory ZIP / DOCX structure against decompression bombs,
+ * pathological compression ratios, excessive entries, and malformed central directories.
+ * Operates purely in-memory with zero disk extraction.
+ */
+export function validateZipSafety(buffer: Buffer): ZipSafetyResult {
+  if (!buffer || buffer.length < 22) {
+    return { safe: false, error: "File is too small to be a valid ZIP archive." };
+  }
+
+  // Confirm ZIP local file header signature PK\x03\x04
+  if (
+    buffer[0] !== 0x50 ||
+    buffer[1] !== 0x4b ||
+    buffer[2] !== 0x03 ||
+    buffer[3] !== 0x04
+  ) {
+    return { safe: false, error: "Invalid ZIP/DOCX file signature." };
+  }
+
+  // Locate End of Central Directory (EOCD) record (signature: PK\x05\x06 -> 0x06054b50)
+  // EOCD is at least 22 bytes long, with a comment field up to 65535 bytes.
+  let eocdOffset = -1;
+  const maxSearch = Math.min(buffer.length, 65557);
+  const searchStart = buffer.length - maxSearch;
+  for (let i = buffer.length - 22; i >= searchStart; i--) {
+    if (
+      buffer[i] === 0x50 &&
+      buffer[i + 1] === 0x4b &&
+      buffer[i + 2] === 0x05 &&
+      buffer[i + 3] === 0x06
+    ) {
+      eocdOffset = i;
+      break;
+    }
+  }
+
+  if (eocdOffset === -1) {
+    return {
+      safe: false,
+      error: "Corrupted ZIP archive: Missing End of Central Directory record.",
+    };
+  }
+
+  const totalEntries = buffer.readUInt16LE(eocdOffset + 10);
+  const cdSize = buffer.readUInt32LE(eocdOffset + 12);
+  const cdOffset = buffer.readUInt32LE(eocdOffset + 16);
+
+  if (totalEntries > MAX_ZIP_ENTRIES) {
+    return {
+      safe: false,
+      error: `ZIP entry count (${totalEntries}) exceeds safety ceiling (${MAX_ZIP_ENTRIES}).`,
+    };
+  }
+
+  if (cdOffset + cdSize > buffer.length) {
+    return {
+      safe: false,
+      error: "Corrupted ZIP archive: Central directory boundaries exceed file size.",
+    };
+  }
+
+  let offset = cdOffset;
+  let totalUncompressedSize = 0;
+  let entriesInspected = 0;
+
+  while (offset + 46 <= cdOffset + cdSize && entriesInspected < totalEntries) {
+    // Confirm central directory entry header signature PK\x01\x02
+    if (
+      buffer[offset] !== 0x50 ||
+      buffer[offset + 1] !== 0x4b ||
+      buffer[offset + 2] !== 0x01 ||
+      buffer[offset + 3] !== 0x02
+    ) {
+      return {
+        safe: false,
+        error: "Corrupted ZIP archive: Invalid central directory entry header.",
+      };
+    }
+
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const uncompressedSize = buffer.readUInt32LE(offset + 24);
+    const nameLen = buffer.readUInt16LE(offset + 28);
+    const extraLen = buffer.readUInt16LE(offset + 30);
+    const commentLen = buffer.readUInt16LE(offset + 32);
+
+    totalUncompressedSize += uncompressedSize;
+
+    if (totalUncompressedSize > MAX_ZIP_UNCOMPRESSED_BYTES) {
+      return {
+        safe: false,
+        error: `Total uncompressed size exceeds maximum safety limit (${MAX_ZIP_UNCOMPRESSED_BYTES / (1024 * 1024)} MB).`,
+      };
+    }
+
+    // Pathological compression ratio check (e.g. zip bomb targeting memory exhaustion)
+    if (compressedSize > 0 && uncompressedSize > 1024 * 1024) {
+      const ratio = uncompressedSize / compressedSize;
+      if (ratio > MAX_ZIP_COMPRESSION_RATIO) {
+        return {
+          safe: false,
+          error: `Pathological compression ratio (${Math.round(ratio)}:1) detected.`,
+        };
+      }
+    }
+
+    offset += 46 + nameLen + extraLen + commentLen;
+    entriesInspected++;
+  }
+
+  if (entriesInspected !== totalEntries) {
+    return {
+      safe: false,
+      error: "Corrupted ZIP archive: Central directory entry count mismatch.",
+    };
+  }
+
+  return { safe: true };
 }
 
 export function isValidAudioContainer(buffer: Buffer): boolean {

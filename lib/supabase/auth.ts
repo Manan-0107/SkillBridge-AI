@@ -91,7 +91,7 @@ export async function getAuthenticatedUser(req?: any): Promise<AuthenticatedUser
 /**
  * Resolves the authenticated user's id for use inside Route Handlers.
  */
-export async function getAuthenticatedUserId(): Promise<string | null> {
-  const user = await getAuthenticatedUser();
+export async function getAuthenticatedUserId(req?: any): Promise<string | null> {
+  const user = await getAuthenticatedUser(req);
   return user?.id ?? null;
 }

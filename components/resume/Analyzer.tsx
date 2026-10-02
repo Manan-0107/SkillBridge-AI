@@ -134,6 +134,8 @@ export function Analyzer({ role }: { role: RoleId }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<ResumeAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [statusAnnouncement, setStatusAnnouncement] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,32 +143,44 @@ export function Analyzer({ role }: { role: RoleId }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setError(null);
+
     const isText =
       file.type.includes("text") ||
       file.name.endsWith(".txt") ||
       file.name.endsWith(".md");
 
     if (isText) {
-      setText(await file.text());
+      const content = await file.text();
+      setText(content);
+      setStatusAnnouncement("Resume text loaded successfully.");
       return;
     }
 
     // PDF / DOCX → server-side extraction
+    setParsing(true);
+    setStatusAnnouncement("Parsing your resume. Please wait.");
     try {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
+        setParsing(false);
+        setStatusAnnouncement(null);
         if (data.code === "OCR_REQUIRED") {
-          setError("⚠️ Text could not be extracted from this document (scanned image or flattened PDF). OCR or manual text entry is required. Please paste your resume text below.");
+          setError("Text could not be extracted from this document (scanned image or flattened PDF). OCR or manual text entry is required. Please paste your resume text below.");
         } else {
-          setError(data.error || "Failed to extract text from document. Please paste your resume text.");
+          setError(data.error?.message || data.error || "Failed to extract text from document. Please paste your resume text.");
         }
         return;
       }
       setText(data.text || "");
+      setParsing(false);
+      setStatusAnnouncement("Resume parsed successfully.");
     } catch {
+      setParsing(false);
+      setStatusAnnouncement(null);
       setError("Network error while uploading resume. Please paste your resume text directly.");
     }
   };
@@ -245,15 +259,17 @@ export function Analyzer({ role }: { role: RoleId }) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer"
+            disabled={parsing}
+            className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer disabled:opacity-50"
           >
             <Paperclip size={13} />
-            <span>Upload File</span>
+            <span>{parsing ? "Parsing..." : "Upload File"}</span>
           </button>
           <button
             type="button"
             onClick={() => setText(sampleResumeTexts[role] || "")}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-white/20 transition-all cursor-pointer"
+            disabled={parsing}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-white/20 transition-all cursor-pointer disabled:opacity-50"
           >
             <FileText size={13} />
             <span>Load Sample</span>
@@ -261,18 +277,34 @@ export function Analyzer({ role }: { role: RoleId }) {
           <button
             type="button"
             onClick={run}
-            disabled={!text.trim() || busy}
+            disabled={!text.trim() || busy || parsing}
             className="ml-auto rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-bg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer shadow-xs"
           >
             {busy ? "Analyzing..." : "Analyze Match"}
           </button>
         </div>
+
+        {statusAnnouncement && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="mt-3 rounded-lg border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent"
+          >
+            {statusAnnouncement}
+          </div>
+        )}
       </div>
 
       {/* ── Right: match score ─────────────────────────────────── */}
       <div className="p-6 sm:p-8">
         {error ? (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-xs leading-relaxed text-danger">
+          <div
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-xs leading-relaxed text-danger"
+          >
             {error}
           </div>
         ) : !result ? (

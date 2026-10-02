@@ -15,16 +15,31 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
+import { checkRateLimit, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import { saveResumeWithUserConsistency } from "@/lib/db";
 import type { EnhancedAnalysis } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId(req);
     if (!userId) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting: 20 saves / 60 sec per user (generous for autosave/edits while preventing DoS).
+    // Note: Distributed rate limiting requires Upstash Redis configuration; falls back to in-memory window.
+    const rl = checkRateLimit(`resume_save:${userId}`, RATE_LIMIT_PRESETS.resumeSave);
+    if (rl.isLimited) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many resume save requests. Please wait a minute before saving again.",
+          code: "RATE_LIMITED",
+        },
+        { status: 429 }
       );
     }
 

@@ -42,6 +42,7 @@ export const RATE_LIMIT_POLICIES = {
   RESUME_PARSE: { limit: 10, windowMs: 60 * 1000 }, // 10 resume parses / min
   RESUME_ANALYZE: { limit: 10, windowMs: 60 * 1000 }, // 10 analyses / min
   RESUME_GENERATION: { limit: 8, windowMs: 60 * 1000 }, // 8 optimizations / min
+  RESUME_SAVE: { limit: 20, windowMs: 60 * 1000 }, // 20 resume saves / min (generous to avoid disrupting edits/autosave)
   JOB_SEARCH: { limit: 30, windowMs: 60 * 1000 }, // 30 job queries / min
   JOB_ALERT: { limit: 5, windowMs: 60 * 1000 }, // 5 email dispatches / min
   PUBLIC_API: { limit: 120, windowMs: 60 * 1000 }, // 120 public requests / min
@@ -60,6 +61,7 @@ export const RATE_LIMIT_PRESETS = {
   voiceWs: RATE_LIMIT_POLICIES.VOICE_WS,
   resumeAnalyze: RATE_LIMIT_POLICIES.RESUME_ANALYZE,
   resumeUpload: RATE_LIMIT_POLICIES.RESUME_PARSE,
+  resumeSave: RATE_LIMIT_POLICIES.RESUME_SAVE,
   jobAlerts: RATE_LIMIT_POLICIES.JOB_ALERT,
   jobsAlert: RATE_LIMIT_POLICIES.JOB_ALERT,
   generalApi: RATE_LIMIT_POLICIES.PUBLIC_API,
