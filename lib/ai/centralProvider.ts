@@ -47,7 +47,7 @@ const DEFAULT_TIMEOUT_MS = 12000;
 
 // ─── Verified Active Production Model IDs ───────────────────────────────────────
 export const VERIFIED_MODELS = {
-  gemini: "gemini-1.5-flash",
+  gemini: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   groq: "llama-3.3-70b-versatile",
   groqFast: "llama-3.1-8b-instant",
   openai: "gpt-4o-mini",
@@ -403,13 +403,20 @@ export async function generateAIResponse(
     };
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
   const groqKey = process.env.GROQ_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
   const openrouterKey = process.env.OPENROUTER_API_KEY;
 
-  // Strict honest failure: never silently fallback if canonical OpenAI is unconfigured
-  if (!openaiKey && !options.preferredProvider) {
+  // Strict honest failure: never fabricate responses if no provider is configured
+  const hasAnyKey = Boolean(
+    (geminiKey && geminiKey.trim().length >= 8) ||
+    (openaiKey && openaiKey.trim().length >= 8) ||
+    (groqKey && groqKey.trim().length >= 8) ||
+    (openrouterKey && openrouterKey.trim().length >= 8)
+  );
+
+  if (!hasAnyKey) {
     throw new AppError(
       "AI_PROVIDER_NOT_CONFIGURED",
       "AI assistant is temporarily unavailable because no AI provider is configured.",
@@ -425,11 +432,6 @@ export async function generateAIResponse(
 
   const providers: ProviderTask[] = [
     {
-      name: "openai",
-      key: openaiKey,
-      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
-    },
-    {
       name: "gemini",
       key: geminiKey,
       call: () => callGemini(geminiKey!, options.messages, options.systemPrompt, options),
@@ -438,6 +440,11 @@ export async function generateAIResponse(
       name: "groq",
       key: groqKey,
       call: () => callGroq(groqKey!, options.messages, options.systemPrompt, options),
+    },
+    {
+      name: "openai",
+      key: openaiKey,
+      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
     },
     {
       name: "openrouter",

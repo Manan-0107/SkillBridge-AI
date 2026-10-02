@@ -210,10 +210,15 @@ export async function POST(req: NextRequest) {
 
     const lastMessage = messages[messages.length - 1]?.text || messages[messages.length - 1]?.content || "";
     const userName = authUser.name || userProfile?.name || authUser.email.split("@")[0];
-    const { getAuthoritativeCareerSnapshot, toAuthoritativeCareerState } = await import(
+    const { getAuthoritativeCareerSnapshot, createDefaultCareerSnapshot, isCareerQuery, toAuthoritativeCareerState } = await import(
       "@/lib/ai/orchestrator/authoritativeCareerState"
     );
-    const careerSnapshot = await getAuthoritativeCareerSnapshot(authUser.id, authUser.email);
+    // Only query the DB when the message requires authoritative career context.
+    // General knowledge and concept questions bypass the snapshot entirely.
+    const needsCareerState = isCareerQuery(lastMessage, currentPage);
+    const careerSnapshot = needsCareerState
+      ? await getAuthoritativeCareerSnapshot(authUser.id, authUser.email)
+      : createDefaultCareerSnapshot(authUser.id);
     const role =
       careerSnapshot.targetRole.status === "KNOWN" && careerSnapshot.targetRole.currentValue
         ? careerSnapshot.targetRole.currentValue
@@ -273,8 +278,8 @@ export async function POST(req: NextRequest) {
 - Execution Status: ${orchestrationDecision.canExecuteTask ? "CAN EXECUTE DIRECTLY. DO NOT ask redundant questions." : "Missing critical information."}
 - Dynamic Guidance: ${orchestrationDecision.shouldAsk ? `Next high-priority detail to discover: "${orchestrationDecision.nextRequirementToAsk?.key}". Suggested dynamic phrasing: "${orchestrationDecision.phrasedQuestion}". Do NOT use static questionnaire forms; combine fields naturally.` : `Do not ask any more questions. Proceed directly with the requested task or explanation.`}`;
 
-    // ─── Authoritative Cross-Module Career State Synthesis ───────────────────
-    const synthQueryType = CareerSynthesisEngine.detectQueryType(lastMessage);
+    // ─── Authoritative Cross-Module Career State Synthesis (career queries only) ──
+    const synthQueryType = needsCareerState ? CareerSynthesisEngine.detectQueryType(lastMessage) : null;
     if (synthQueryType) {
       // Deterministically derive authoritative state strictly from server snapshot
       const careerState = toAuthoritativeCareerState(careerSnapshot);

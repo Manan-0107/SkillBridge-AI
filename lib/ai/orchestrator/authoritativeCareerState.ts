@@ -14,7 +14,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
-import { AuthoritativeCareerState } from "./careerStateSynthesis";
+import { AuthoritativeCareerState, CareerSynthesisEngine } from "./careerStateSynthesis";
 
 export type CareerFieldStatus =
   | "KNOWN"
@@ -130,17 +130,10 @@ function createKnownField<T>(
 }
 
 /**
- * Queries the authoritative PostgreSQL / Supabase tables for a given user.
- * Service-role and direct queries MUST enforce userId ownership explicitly.
+ * Creates a clean default baseline snapshot with UNKNOWN statuses
  */
-export async function getAuthoritativeCareerSnapshot(
-  userId: string,
-  authEmail?: string
-): Promise<CareerStateSnapshot> {
-  const now = new Date().toISOString();
-
-  // Default empty baseline snapshot with UNKNOWN statuses
-  const snapshot: CareerStateSnapshot = {
+export function createDefaultCareerSnapshot(userId: string): CareerStateSnapshot {
+  return {
     userId,
     targetRole: createUnknownField<string>(null),
     skills: createUnknownField<string[]>([]),
@@ -185,8 +178,43 @@ export async function getAuthoritativeCareerSnapshot(
       daysRemaining: null,
     }),
     milestones: createUnknownField<any[]>([]),
-    lastUpdated: now,
+    lastUpdated: new Date().toISOString(),
   };
+}
+
+/**
+ * Evaluates whether an inquiry requires authoritative Career State retrieval.
+ * General knowledge, definition, and concept queries bypass database retrieval to minimize latency and token overhead.
+ */
+export function isCareerQuery(text: string, currentPage?: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const clean = text.trim();
+
+  // If user is currently viewing/interacting with a career entity or roadmap page
+  if (currentPage && ["roadmap", "progress", "journey"].includes(currentPage.toLowerCase())) {
+    return true;
+  }
+
+  // 1. Explicit career synthesis query types ("what should I work on today?", etc.)
+  if (CareerSynthesisEngine.detectQueryType(clean) !== null) {
+    return true;
+  }
+
+  // 2. Personal career keywords & context
+  const careerKeywords = /\b(my (role|career|skills|roadmap|progress|resume|ats|interview|milestone|learning|streak)|what skills am i missing|based on my resume|my weak areas|my job matches|update my|where am i weak|what to study today)\b/i;
+  return careerKeywords.test(clean);
+}
+
+/**
+ * Queries the authoritative PostgreSQL / Supabase tables for a given user.
+ * Service-role and direct queries MUST enforce userId ownership explicitly.
+ */
+export async function getAuthoritativeCareerSnapshot(
+  userId: string,
+  authEmail?: string
+): Promise<CareerStateSnapshot> {
+  // Baseline snapshot with UNKNOWN statuses
+  const snapshot: CareerStateSnapshot = createDefaultCareerSnapshot(userId);
 
   if (!userId || !supabase) {
     return snapshot;

@@ -214,7 +214,7 @@ test("Security: Untrusted user data wrapping neutralizes control characters and 
 
 // ─── 6. AI Providers & Obsolete Model Removal (§10, §34, §46) ─────────────────
 test("AI Provider Audit: Retired GitHub Models is fully removed and verified models are active", () => {
-  assert.equal(VERIFIED_MODELS.gemini, "gemini-1.5-flash");
+  assert.equal(VERIFIED_MODELS.gemini, "gemini-3.5-flash-lite");
   assert.equal(VERIFIED_MODELS.groq, "llama-3.3-70b-versatile");
   assert.equal(VERIFIED_MODELS.openai, "gpt-4o-mini");
 
