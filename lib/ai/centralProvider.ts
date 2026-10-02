@@ -257,7 +257,7 @@ async function callGroq(
   };
 }
 
-// ─── 3. OpenAI Provider ───────────────────────────────────────────────────────
+// ─── 3. OpenAI Provider (Responses API) ───────────────────────────────────────
 async function callOpenAI(
   apiKey: string,
   messages: AIChatMessage[],
@@ -266,51 +266,58 @@ async function callOpenAI(
 ): Promise<AICompletionResult> {
   const start = Date.now();
   const model = VERIFIED_MODELS.openai;
-  const url = "https://api.openai.com/v1/chat/completions";
-
-  const formattedMessages: AIChatMessage[] = [];
-  if (systemPrompt) {
-    formattedMessages.push({ role: "system", content: systemPrompt });
-  }
-  formattedMessages.push(...messages);
-
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
+
+  try {
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { generateText } = await import("ai");
+    const openai = createOpenAI({ apiKey });
+    const languageModel =
+      typeof openai.responses === "function"
+        ? openai.responses(model)
+        : openai(model);
+
+    const formattedMessages = messages.map((m) => ({
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: m.content,
+    }));
+
+    const result = await generateText({
+      model: languageModel,
+      system: systemPrompt,
       messages: formattedMessages,
       temperature: options?.temperature ?? 0.3,
-      max_tokens: options?.maxTokens ?? 1500,
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+      maxOutputTokens: options?.maxTokens ?? 1500,
+      abortSignal: AbortSignal.timeout(timeoutMs),
+    });
 
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "");
+    const text = result.text || "";
+    if (!text.trim()) {
+      throw new AppError("AI_VALIDATION_ERROR", "OpenAI returned empty completion content");
+    }
+
+    return {
+      text: text.trim(),
+      provider: "openai",
+      model,
+      durationMs: Date.now() - start,
+    };
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    const status = err?.status || err?.statusCode || 500;
+    const msg = String(err?.message || err || "");
+    if (err?.name === "AbortError" || msg.includes("timeout")) {
+      throw new AppError("AI_PROVIDER_TIMEOUT", "OpenAI request timed out", { statusCode: 504 });
+    }
+    if (status === 429 || msg.includes("rate limit")) {
+      throw new AppError("AI_RATE_LIMITED", "OpenAI rate limit exceeded", { statusCode: 429 });
+    }
     throw new AppError(
-      res.status === 429 ? "AI_RATE_LIMITED" : "UPSTREAM_PROVIDER_ERROR",
-      `OpenAI returned ${res.status}: ${errorText.slice(0, 150)}`,
-      { statusCode: res.status }
+      "UPSTREAM_PROVIDER_ERROR",
+      `OpenAI provider error: ${msg.slice(0, 150)}`,
+      { statusCode: status }
     );
   }
-
-  const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text || typeof text !== "string") {
-    throw new AppError("AI_VALIDATION_ERROR", "OpenAI returned empty completion content");
-  }
-
-  return {
-    text: text.trim(),
-    provider: "openai",
-    model,
-    durationMs: Date.now() - start,
-  };
 }
 
 // ─── 4. OpenRouter Provider ───────────────────────────────────────────────────
@@ -377,18 +384,38 @@ async function callOpenRouter(
  * Executes an AI completion request across the active verified provider cascade.
  *
  * Flow:
- * 1. Checks available API keys (Gemini, Groq, OpenAI, OpenRouter).
- * 2. Attempts primary provider with bounded exponential backoff on transient errors.
- * 3. Falls through to next configured provider if primary fails.
- * 4. Throws structured AppError (AI_PROVIDER_UNAVAILABLE) if all configured providers fail.
+ * 1. Checks available API keys (OpenAI is canonical primary).
+ * 2. If UBIX_MOCK_AI=true in non-production, returns deterministic mock response.
+ * 3. If OPENAI_API_KEY is missing and no explicit preferredProvider is requested,
+ *    fails immediately with AI_PROVIDER_NOT_CONFIGURED (503) — NO silent fallback.
+ * 4. Attempts primary provider with bounded exponential backoff on transient errors.
  */
 export async function generateAIResponse(
   options: AICompletionOptions
 ): Promise<AICompletionResult> {
+  // Support deterministic mock in test environment
+  if (process.env.UBIX_MOCK_AI === "true" && process.env.NODE_ENV !== "production") {
+    return {
+      text: "UBIX_MOCK_AI_RESPONSE: Deterministic mock response for testing.",
+      provider: "openai",
+      model: "mock-model",
+      durationMs: 5,
+    };
+  }
+
+  const openaiKey = process.env.OPENAI_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
   const groqKey = process.env.GROQ_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
   const openrouterKey = process.env.OPENROUTER_API_KEY;
+
+  // Strict honest failure: never silently fallback if canonical OpenAI is unconfigured
+  if (!openaiKey && !options.preferredProvider) {
+    throw new AppError(
+      "AI_PROVIDER_NOT_CONFIGURED",
+      "AI assistant is temporarily unavailable because no AI provider is configured.",
+      { statusCode: 503 }
+    );
+  }
 
   type ProviderTask = {
     name: "gemini" | "groq" | "openai" | "openrouter";
@@ -398,6 +425,11 @@ export async function generateAIResponse(
 
   const providers: ProviderTask[] = [
     {
+      name: "openai",
+      key: openaiKey,
+      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
+    },
+    {
       name: "gemini",
       key: geminiKey,
       call: () => callGemini(geminiKey!, options.messages, options.systemPrompt, options),
@@ -406,11 +438,6 @@ export async function generateAIResponse(
       name: "groq",
       key: groqKey,
       call: () => callGroq(groqKey!, options.messages, options.systemPrompt, options),
-    },
-    {
-      name: "openai",
-      key: openaiKey,
-      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
     },
     {
       name: "openrouter",
@@ -459,7 +486,7 @@ export async function generateAIResponse(
   if (errors.length === 0) {
     throw new AppError(
       "AI_PROVIDER_NOT_CONFIGURED",
-      "No AI provider is configured for this environment. Please configure OPENAI_API_KEY on the server.",
+      "AI assistant is temporarily unavailable because no AI provider is configured.",
       { statusCode: 503 }
     );
   }

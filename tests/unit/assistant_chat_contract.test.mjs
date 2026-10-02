@@ -41,7 +41,10 @@ test("API Contract: /api/assistant/chat returns 503 AI_PROVIDER_NOT_CONFIGURED w
     const json = await res.json();
     assert.equal(json.ok, false);
     assert.equal(json.error?.code, "AI_PROVIDER_NOT_CONFIGURED");
-    assert(json.error?.message?.includes("not configured yet"));
+    assert.equal(
+      json.error?.message,
+      "AI assistant is temporarily unavailable because no AI provider is configured."
+    );
     // Ensure no fake AI reply was returned
     assert.equal(json.reply, undefined);
   } finally {
@@ -91,4 +94,52 @@ test("API Contract: /api/assistant/status returns provider metadata without leak
   const raw = JSON.stringify(json);
   assert(!raw.includes("sk-"), "No secret key prefix");
   assert(!raw.includes("Bearer"), "No bearer token");
+});
+
+test("API Contract: UBIX_MOCK_AI is strictly ignored when NODE_ENV is production", async () => {
+  const origMock = process.env.UBIX_MOCK_AI;
+  const origNodeEnv = process.env.NODE_ENV;
+  const origKey = process.env.OPENAI_API_KEY;
+  const origSecret = process.env.SESSION_SECRET;
+
+  delete process.env.OPENAI_API_KEY;
+  process.env.UBIX_MOCK_AI = "true";
+  process.env.NODE_ENV = "production";
+  process.env.SESSION_SECRET = "production-test-secret-must-be-configured";
+
+  const prodCookie = `cf_session=${createSignedSessionToken({
+    userId: "test-user-contract-123",
+    email: "contract-test@ubix.internal",
+    role: "authenticated",
+  })}`;
+
+  try {
+    const req = new NextRequest("http://localhost:3000/api/assistant/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: prodCookie,
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", text: "Hello" }],
+      }),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 503, "Must return 503 in production even if UBIX_MOCK_AI is set");
+    const json = await res.json();
+    assert.equal(json.error?.code, "AI_PROVIDER_NOT_CONFIGURED");
+    assert.equal(
+      json.error?.message,
+      "AI assistant is temporarily unavailable because no AI provider is configured."
+    );
+  } finally {
+    if (origMock !== undefined) process.env.UBIX_MOCK_AI = origMock;
+    else delete process.env.UBIX_MOCK_AI;
+    if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+    else delete process.env.NODE_ENV;
+    if (origKey !== undefined) process.env.OPENAI_API_KEY = origKey;
+    if (origSecret !== undefined) process.env.SESSION_SECRET = origSecret;
+    else delete process.env.SESSION_SECRET;
+  }
 });

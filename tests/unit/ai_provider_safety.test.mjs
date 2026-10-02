@@ -108,12 +108,20 @@ test("AI Provider: Error mapping translates upstream failures into structured co
   const mappedGen = mapProviderError(genErr);
   assert.equal(mappedGen.code, "AI_PROVIDER_UNAVAILABLE");
   assert.equal(mappedGen.statusCode, 503);
+
+  // 6. Malformed response / JSON parse error
+  const malformedErr = new Error("SyntaxError: Unexpected token < in JSON at position 0");
+  const mappedMalformed = mapProviderError(malformedErr);
+  assert.equal(mappedMalformed.code, "AI_PROVIDER_MALFORMED_RESPONSE");
+  assert.equal(mappedMalformed.statusCode, 502);
 });
 
 test("AI Provider: Mock AI mode enables hermetic, deterministic tests without keys", () => {
   const origMock = process.env.UBIX_MOCK_AI;
+  const origNodeEnv = process.env.NODE_ENV;
   try {
     process.env.UBIX_MOCK_AI = "true";
+    process.env.NODE_ENV = "test";
     const info = getCanonicalProvider();
     assert.equal(info.isMock, true);
     assert.equal(info.isConfigured, true);
@@ -121,6 +129,30 @@ test("AI Provider: Mock AI mode enables hermetic, deterministic tests without ke
   } finally {
     if (origMock !== undefined) process.env.UBIX_MOCK_AI = origMock;
     else delete process.env.UBIX_MOCK_AI;
+    if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+    else delete process.env.NODE_ENV;
+  }
+});
+
+test("AI Provider: Mock AI mode is strictly blocked in production environment", () => {
+  const origMock = process.env.UBIX_MOCK_AI;
+  const origNodeEnv = process.env.NODE_ENV;
+  const origKey = process.env.OPENAI_API_KEY;
+
+  delete process.env.OPENAI_API_KEY;
+  process.env.UBIX_MOCK_AI = "true";
+  process.env.NODE_ENV = "production";
+
+  try {
+    const info = getCanonicalProvider();
+    assert.equal(info.isMock, false, "Mock AI must NEVER activate in production");
+    assert.equal(info.isConfigured, false, "Provider must report not configured when key is absent");
+  } finally {
+    if (origMock !== undefined) process.env.UBIX_MOCK_AI = origMock;
+    else delete process.env.UBIX_MOCK_AI;
+    if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+    else delete process.env.NODE_ENV;
+    if (origKey !== undefined) process.env.OPENAI_API_KEY = origKey;
   }
 });
 

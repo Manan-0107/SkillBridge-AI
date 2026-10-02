@@ -76,8 +76,11 @@ export function getKeyFor(providerName: ProviderName): string | undefined {
  * Automatically activates mock mode when UBIX_MOCK_AI=true for hermetic tests.
  */
 export function getCanonicalProvider(): ResolvedProviderInfo {
-  // Support deterministic mock in test environment
-  if (process.env.UBIX_MOCK_AI === "true" || (process.env.NODE_ENV as string) === "test-mock") {
+  // Support deterministic mock ONLY in non-production test environment
+  if (
+    (process.env.UBIX_MOCK_AI === "true" || (process.env.NODE_ENV as string) === "test-mock") &&
+    process.env.NODE_ENV !== "production"
+  ) {
     return {
       provider: "mock",
       apiKey: "mock-key-for-testing-only",
@@ -166,6 +169,20 @@ export function mapProviderError(err: any): {
   }
 
   if (
+    msg.includes("malformed") ||
+    msg.includes("syntaxerror") ||
+    msg.includes("invalid json") ||
+    msg.includes("unexpected token") ||
+    msg.includes("validation error")
+  ) {
+    return {
+      code: "AI_PROVIDER_MALFORMED_RESPONSE",
+      statusCode: 502,
+      message: "Received an invalid or malformed response from the upstream AI provider.",
+    };
+  }
+
+  if (
     msg.includes("econnrefused") ||
     msg.includes("enotfound") ||
     msg.includes("network") ||
@@ -188,6 +205,7 @@ export function mapProviderError(err: any): {
 
 /**
  * Instantiate an AI SDK model wrapped for the specified provider.
+ * For OpenAI, explicitly invokes the current Responses API (v1/responses).
  */
 export function getModelInstance(providerName: ProviderName, apiKey: string) {
   switch (providerName) {
@@ -195,8 +213,12 @@ export function getModelInstance(providerName: ProviderName, apiKey: string) {
       return createGroq({ apiKey })(PROVIDER_MODELS.groq);
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(PROVIDER_MODELS.gemini);
-    case "openai":
-      return createOpenAI({ apiKey })(PROVIDER_MODELS.openai);
+    case "openai": {
+      const client = createOpenAI({ apiKey });
+      return typeof client.responses === "function"
+        ? client.responses(PROVIDER_MODELS.openai)
+        : client(PROVIDER_MODELS.openai);
+    }
     case "openrouter":
       return createOpenRouter({ apiKey })(PROVIDER_MODELS.openrouter);
     case "anthropic":
