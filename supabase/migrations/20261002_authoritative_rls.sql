@@ -347,7 +347,8 @@ revoke all on function private.is_owner(uuid) from anon;
 grant execute on function private.is_owner(uuid) to authenticated;
 
 -- ─── 11. Database-Level Ownership Immutability Triggers ───────────────────────
--- Prevents clients or malicious queries from mutating public.users.id or auth_user_id
+-- Prevents clients or malicious queries from mutating public.users.id, auth_user_id,
+-- or altering email to an address that does not match verified auth.users.
 create or replace function private.protect_user_identity_mutation()
 returns trigger
 language plpgsql
@@ -360,6 +361,11 @@ begin
   end if;
   if new.auth_user_id is distinct from old.auth_user_id then
     raise exception 'Cannot mutate public.users.auth_user_id';
+  end if;
+  if lower(new.email) <> lower(old.email) then
+    if not exists (select 1 from auth.users where id = new.auth_user_id and lower(email) = lower(new.email)) then
+      raise exception 'Cannot mutate public.users.email: email must match verified auth.users account';
+    end if;
   end if;
   return new;
 end;

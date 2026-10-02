@@ -6,7 +6,7 @@
 -- ==============================================================================
 
 begin;
-select plan(38);
+select plan(39);
 
 -- ─── SETUP: Test Identities and Context Helpers ──────────────────────────────
 create or replace function tests.setup_test_environment()
@@ -107,6 +107,13 @@ select throws_ok(
   $$update public.users set id = '99999999-9999-9999-9999-999999999999' where email = 'test_user_a@careerforge.test'$$,
   'Cannot mutate public.users.id',
   'Group A5: Database trigger prevents mutating public.users.id'
+);
+
+-- 6. Identity immutability: trigger blocks reassigning email to unverified address
+select throws_ok(
+  $$update public.users set email = 'spoofed@evil.com' where email = 'test_user_a@careerforge.test'$$,
+  'Cannot mutate public.users.email: email must match verified auth.users account',
+  'Group A6: Database trigger prevents altering public.users.email to unverified address'
 );
 
 -- ─── TEST GROUP B: USER A AUTHORIZED OPERATIONS ──────────────────────────────
