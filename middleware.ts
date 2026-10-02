@@ -44,7 +44,6 @@ const PUBLIC_ACCESSIBILITY_POSTS = new Set<string>([
 ]);
 
 const AI_ROUTES = new Set<string>([
-  "/api/chat",
   "/api/assistant/chat",
   "/api/resume/analyze",
   "/api/resume/optimize",
@@ -52,12 +51,10 @@ const AI_ROUTES = new Set<string>([
 
 const STT_ROUTES = new Set<string>([
   "/api/speech/transcribe",
-  "/api/audio/transcribe",
 ]);
 
 const TTS_ROUTES = new Set<string>([
   "/api/speech/synthesize",
-  "/api/audio/synthesize",
 ]);
 
 const EMAIL_ROUTES = new Set<string>([

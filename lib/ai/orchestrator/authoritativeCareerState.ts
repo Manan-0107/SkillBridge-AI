@@ -305,10 +305,42 @@ export async function getAuthoritativeCareerSnapshot(
       }
       const struggledArr = Array.from(struggledSet);
 
+      // Deterministic streak calculation from session dates
+      let calculatedStreak = 0;
+      if (practiceRows.length > 0 && practiceRows[0].completed_at) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const uniqueDays = Array.from(new Set(practiceRows
+          .map((r: any) => r.completed_at ? new Date(r.completed_at).toISOString().split("T")[0] : null)
+          .filter((d: any): d is string => Boolean(d))
+        )).sort().reverse();
+
+        if (uniqueDays.length > 0) {
+          const latestDay = new Date(uniqueDays[0]);
+          latestDay.setHours(0, 0, 0, 0);
+          const diffDays = Math.round((today.getTime() - latestDay.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays <= 1) {
+            calculatedStreak = 1;
+            let prevDate = latestDay;
+            for (let i = 1; i < uniqueDays.length; i++) {
+              const curDate = new Date(uniqueDays[i]);
+              curDate.setHours(0, 0, 0, 0);
+              const dayStep = Math.round((prevDate.getTime() - curDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (dayStep === 1) {
+                calculatedStreak++;
+                prevDate = curDate;
+              } else {
+                break;
+              }
+            }
+          }
+        }
+      }
+
       const practiceState: CareerPracticeState = {
         recentScoreAverage: avgScore,
         totalQuestionsAnswered: practiceRows.length,
-        currentStreak: 1, // At least 1 active recorded session
+        currentStreak: calculatedStreak,
         struggledConcepts: struggledArr,
         masteredConcepts: avgScore >= 80 && snapshot.skills.currentValue ? snapshot.skills.currentValue : [],
         latestPracticeDate: practiceRows[0].completed_at || null,

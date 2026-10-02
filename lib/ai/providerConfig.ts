@@ -18,15 +18,17 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
-export const CANONICAL_PROVIDER = "openai" as const;
+export const CANONICAL_PROVIDER = "gemini" as const;
 
 export const PROVIDER_MODELS = {
   groq: process.env.GROQ_MODEL_ID || "llama-3.3-70b-versatile",
-  gemini: process.env.GEMINI_MODEL_ID || "gemini-1.5-flash",
+  gemini: process.env.GEMINI_MODEL || process.env.GEMINI_MODEL_ID || "gemini-3.5-flash-lite",
   openai: process.env.OPENAI_MODEL_ID || "gpt-4o-mini",
   openrouter: process.env.OPENROUTER_MODEL_ID || "meta-llama/llama-3.3-70b-instruct:free",
   anthropic: process.env.ANTHROPIC_MODEL_ID || "claude-sonnet-4-5",
 };
+
+export const CANONICAL_MODEL = PROVIDER_MODELS.gemini;
 
 export const PROVIDER_LABELS: Record<string, string> = {
   groq: `Groq (${PROVIDER_MODELS.groq})`,
@@ -101,7 +103,7 @@ export function getCanonicalProvider(): ResolvedProviderInfo {
   return {
     provider: targetProvider,
     apiKey: isConfigured ? key!.trim() : null,
-    modelId: PROVIDER_MODELS[targetProvider] || "gpt-4o-mini",
+    modelId: PROVIDER_MODELS[targetProvider] || "gemini-3.5-flash-lite",
     isConfigured,
     isMock: false,
   };

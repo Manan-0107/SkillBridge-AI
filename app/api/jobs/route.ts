@@ -55,6 +55,7 @@ export interface LiveJob {
   postedAt: string;
   descriptionSnippet: string;
   source: "LinkedIn" | "Adzuna" | "SerpApi" | "Arbeitnow" | "Remotive" | "Jobicy";
+  provenance: "SOURCE_VERIFIED" | "ESTIMATED" | "INFERRED" | "UNKNOWN";
   salary: SalaryRange;
   accessibility: AccessibilityProfile;
   distanceKm?: number | null;
@@ -453,6 +454,7 @@ async function fetchLinkedInJobs(
         accessibility: generateAccessibilityProfile(arrangement.remote, title),
         isLocalMatch: true,
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
         distanceKm: null,
       });
     }
@@ -528,6 +530,7 @@ async function fetchAdzunaJobs(
         salary: calculateLocalizedSalary(role || r.title, countryRule, isIntern),
         accessibility: generateAccessibilityProfile(arrangement.remote, r.description),
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
       };
     });
   } catch {
@@ -593,6 +596,7 @@ async function fetchSerpApiJobs(
         salary: calculateLocalizedSalary(role || j.title, countryRule, isIntern),
         accessibility: generateAccessibilityProfile(arrangement.remote, j.description),
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
       };
     });
   } catch {
@@ -648,6 +652,7 @@ async function fetchArbeitnowJobs(countryRule: CountryCurrencyRule = COUNTRY_CUR
         salary: calculateLocalizedSalary(item.title, countryRule, isIntern),
         accessibility: generateAccessibilityProfile(arrangement.remote, item.description),
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
       };
     });
   } catch {
@@ -712,6 +717,7 @@ async function fetchRemotiveJobs(
         salary: calculateLocalizedSalary(j.title, countryRule, isIntern),
         accessibility: generateAccessibilityProfile(true, j.description),
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
       };
     });
   } catch {
@@ -766,6 +772,7 @@ async function fetchJobicyJobs(countryRule: CountryCurrencyRule = COUNTRY_CURREN
         salary: calculateLocalizedSalary(j.jobTitle, countryRule, isIntern),
         accessibility: generateAccessibilityProfile(true, j.jobExcerpt),
         isVerifiedReal: true,
+        provenance: "SOURCE_VERIFIED",
       };
     });
   } catch {

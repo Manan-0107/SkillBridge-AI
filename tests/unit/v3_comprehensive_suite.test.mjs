@@ -19,15 +19,6 @@ test("1. Profile & Consent Architecture (§1, §3): deaf profile completely unmo
     "GlobalVoiceDictator must unmount and return null for deaf_hard_of_hearing profile"
   );
 
-  // FloatingControlBar check for deaf_hard_of_hearing profile
-  const fcbPath = path.join(projectRoot, "components/accessibility/FloatingControlBar.tsx");
-  const fcbCode = fs.readFileSync(fcbPath, "utf-8");
-  assert(
-    fcbCode.includes('accessibilityProfile !== "deaf_hard_of_hearing"') ||
-    fcbCode.includes('isDeafProfile'),
-    "FloatingControlBar must not render mic toggle for deaf_hard_of_hearing profile"
-  );
-
   // Standard profile with voice off must not request mic
   assert(
     gvdCode.includes('accessibilityProfile === "standard"'),

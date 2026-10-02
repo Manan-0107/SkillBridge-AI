@@ -16,28 +16,44 @@ export type ResumeTab = "analyzer" | "personalizer" | "builder";
 interface PendingConfirmation {
   token: string;
   toolName: string;
+  userId?: string;
   parameters: Record<string, any>;
   expiresAt: number;
 }
 
 const pendingConfirmations = new Map<string, PendingConfirmation>();
 
-export function createConfirmationToken(toolName: string, parameters: Record<string, any>): string {
+export function createConfirmationToken(
+  toolName: string,
+  parameters: Record<string, any>,
+  userId?: string
+): string {
   const token = `conf_${crypto.randomBytes(8).toString("hex")}`;
   pendingConfirmations.set(token, {
     token,
     toolName,
+    userId,
     parameters,
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 min TTL
   });
   return token;
 }
 
-export function verifyAndConsumeConfirmationToken(token: string, toolName: string): boolean {
+export function verifyAndConsumeConfirmationToken(
+  token: string,
+  toolName: string,
+  userId?: string
+): boolean {
   const entry = pendingConfirmations.get(token);
   if (!entry) return false;
-  if (entry.toolName !== toolName || Date.now() > entry.expiresAt) {
+  if (entry.toolName !== toolName) {
+    return false;
+  }
+  if (Date.now() > entry.expiresAt) {
     pendingConfirmations.delete(token);
+    return false;
+  }
+  if (entry.userId && userId && entry.userId !== userId) {
     return false;
   }
   pendingConfirmations.delete(token);
@@ -355,12 +371,13 @@ export const aiTools = {
       name: z.string().optional().describe("New display name"),
       email: z.string().email().optional().describe("New contact email"),
       targetRole: z.string().optional().describe("New target role"),
+      userId: z.string().optional().describe("Authenticated user identifier"),
       confirmed: z.boolean().default(false).describe("Whether user has explicitly confirmed this change"),
       confirmationToken: z.string().optional().describe("Signed confirmation token if previously confirmed"),
     }),
-    execute: async ({ name, email, targetRole, confirmed, confirmationToken }) => {
-      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "modifyProfile")) {
-        const token = createConfirmationToken("modifyProfile", { name, email, targetRole });
+    execute: async ({ name, email, targetRole, userId, confirmed, confirmationToken }) => {
+      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "modifyProfile", userId)) {
+        const token = createConfirmationToken("modifyProfile", { name, email, targetRole }, userId);
         return {
           success: false,
           requiresConfirmation: true,
@@ -390,12 +407,13 @@ export const aiTools = {
       location: z.string().optional().describe("Target location"),
       remote: z.boolean().optional().describe("Remote-only preference"),
       frequency: z.enum(["Immediately", "Daily", "Weekly"]).optional().describe("Alert notification frequency"),
+      userId: z.string().optional().describe("Authenticated user identifier"),
       confirmed: z.boolean().default(false).describe("Whether user has confirmed setting this alert"),
       confirmationToken: z.string().optional().describe("Verification token"),
     }),
-    execute: async ({ email, role, location, remote, frequency, confirmed, confirmationToken }) => {
-      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "configureJobAlerts")) {
-        const token = createConfirmationToken("configureJobAlerts", { email, role, location, remote, frequency });
+    execute: async ({ email, role, location, remote, frequency, userId, confirmed, confirmationToken }) => {
+      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "configureJobAlerts", userId)) {
+        const token = createConfirmationToken("configureJobAlerts", { email, role, location, remote, frequency }, userId);
         return {
           success: false,
           requiresConfirmation: true,
@@ -422,12 +440,13 @@ export const aiTools = {
     description: "Permanently delete user profile data, resumes, or chat history. SENSITIVE: Irreversible action.",
     inputSchema: z.object({
       dataType: z.enum(["chat_history", "resumes", "account"]).describe("Data category to delete"),
+      userId: z.string().optional().describe("Authenticated user identifier"),
       confirmed: z.boolean().default(false).describe("Whether user explicitly confirmed deletion"),
       confirmationToken: z.string().optional().describe("Signed confirmation token"),
     }),
-    execute: async ({ dataType, confirmed, confirmationToken }) => {
-      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "deleteUserData")) {
-        const token = createConfirmationToken("deleteUserData", { dataType });
+    execute: async ({ dataType, userId, confirmed, confirmationToken }) => {
+      if (!confirmed || !confirmationToken || !verifyAndConsumeConfirmationToken(confirmationToken, "deleteUserData", userId)) {
+        const token = createConfirmationToken("deleteUserData", { dataType }, userId);
         return {
           success: false,
           requiresConfirmation: true,

@@ -474,7 +474,7 @@ export function PracticeHub() {
     const prompt = `The user is answering assessment question: "${activeQuestion.question}". They have a doubt/question: "${userQuery}". Please provide a helpful, concise clarification to resolve their doubt without giving away the entire answer, then encourage them to resume answering.`;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -609,7 +609,7 @@ export function PracticeHub() {
     const standardDef = activeQuestion.standardConcept;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

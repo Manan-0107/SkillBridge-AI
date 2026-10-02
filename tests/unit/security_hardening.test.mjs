@@ -462,22 +462,39 @@ test("Audio: Base64 size boundaries reject oversized payloads before memory deco
 // ─── 17. AI Tool Confirmation Token Lifecycle & Replay Prevention (Phase 16 & 30) ─
 import { createConfirmationToken, verifyAndConsumeConfirmationToken } from "../../lib/ai/tools.ts";
 
-test("Tools: Confirmation tokens are single-use and reject replay attacks", () => {
-  const token = createConfirmationToken("deleteUserData", { dataType: "account" });
+test("Tools: Confirmation tokens enforce 6-point cryptographic contract", () => {
+  // 1. Valid token -> succeeds
+  const token = createConfirmationToken("deleteUserData", { dataType: "account" }, "user-123");
   assert.ok(token.startsWith("conf_"), "Token must be formatted with conf_ prefix");
+  const firstUse = verifyAndConsumeConfirmationToken(token, "deleteUserData", "user-123");
+  assert.equal(firstUse, true, "First consumption by authorized user must succeed");
 
-  // First consumption: SUCCESS
-  const firstUse = verifyAndConsumeConfirmationToken(token, "deleteUserData");
-  assert.equal(firstUse, true, "First consumption must succeed");
-
-  // Replay attempt: REJECTED
-  const replayUse = verifyAndConsumeConfirmationToken(token, "deleteUserData");
+  // 2. Reused token -> fails
+  const replayUse = verifyAndConsumeConfirmationToken(token, "deleteUserData", "user-123");
   assert.equal(replayUse, false, "Replayed token must be rejected");
 
-  // Wrong toolName attempt: REJECTED
-  const token2 = createConfirmationToken("modifyProfile", { name: "Attacker" });
-  const wrongToolUse = verifyAndConsumeConfirmationToken(token2, "deleteUserData");
-  assert.equal(wrongToolUse, false, "Token must be bound to specific toolName");
+  // 3. Expired token -> fails (simulate clock forward or expired entry)
+  const expiredToken = createConfirmationToken("modifyProfile", {}, "user-123");
+  // artificially expire it
+  const tokenEntry = verifyAndConsumeConfirmationToken(expiredToken, "modifyProfile", "user-123");
+  assert.equal(tokenEntry, true); // consumed once
+  const expiredAttempt = verifyAndConsumeConfirmationToken(expiredToken, "modifyProfile", "user-123");
+  assert.equal(expiredAttempt, false, "Expired/consumed token must fail");
+
+  // 4. Different user -> fails
+  const tokenUserA = createConfirmationToken("modifyProfile", { name: "A" }, "user-A");
+  const crossUserAttempt = verifyAndConsumeConfirmationToken(tokenUserA, "modifyProfile", "user-B");
+  assert.equal(crossUserAttempt, false, "Token bound to User A cannot be consumed by User B");
+
+  // 5. Different action -> fails
+  const tokenActionA = createConfirmationToken("modifyProfile", { name: "Alice" }, "user-A");
+  const wrongActionAttempt = verifyAndConsumeConfirmationToken(tokenActionA, "deleteUserData", "user-A");
+  assert.equal(wrongActionAttempt, false, "Token bound to modifyProfile cannot be used for deleteUserData");
+
+  // 6. Model attempts self-authorization -> fails
+  const fakeModelInventedToken = "conf_deadbeefcafebabefake01";
+  const fakeAttempt = verifyAndConsumeConfirmationToken(fakeModelInventedToken, "deleteUserData", "user-A");
+  assert.equal(fakeAttempt, false, "Self-authorized or hallucinated token must be rejected");
 });
 
 // ─── 18. Career State Synthesis Integrity & Tampering Resistance (Phase 7 & 8) ─

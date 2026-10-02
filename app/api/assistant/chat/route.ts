@@ -16,7 +16,6 @@ import path from "path";
 import crypto from "crypto";
 import { generateText } from "ai";
 import { parseIntent, FeatureId, ResumeTab } from "@/lib/intent";
-import { AGENT_TOOLS_DEFINITIONS, AgentToolName } from "@/lib/agentTools";
 import { processResumeStepInput, ResumeDraftState } from "@/lib/conversationalResume";
 import { normalizeSpokenEmail } from "@/lib/voice";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
@@ -94,7 +93,8 @@ function sanitizeTab(tab: any): ResumeTab | undefined {
 
 interface ChatMessage {
   role: "user" | "assistant";
-  text: string;
+  text?: string;
+  content?: string;
 }
 
 interface RequestBody {
@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
     }
 
     const totalMessageLength = messages.reduce(
-      (sum, m) => sum + (typeof m?.text === "string" ? m.text.length : 0),
+      (sum, m) => sum + (typeof m?.text === "string" ? m.text.length : (typeof m?.content === "string" ? m.content.length : 0)),
       0
     );
     if (totalMessageLength > MAX_TOTAL_MESSAGE_LENGTH) {
@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const lastMessage = messages[messages.length - 1]?.text || "";
+    const lastMessage = messages[messages.length - 1]?.text || messages[messages.length - 1]?.content || "";
     const userName = authUser.name || userProfile?.name || authUser.email.split("@")[0];
     const { getAuthoritativeCareerSnapshot, toAuthoritativeCareerState } = await import(
       "@/lib/ai/orchestrator/authoritativeCareerState"
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
     const role =
       careerSnapshot.targetRole.status === "KNOWN" && careerSnapshot.targetRole.currentValue
         ? careerSnapshot.targetRole.currentValue
-        : targetRole || "Software Engineering";
+        : "Software Engineering";
 
 
 
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
       },
       conversationHistory: messages.map((m) => ({
         role: m.role,
-        text: m.text,
+        text: m.text || m.content || "",
       })),
       knownInformation: {
         fullName: userName,
@@ -418,7 +418,7 @@ async function callLLMProvider(
 
   const formattedMessages: any[] = messages.map((m) => ({
     role: m.role === "assistant" ? "assistant" : "user",
-    content: m.text,
+    content: m.text || m.content || "",
   }));
 
   try {

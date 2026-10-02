@@ -17,9 +17,13 @@ const testAuthCookie = `cf_session=${createSignedSessionToken({
   role: "authenticated",
 })}`;
 
-test("API Contract: /api/assistant/chat returns 503 AI_PROVIDER_NOT_CONFIGURED when OPENAI_API_KEY is absent", async () => {
-  const origKey = process.env.OPENAI_API_KEY;
+test("API Contract: /api/assistant/chat returns 503 AI_PROVIDER_NOT_CONFIGURED when GEMINI_API_KEY is absent", async () => {
+  const origKey = process.env.GEMINI_API_KEY;
+  const origOpenai = process.env.OPENAI_API_KEY;
   const origMock = process.env.UBIX_MOCK_AI;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_AI_KEY;
   delete process.env.OPENAI_API_KEY;
   delete process.env.UBIX_MOCK_AI;
 
@@ -48,7 +52,8 @@ test("API Contract: /api/assistant/chat returns 503 AI_PROVIDER_NOT_CONFIGURED w
     // Ensure no fake AI reply was returned
     assert.equal(json.reply, undefined);
   } finally {
-    if (origKey !== undefined) process.env.OPENAI_API_KEY = origKey;
+    if (origKey !== undefined) process.env.GEMINI_API_KEY = origKey;
+    if (origOpenai !== undefined) process.env.OPENAI_API_KEY = origOpenai;
     if (origMock !== undefined) process.env.UBIX_MOCK_AI = origMock;
   }
 });
@@ -87,27 +92,30 @@ test("API Contract: /api/assistant/status returns provider metadata without leak
 
   const json = await res.json();
   assert.equal(json.ok, true);
-  assert.equal(json.provider, "openai");
+  assert.equal(json.provider, "gemini");
   assert.equal(typeof json.configured, "boolean");
-  assert.equal(json.model, "gpt-4o-mini");
+  assert.equal(json.model, "gemini-3.5-flash-lite");
 
   const raw = JSON.stringify(json);
-  assert(!raw.includes("sk-"), "No secret key prefix");
+  assert(!raw.includes("AQ."), "No secret key prefix");
   assert(!raw.includes("Bearer"), "No bearer token");
 });
 
 test("API Contract: UBIX_MOCK_AI is strictly ignored when NODE_ENV is production", async () => {
   const origMock = process.env.UBIX_MOCK_AI;
   const origNodeEnv = process.env.NODE_ENV;
-  const origKey = process.env.OPENAI_API_KEY;
+  const origKey = process.env.GEMINI_API_KEY;
   const origSecret = process.env.SESSION_SECRET;
 
-  delete process.env.OPENAI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_AI_KEY;
   process.env.UBIX_MOCK_AI = "true";
   process.env.NODE_ENV = "production";
-  process.env.SESSION_SECRET = "production-test-secret-must-be-configured";
+  process.env.SESSION_SECRET = origSecret || "test-production-secret-must-be-at-least-32-chars-long";
 
-  const prodCookie = `cf_session=${createSignedSessionToken({
+  // Regenerate session cookie using the explicit secret
+  const prodAuthCookie = `cf_session=${createSignedSessionToken({
     userId: "test-user-contract-123",
     email: "contract-test@ubix.internal",
     role: "authenticated",
@@ -118,27 +126,24 @@ test("API Contract: UBIX_MOCK_AI is strictly ignored when NODE_ENV is production
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        cookie: prodCookie,
+        cookie: prodAuthCookie,
       },
       body: JSON.stringify({
-        messages: [{ role: "user", text: "Hello" }],
+        messages: [{ role: "user", text: "Hello in production" }],
       }),
     });
 
     const res = await POST(req);
-    assert.equal(res.status, 503, "Must return 503 in production even if UBIX_MOCK_AI is set");
+    assert.equal(res.status, 503, "Production must ignore mock mode and fail closed with 503");
     const json = await res.json();
+    assert.equal(json.ok, false);
     assert.equal(json.error?.code, "AI_PROVIDER_NOT_CONFIGURED");
-    assert.equal(
-      json.error?.message,
-      "AI assistant is temporarily unavailable because no AI provider is configured."
-    );
   } finally {
     if (origMock !== undefined) process.env.UBIX_MOCK_AI = origMock;
     else delete process.env.UBIX_MOCK_AI;
     if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
     else delete process.env.NODE_ENV;
-    if (origKey !== undefined) process.env.OPENAI_API_KEY = origKey;
+    if (origKey !== undefined) process.env.GEMINI_API_KEY = origKey;
     if (origSecret !== undefined) process.env.SESSION_SECRET = origSecret;
     else delete process.env.SESSION_SECRET;
   }

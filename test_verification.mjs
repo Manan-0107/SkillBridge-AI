@@ -102,8 +102,8 @@ async function runTests() {
   }
 
   {
-    const r = await postJson("/api/chat", { messages: [{ role: "user", text: "hello" }] });
-    assert("POST /api/chat rejects unauthenticated with 401", r.status === 401, `Got status ${r.status}`);
+    const r = await postJson("/api/assistant/chat", { messages: [{ role: "user", text: "hello" }] });
+    assert("POST /api/assistant/chat rejects unauthenticated with 401", r.status === 401, `Got status ${r.status}`);
   }
 
   // 2. AUTHENTICATED SESSION FLOW

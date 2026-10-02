@@ -269,6 +269,65 @@ export async function POST(req: NextRequest) {
         const pages = parseResult.pages || 1;
 
         if (!rawText || rawText.length < 40) {
+          // Attempt OCR extraction fallback for scanned image PDFs
+          const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
+          let ocrExtractedText = "";
+          if (geminiKey && buffer) {
+            try {
+              const ocrRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [
+                      {
+                        parts: [
+                          {
+                            text: "Extract all text verbatim from this scanned resume document. Return only the extracted text. If no legible text exists, reply exactly with: NO_TEXT_FOUND.",
+                          },
+                          {
+                            inlineData: {
+                              mimeType: "application/pdf",
+                              data: buffer.toString("base64"),
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                    generationConfig: {
+                      maxOutputTokens: 2000,
+                      temperature: 0.1,
+                    },
+                  }),
+                  signal: AbortSignal.timeout(5000),
+                }
+              );
+              if (ocrRes.ok) {
+                const ocrData = await ocrRes.json();
+                const cand = ocrData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                if (cand && !cand.includes("NO_TEXT_FOUND") && cand.length >= 40) {
+                  ocrExtractedText = cand;
+                }
+              }
+            } catch (ocrErr) {
+              console.warn(`[Resume Parse] OCR fallback attempt failed (${requestId}):`, ocrErr);
+            }
+          }
+
+          if (ocrExtractedText) {
+            const normalizedText = ocrExtractedText.slice(0, MAX_RESUME_TEXT_LENGTH);
+            return NextResponse.json({
+              success: true,
+              status: "SUCCESS",
+              text: normalizedText,
+              filename: sanitizedName,
+              pages,
+              ocrApplied: true,
+              truncated: ocrExtractedText.length > MAX_RESUME_TEXT_LENGTH,
+            });
+          }
+
           return NextResponse.json(
             {
               success: false,
