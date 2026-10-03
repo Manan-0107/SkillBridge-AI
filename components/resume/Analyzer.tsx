@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { RoleId, ResumeAnalysis, EnhancedAnalysis } from "@/lib/types";
+import { Paperclip, FileText, BarChart3, Check, Lightbulb } from "lucide-react";
 
 const sampleResumeTexts: Record<RoleId, string> = {
   frontend: `ALEX RIVERA
@@ -133,6 +134,8 @@ export function Analyzer({ role }: { role: RoleId }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<ResumeAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [statusAnnouncement, setStatusAnnouncement] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,25 +143,45 @@ export function Analyzer({ role }: { role: RoleId }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setError(null);
+
     const isText =
       file.type.includes("text") ||
       file.name.endsWith(".txt") ||
       file.name.endsWith(".md");
 
     if (isText) {
-      setText(await file.text());
+      const content = await file.text();
+      setText(content);
+      setStatusAnnouncement("Resume text loaded successfully.");
       return;
     }
 
-    // PDF / DOCX → server-side extraction, fall back to role sample
+    // PDF / DOCX → server-side extraction
+    setParsing(true);
+    setStatusAnnouncement("Parsing your resume. Please wait.");
     try {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/resume/parse", { method: "POST", body: fd });
       const data = await res.json();
-      setText(data.text || sampleResumeTexts[role] || "");
+      if (!res.ok) {
+        setParsing(false);
+        setStatusAnnouncement(null);
+        if (data.code === "OCR_REQUIRED") {
+          setError("Text could not be extracted from this document (scanned image or flattened PDF). OCR or manual text entry is required. Please paste your resume text below.");
+        } else {
+          setError(data.error?.message || data.error || "Failed to extract text from document. Please paste your resume text.");
+        }
+        return;
+      }
+      setText(data.text || "");
+      setParsing(false);
+      setStatusAnnouncement("Resume parsed successfully.");
     } catch {
-      setText(sampleResumeTexts[role] || "");
+      setParsing(false);
+      setStatusAnnouncement(null);
+      setError("Network error while uploading resume. Please paste your resume text directly.");
     }
   };
 
@@ -204,19 +227,23 @@ export function Analyzer({ role }: { role: RoleId }) {
   }, []);
 
   return (
-    <div className="grid grid-cols-1 border border-black lg:grid-cols-2">
+    <div className="grid grid-cols-1 rounded-2xl border border-ink/10 bg-surface/30 overflow-hidden lg:grid-cols-2">
       {/* ── Left: raw resume input ─────────────────────────────── */}
-      <div className="border-b border-black p-8 lg:border-b-0 lg:border-r">
-        <p className="mb-6 text-xs font-black uppercase tracking-widest">
-          Resume Text · {role} track
-        </p>
+      <div className="border-b border-ink/10 p-6 sm:p-8 lg:border-b-0 lg:border-r">
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-widest text-ink/60">
+            Resume Text · <span className="text-accent capitalize">{role}</span> Track
+          </p>
+          <span className="text-[11px] text-ink/40">Paste or upload</span>
+        </div>
 
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={18}
-          placeholder="Paste your full resume text here — summary, experience, skills, education."
-          className="w-full resize-y rounded-none border border-black bg-white p-4 font-mono text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+          rows={16}
+          placeholder="Paste your full resume text here — summary, work experience, technical skills, and education."
+          className="w-full resize-y rounded-xl border border-ink/15 bg-bg p-4 text-xs sm:text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent leading-relaxed"
+          aria-label="Resume text to analyze"
         />
 
         <input
@@ -225,89 +252,155 @@ export function Analyzer({ role }: { role: RoleId }) {
           accept=".pdf,.docx,.doc,.txt,.md,.rtf"
           onChange={handleFileChange}
           className="hidden"
+          id="analyzer-file-input"
         />
 
-        <div className="mt-6 flex flex-wrap gap-4 text-xs font-black uppercase tracking-widest">
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-none border border-black px-6 py-3 hover:bg-zinc-900 hover:text-white"
+            disabled={parsing}
+            className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer disabled:opacity-50"
           >
-            Upload File
+            <Paperclip size={13} />
+            <span>{parsing ? "Parsing..." : "Upload File"}</span>
           </button>
           <button
             type="button"
             onClick={() => setText(sampleResumeTexts[role] || "")}
-            className="rounded-none border border-black px-6 py-3 hover:bg-zinc-900 hover:text-white"
+            disabled={parsing}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-white/20 transition-all cursor-pointer disabled:opacity-50"
           >
-            Load Sample
+            <FileText size={13} />
+            <span>Load Sample</span>
           </button>
           <button
             type="button"
             onClick={run}
-            disabled={!text.trim() || busy}
-            className="rounded-none bg-zinc-900 px-6 py-3 text-white hover:bg-black disabled:opacity-30"
+            disabled={!text.trim() || busy || parsing}
+            className="ml-auto rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-bg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer shadow-xs"
           >
-            {busy ? "Analyzing…" : "Analyze"}
+            {busy ? "Analyzing..." : "Analyze Match"}
           </button>
         </div>
+
+        {statusAnnouncement && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="mt-3 rounded-lg border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent"
+          >
+            {statusAnnouncement}
+          </div>
+        )}
       </div>
 
       {/* ── Right: match score ─────────────────────────────────── */}
-      <div className="p-8">
+      <div className="p-6 sm:p-8">
         {error ? (
-          <p className="border-l-2 border-black pl-4 text-sm leading-relaxed text-red-700">
+          <div
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-xs leading-relaxed text-danger"
+          >
             {error}
-          </p>
+          </div>
         ) : !result ? (
-          <p className="text-xs font-black uppercase tracking-widest text-zinc-400">
-            {busy ? "Analyzing…" : "No analysis yet"}
-          </p>
+          <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
+            <BarChart3 size={32} className="text-ink/30 mb-2" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink/40">
+              {busy ? "Analyzing skills against market data..." : "No analysis yet"}
+            </p>
+            <p className="mt-1 text-xs text-ink/50 max-w-xs">
+              Paste your resume or click &quot;Load Sample&quot; and hit &quot;Analyze Match&quot; to inspect your ATS skill fit.
+            </p>
+          </div>
         ) : (
-          <div className="space-y-8">
-            <div>
-              <p className="mb-2 text-xs font-black uppercase tracking-widest">
-                Match Score
+          <div className="space-y-6">
+            {/* Score Banner */}
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xs">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink/50">
+                Market Match Score
               </p>
-              <p className="text-6xl font-black leading-none tabular-nums">
-                {result.score}
-                <span className="text-2xl text-zinc-400">/100</span>
-              </p>
-              <p className="mt-2 text-xs font-black uppercase tracking-widest">
-                {verdict(result.score)}
-              </p>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="font-sans text-5xl font-extrabold text-ink tabular-nums">
+                  {result.score}
+                </span>
+                <span className="text-lg text-ink/40">/100</span>
+                <span className="ml-auto rounded-full bg-accent/15 border border-accent/30 px-3 py-1 text-xs font-bold text-accent">
+                  {verdict(result.score)}
+                </span>
+              </div>
             </div>
 
+            {/* Matched Skills */}
             <div>
-              <p className="mb-3 text-xs font-black uppercase tracking-widest">
-                Matched · {result.matchedSkills.length}
-              </p>
-              <p className="text-sm leading-relaxed">
-                {result.matchedSkills.join(", ") || "None detected."}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-success">
+                  Matched Skills ({result.matchedSkills.length})
+                </p>
+              </div>
+              {result.matchedSkills.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {result.matchedSkills.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success"
+                    >
+                      <Check size={11} strokeWidth={2.5} />
+                      <span>{s}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-ink/50">None detected.</p>
+              )}
             </div>
 
+            {/* Missing Skills */}
             <div>
-              <p className="mb-3 text-xs font-black uppercase tracking-widest">
-                Missing · {result.missingSkills.length}
-              </p>
-              <p className="text-sm leading-relaxed">
-                {result.missingSkills.join(", ") || "None — full coverage."}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-danger">
+                  Missing Skills ({result.missingSkills.length})
+                </p>
+              </div>
+              {result.missingSkills.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {result.missingSkills.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-1 text-xs font-medium text-danger"
+                    >
+                      + {s}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-success font-medium">Full skill coverage detected!</p>
+              )}
             </div>
 
-            <div>
-              <p className="mb-3 text-xs font-black uppercase tracking-widest">
-                Recommendations
-              </p>
-              <ul className="space-y-3">
-                {result.suggestions.map((s, i) => (
-                  <li key={i} className="border-l-2 border-black pl-4 text-sm leading-relaxed">
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Recommendations */}
+            {result.suggestions.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink/60">
+                  Targeted Suggestions
+                </p>
+                <ul className="space-y-2">
+                  {result.suggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-ink/80"
+                    >
+                      <Lightbulb size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>

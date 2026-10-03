@@ -13,12 +13,13 @@ export interface RoleOption {
 }
 
 export interface User {
+  id?: string;
   name: string;
   email: string;
   phone?: string;
   picture?: string;
   avatarUrl?: string;
-  authProvider?: "email" | "google" | "github" | "phone";
+  authProvider?: "email" | "google" | "github" | "phone" | "guest";
   targetRole: RoleId | null;
   /** Supabase DB row id — null when DB is not configured */
   dbId?: string | null;

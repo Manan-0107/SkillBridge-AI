@@ -2,6 +2,7 @@ export type GoogleProfile = {
   name: string;
   email: string;
   picture?: string;
+  accessToken?: string;
 };
 
 declare global {
@@ -97,6 +98,7 @@ export async function requestGoogleProfile(): Promise<GoogleProfile> {
             name: profile.name || String(profile.email).split("@")[0],
             email: profile.email,
             picture: profile.picture,
+            accessToken: resp.access_token,
           });
         } catch (e) {
           reject(e instanceof Error ? e : new Error("Could not finish Google sign-in."));

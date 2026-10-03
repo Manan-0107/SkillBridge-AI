@@ -9,13 +9,38 @@ import { PracticeHub } from "@/components/practice/PracticeHub";
 import { LocalOpportunities } from "@/components/local/LocalOpportunities";
 import { roleOptions } from "@/lib/data";
 import { useApp } from "@/lib/store";
+import { Bot, Map, Code2, FileText, Briefcase, BookOpen, ChevronDown } from "lucide-react";
 
-const copy: Record<FeatureId, { eyebrow: string; title: string }> = {
-  resume: { eyebrow: "Resume", title: "Resume suite" },
-  roadmap: { eyebrow: "Path", title: "Career roadmap" },
-  courses: { eyebrow: "Learn", title: "Curated courses" },
-  practice: { eyebrow: "Drill", title: "Practice hub" },
-  local: { eyebrow: "Nearby", title: "Local opportunities" },
+const featureMeta: Record<FeatureId, {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+}> = {
+  resume: {
+    icon: <FileText size={16} strokeWidth={2} />,
+    label: "Resume Suite",
+    description: "Build, analyze, and tailor your resume for any role",
+  },
+  roadmap: {
+    icon: <Map size={16} strokeWidth={2} />,
+    label: "Career Roadmap",
+    description: "Phased skill milestones from beginner to role-ready",
+  },
+  courses: {
+    icon: <BookOpen size={16} strokeWidth={2} />,
+    label: "Curated Learning",
+    description: "Curated courses, books, and certifications for your track",
+  },
+  practice: {
+    icon: <Code2 size={16} strokeWidth={2} />,
+    label: "Technical Practice",
+    description: "Interactive coding drills and mock interview prep",
+  },
+  local: {
+    icon: <Briefcase size={16} strokeWidth={2} />,
+    label: "Job Discovery",
+    description: "Live openings, remote positions, and real-time alerts",
+  },
 };
 
 export function Workspace({
@@ -26,38 +51,17 @@ export function Workspace({
   resumeTab?: ResumeTab;
 }) {
   const { user, setTargetRole } = useApp();
-  const role: RoleId = user?.targetRole ?? "frontend";
-  const heading = copy[feature];
+  const role: RoleId =
+    user?.targetRole && roleOptions.some((r) => r.id === user.targetRole)
+      ? (user.targetRole as RoleId)
+      : "frontend";
+
+  const meta = featureMeta[feature];
 
   return (
-    <div className="min-h-[calc(100vh-4.25rem)]">
-      <div className="border-b border-line py-10">
-        <div className="app-shell flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-graphite">
-              {heading.eyebrow}
-            </p>
-            <h1 className="mt-2 font-display text-3xl italic text-ink md:text-4xl">
-              {heading.title}
-            </h1>
-          </div>
-          <label className="flex items-center gap-2 text-[13px] text-graphite">
-            Target role
-            <select
-              value={role}
-              onChange={(e) => setTargetRole(e.target.value as RoleId)}
-              className="rounded-md border border-line bg-white px-2.5 py-1.5 text-sm text-ink"
-            >
-              {roleOptions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
+    <div className="min-h-[calc(100vh-3rem)] bg-bg text-ink selection:bg-surface relative">
 
+      {/* Feature content */}
       {feature === "resume" && (
         <ResumeSuite role={role} initialTab={resumeTab ?? "analyzer"} />
       )}

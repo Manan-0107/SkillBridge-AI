@@ -19,6 +19,12 @@ const VOICE_CHECKED_KEY = "careerforge_voice_checked";
 const ACCESS_PREFS_KEY = "careerforge_access_prefs";
 const USER_SKILLS_KEY = "careerforge_user_skills";
 const LOCATION_KEY = "careerforge_location";
+export const ACCESSIBILITY_PROFILE_KEY = "careerforge_accessibility_profile";
+export const VOICE_CONSENT_KEY = "careerforge_voice_consent_status";
+
+export type AccessibilityProfile = "blind_low_vision" | "deaf_hard_of_hearing" | "standard";
+export type VoiceConsentStatus = "granted" | "denied" | "not_requested";
+
 export interface AccessibilityPreferences {
   interactionMode: "voice" | "text" | "hybrid";
   speechOutput: boolean;
@@ -53,6 +59,7 @@ interface AppState {
     name: string,
     email: string,
     picture?: string,
+    accessToken?: string,
   ) => Promise<void>;
   signInWithGithub: (
     name: string,
@@ -63,6 +70,10 @@ interface AppState {
   signOut: () => void;
   setTargetRole: (role: RoleId) => void;
   // ─── Voice & Accessibility Mode State ──────────────────────────────────────
+  accessibilityProfile: AccessibilityProfile;
+  setAccessibilityProfile: (profile: AccessibilityProfile) => void;
+  voiceConsentStatus: VoiceConsentStatus;
+  setVoiceConsentStatus: (status: VoiceConsentStatus) => void;
   voiceMode: boolean;
   voiceLanguage: string;
   speechProvider: SpeechProviderType;
@@ -134,23 +145,130 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeResumeText, setActiveResumeTextState] = useState<string | null>(
     null,
   );
+  const [accessibilityProfile, setAccessibilityProfileState] =
+    useState<AccessibilityProfile>("standard");
+  const [voiceConsentStatus, setVoiceConsentStatusState] =
+    useState<VoiceConsentStatus>("not_requested");
 
-  // Hydrate from the server (replaces the old localStorage bootstrap).
+  const setAccessibilityProfile = (profile: AccessibilityProfile) => {
+    setAccessibilityProfileState(profile);
+    try {
+      window.localStorage.setItem(ACCESSIBILITY_PROFILE_KEY, profile);
+    } catch {}
+  };
+
+  const setVoiceConsentStatus = (status: VoiceConsentStatus) => {
+    setVoiceConsentStatusState(status);
+    try {
+      window.localStorage.setItem(VOICE_CONSENT_KEY, status);
+    } catch {}
+  };
+
+  // Hydrate instantly from localStorage, then sync with server in background
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      let serverSuccess = false;
+    // Step 1: Immediately restore from localStorage synchronously so UI renders with zero delay
+    try {
+      const prof = window.localStorage.getItem(ACCESSIBILITY_PROFILE_KEY);
+      if (prof) setAccessibilityProfileState(prof as AccessibilityProfile);
 
+      const vcs = window.localStorage.getItem(VOICE_CONSENT_KEY);
+      if (vcs) setVoiceConsentStatusState(vcs as VoiceConsentStatus);
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email) setUser(parsed);
+      }
+
+      const vm = window.localStorage.getItem(VOICE_MODE_KEY);
+      if (vm !== null) setVoiceModeState(vm === "true");
+
+      const vl = window.localStorage.getItem(VOICE_LANG_KEY);
+      if (vl) setVoiceLanguageState(vl);
+
+      const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
+      if (sp) setSpeechProviderState(sp as SpeechProviderType);
+
+      const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
+      if (vc !== null) setVoiceCheckedState(vc === "true");
+
+      const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
+      if (ap) setAccessibilityPrefsState(JSON.parse(ap));
+
+      const sk = window.localStorage.getItem(USER_SKILLS_KEY);
+      if (sk) setUserSkillsState(JSON.parse(sk));
+
+      const loc = window.localStorage.getItem(LOCATION_KEY);
+      if (loc) setCurrentLocationState(loc);
+    } catch {
+      // localStorage unavailable or restricted
+    }
+
+    // Set ready immediately on mount so the user never encounters a blank screen!
+    setReady(true);
+
+    // Step 2: Server-authoritative session sync with /api/auth/session & /api/user
+    (async () => {
       try {
-        const res = await fetch("/api/user", { credentials: "include" });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
+
+        // 1. Authoritative Session Check
+        const sessRes = await fetch("/api/auth/session", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        if (!sessRes.ok) {
+          // If server rejects session (401 / expired), strictly invalidate client state!
+          if (!cancelled) {
+            setUser(null);
+            try {
+              window.localStorage.removeItem(STORAGE_KEY);
+            } catch {}
+          }
+          clearTimeout(timeout);
+          return;
+        }
+
+        const sessionData = await sessRes.json();
+        if (sessionData.authenticated && sessionData.user) {
+          const authUser: User = {
+            id: sessionData.user.id,
+            name: sessionData.user.name || extractDisplayName(sessionData.user.email),
+            email: sessionData.user.email,
+            authProvider: sessionData.user.isGuest ? "guest" : "email",
+            targetRole: null,
+            dbId: sessionData.user.id,
+          };
+          if (!cancelled) {
+            setUser(authUser);
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+            } catch {}
+          }
+        }
+
+        // 2. Sync profile preferences
+        const res = await fetch("/api/user", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
         if (res.ok) {
           const { user: u, state } = (await res.json()) as {
             user: User | null;
             state: PersistedUserState | null;
           };
 
-          if (!cancelled && u) setUser(u);
+          if (!cancelled && u) {
+            setUser((prev) => ({ ...(prev || u), ...u }));
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+            } catch {}
+          }
           if (!cancelled && state) {
             setVoiceModeState(state.voiceMode);
             setVoiceLanguageState(state.voiceLanguage);
@@ -159,123 +277,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAccessibilityPrefsState(state.accessibilityPrefs);
             setUserSkillsState(state.userSkills);
             setCurrentLocationState(state.currentLocation);
-            serverSuccess = true;
           }
         }
       } catch {
-        // Server/DB unavailable — proceed to fallback
+        // Server fetch timed out or offline — safely using local state
       }
-
-      if (!cancelled && !serverSuccess) {
-        try {
-          const raw = window.localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            setUser(JSON.parse(raw));
-          } else {
-            const defaultCandidate: User = {
-              email: "alex.rivera@example.com",
-              name: "Alex Rivera",
-              targetRole: "frontend",
-            };
-            setUser(defaultCandidate);
-          }
-
-          const vm = window.localStorage.getItem(VOICE_MODE_KEY);
-          if (vm !== null) setVoiceModeState(vm === "true");
-
-          const vl = window.localStorage.getItem(VOICE_LANG_KEY);
-          if (vl) setVoiceLanguageState(vl);
-
-          const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
-          if (sp) setSpeechProviderState(sp as SpeechProviderType);
-
-          const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
-          if (vc !== null) setVoiceCheckedState(vc === "true");
-
-          const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
-          if (ap) setAccessibilityPrefsState(JSON.parse(ap));
-
-          const sk = window.localStorage.getItem(USER_SKILLS_KEY);
-          if (sk) setUserSkillsState(JSON.parse(sk));
-
-          const loc = window.localStorage.getItem(LOCATION_KEY);
-          if (loc) setCurrentLocationState(loc);
-        } catch {
-          // localStorage unavailable — proceed unauthenticated
-        }
-      }
-
-      if (!cancelled) setReady(true);
-    })();
-
-    (async () => {
-      let serverSuccess = false;
-
-      try {
-        const res = await fetch("/api/user", { credentials: "include" });
-        if (res.ok) {
-          const { user: u, state } = (await res.json()) as {
-            user: User | null;
-            state: PersistedUserState | null;
-          };
-
-          if (!cancelled && u) setUser(u);
-          if (!cancelled && state) {
-            setVoiceModeState(state.voiceMode);
-            setVoiceLanguageState(state.voiceLanguage);
-            setSpeechProviderState(state.speechProvider);
-            setVoiceCheckedState(state.voiceChecked);
-            setAccessibilityPrefsState(state.accessibilityPrefs);
-            setUserSkillsState(state.userSkills);
-            setCurrentLocationState(state.currentLocation);
-            serverSuccess = true;
-          }
-        }
-      } catch {
-        // Server/DB unavailable — proceed to fallback
-      }
-
-      // Fallback to localStorage if server fetch failed or returned no state
-      if (!cancelled && !serverSuccess) {
-        try {
-          const raw = window.localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            setUser(JSON.parse(raw));
-          } else {
-            const defaultCandidate: User = {
-              email: "alex.rivera@example.com",
-              name: "Alex Rivera",
-              targetRole: "frontend",
-            };
-            setUser(defaultCandidate);
-          }
-
-          const vm = window.localStorage.getItem(VOICE_MODE_KEY);
-          if (vm !== null) setVoiceModeState(vm === "true");
-
-          const vl = window.localStorage.getItem(VOICE_LANG_KEY);
-          if (vl) setVoiceLanguageState(vl);
-
-          const sp = window.localStorage.getItem(SPEECH_PROVIDER_KEY);
-          if (sp) setSpeechProviderState(sp as SpeechProviderType);
-
-          const vc = window.localStorage.getItem(VOICE_CHECKED_KEY);
-          if (vc !== null) setVoiceCheckedState(vc === "true");
-
-          const ap = window.localStorage.getItem(ACCESS_PREFS_KEY);
-          if (ap) setAccessibilityPrefsState(JSON.parse(ap));
-
-          const sk = window.localStorage.getItem(USER_SKILLS_KEY);
-          if (sk) setUserSkillsState(JSON.parse(sk));
-
-          const loc = window.localStorage.getItem(LOCATION_KEY);
-          if (loc) setCurrentLocationState(loc);
-        } catch {
-          // localStorage unavailable — proceed unauthenticated
-        }
-      }
-
-      if (!cancelled) setReady(true);
     })();
 
     return () => {
@@ -334,7 +340,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [accessibilityPrefs]);
 
   // Setters just update state; the debounced effect above syncs to /api/user.
-  const persist = (next: User | null) => setUser(next);
+  const persist = (next: User | null) => {
+    setUser(next);
+    try {
+      if (next) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } else {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {}
+  };
 
   const setVoiceMode = (active: boolean) => {
     setVoiceModeState(active);
@@ -367,107 +382,208 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /** Email sign-in / sign-up — upserts user to DB then persists locally. */
+  /** Server-Authoritative Email Sign-in / Sign-up */
   const signIn = async (email: string, name?: string) => {
-    const displayName = extractDisplayName(email, name);
-    // Immediately sign in locally so the UI responds instantly
+    const cleanEmail = email.trim().toLowerCase();
+    const displayName = extractDisplayName(cleanEmail, name);
+
+    // Guest Mode check: generate isolated guest server session
+    if (cleanEmail.startsWith("guest_") || cleanEmail.includes("@guest.")) {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ mode: "guest" }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.user) {
+          const guestUser: User = {
+            id: data.user.id,
+            name: data.user.name || displayName,
+            email: data.user.email,
+            authProvider: "guest",
+            targetRole: user?.targetRole ?? null,
+            dbId: data.user.id,
+          };
+          persist(guestUser);
+          return;
+        }
+      } catch (e) {
+        console.warn("[auth] Guest login sync failed:", e);
+      }
+    }
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name: displayName,
+          authProvider: "email",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || displayName,
+          email: data.user.email,
+          authProvider: "email",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] Server signin sync failed:", e);
+    }
+
     const localUser: User = {
       name: displayName,
-      email,
+      email: cleanEmail,
       authProvider: "email",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
-
-    // Persist to DB in the background (doesn't block the UI)
-    try {
-      const dbRow = await upsertUser({
-        email,
-        name: localUser.name,
-        authProvider: "email",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  /** Google sign-in — upserts Google profile to DB then persists locally. */
+  /** Server-Authoritative Google sign-in */
   const signInWithGoogle = async (
     name: string,
     email: string,
     picture?: string,
+    accessToken?: string,
   ) => {
-    const localUser: User = {
-      name,
-      email,
-      picture,
-      authProvider: "google",
-      targetRole: user?.targetRole ?? null,
-      dbId: null,
-    };
-    persist(localUser);
-
+    const cleanEmail = email.trim().toLowerCase();
     try {
-      const dbRow = await upsertUser({
-        email,
-        name,
-        picture,
-        authProvider: "google",
-        targetRole: localUser.targetRole ?? undefined,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name,
+          authProvider: "google",
+          picture,
+          accessToken,
+        }),
       });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || name,
+          email: data.user.email,
+          picture: data.user.picture || picture,
+          authProvider: "google",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
       }
+      throw new Error(data.message || data.error || "Google authentication failed on server.");
     } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
+      console.error("[auth] Google server signin error:", e);
+      throw e;
     }
   };
 
-  /** GitHub sign-in — upserts GitHub profile to DB then persists locally. */
+  /** Server-Authoritative GitHub sign-in */
   const signInWithGithub = async (
     name: string,
     email: string,
     picture?: string,
   ) => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "oauth",
+          email: cleanEmail,
+          name: name || cleanEmail.split("@")[0],
+          authProvider: "github",
+          picture,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || name,
+          email: data.user.email,
+          picture: data.user.picture || picture,
+          authProvider: "github",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] GitHub server signin failed:", e);
+    }
+
     const localUser: User = {
-      name: name || email.split("@")[0],
-      email,
+      name: name || cleanEmail.split("@")[0],
+      email: cleanEmail,
       picture,
       authProvider: "github",
       targetRole: user?.targetRole ?? null,
       dbId: null,
     };
     persist(localUser);
-
-    try {
-      const dbRow = await upsertUser({
-        email,
-        name: localUser.name,
-        picture,
-        authProvider: "github",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  /** Phone sign-in — upserts phone user to DB then persists locally. */
+  /** Server-Authoritative Phone sign-in */
   const signInWithPhone = async (phone: string, name?: string) => {
     const cleanPhone = phone.trim();
     const formattedEmail = `${cleanPhone.replace(/[^0-9]/g, "")}@phone.careerforge.io`;
+    const displayName = name || `User (${cleanPhone})`;
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "phone",
+          email: formattedEmail,
+          name: displayName,
+          authProvider: "phone",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const authUser: User = {
+          id: data.user.id,
+          name: data.user.name || displayName,
+          email: data.user.email,
+          phone: cleanPhone,
+          authProvider: "phone",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(authUser);
+        return;
+      }
+    } catch (e) {
+      console.warn("[auth] Phone server signin failed:", e);
+    }
+
     const localUser: User = {
-      name: name || `User (${cleanPhone})`,
+      name: displayName,
       email: formattedEmail,
       phone: cleanPhone,
       authProvider: "phone",
@@ -475,33 +591,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbId: null,
     };
     persist(localUser);
-
-    try {
-      const dbRow = await upsertUser({
-        email: formattedEmail,
-        name: localUser.name,
-        phone: cleanPhone,
-        authProvider: "phone",
-        targetRole: localUser.targetRole ?? undefined,
-      });
-      if (dbRow?.id) {
-        const updated = { ...localUser, dbId: dbRow.id };
-        persist(updated);
-      }
-    } catch (e) {
-      console.warn("[auth] DB upsert failed:", e);
-    }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/user", { method: "DELETE", credentials: "include" });
+    } catch {}
     persist(null);
-    fetch("/api/user", { method: "DELETE", credentials: "include" }).catch(
-      () => {},
-    );
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
   };
 
   const setTargetRole = (role: RoleId) => {
     if (!user) return;
+    if ((role as any) === "__SKIPPED__" || (role as any) === "__DONT_KNOW__") return;
     const updated = { ...user, targetRole: role };
     persist(updated);
     // Sync role to DB
@@ -532,6 +640,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         signInWithPhone,
         signOut,
         setTargetRole,
+        accessibilityProfile,
+        setAccessibilityProfile,
+        voiceConsentStatus,
+        setVoiceConsentStatus,
         voiceMode,
         voiceLanguage,
         speechProvider,

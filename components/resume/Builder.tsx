@@ -3,6 +3,7 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
 import { atsTemplates, AtsTemplate } from "@/lib/templates";
+import { Check, Eye, FileText } from "lucide-react";
 
 interface ExperienceItem {
   id: string;
@@ -108,16 +109,15 @@ const popularSkills = [
 ];
 
 const colorPalettes = [
-  { id: "black", label: "Monochrome ATS", hex: "#111827", bgLight: "#F3F4F6", text: "#111827" },
-  { id: "navy", label: "Midnight Navy", hex: "#1E3A8A", bgLight: "#EFF6FF", text: "#1E3A8A" },
-  { id: "emerald", label: "Forest Emerald", hex: "#065F46", bgLight: "#ECFDF5", text: "#065F46" },
-  { id: "indigo", label: "Royal Indigo", hex: "#4338CA", bgLight: "#EEF2FF", text: "#4338CA" },
-  { id: "crimson", label: "Classic Crimson", hex: "#991B1B", bgLight: "#FEF2F2", text: "#991B1B" },
+  { id: "black", label: "Monochrome ATS", hex: "var(--color-ink)", bgLight: "var(--color-surface)", text: "var(--color-ink)" },
+  { id: "accent", label: "Warm Terracotta", hex: "var(--color-accent)", bgLight: "var(--color-surface)", text: "var(--color-accent)" },
+  { id: "info", label: "Deep Slate", hex: "var(--color-info)", bgLight: "var(--color-surface)", text: "var(--color-info)" },
+  { id: "success", label: "Muted Forest", hex: "var(--color-success)", bgLight: "var(--color-surface)", text: "var(--color-success)" },
+  { id: "danger", label: "Rust Crimson", hex: "var(--color-danger)", bgLight: "var(--color-surface)", text: "var(--color-danger)" },
 ];
 
 const fontOptions = [
   { id: "sans", label: "Inter (Modern Sans)", className: "font-sans" },
-  { id: "serif", label: "Merriweather (Ivy Serif)", className: "font-serif" },
   { id: "mono", label: "JetBrains Mono (Technical)", className: "font-mono" },
 ];
 
@@ -162,7 +162,7 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
     if (initialSummary) {
       setSummary(initialSummary);
       setActiveTab("intermediate");
-      showToast("✓ Tailored content loaded into Intermediate Editor!");
+      showToast("Tailored content loaded into Intermediate Editor!");
     }
   }, [initialSummary]);
 
@@ -203,7 +203,7 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
       const fallback = colorPalettes.find((c) => currentTemplate.supportedColors.includes(c.id)) || colorPalettes[0];
       setSelectedColor(fallback);
     }
-  }, [selectedTemplate, currentTemplate]);
+  }, [selectedTemplate, currentTemplate, selectedColor.id]);
 
   // Dedicated Print / Download PDF Handler (Ensuring 1-Page PDF output)
   const handleDownloadPdf = () => {
@@ -392,7 +392,7 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
       a.download = `${fullName.toLowerCase().replace(/\s+/g, "_")}_resume.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast("✓ JSONResume exported successfully!");
+      showToast("JSONResume exported successfully!");
     } catch (e) {
       console.error(e);
       showToast("Could not export JSONResume file.");
@@ -456,7 +456,7 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
             const allSkills = json.skills.map((s: { keywords?: string[] }) => (s.keywords || []).join(", ")).filter(Boolean).join(", ");
             if (allSkills) setSkills(allSkills);
           }
-          showToast("✓ Successfully imported JSONResume data!");
+          showToast("Successfully imported JSONResume data!");
         } catch {
           showToast("Error parsing JSONResume file. Please check format.");
         }
@@ -561,7 +561,7 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           </GhostButton>
 
           <GhostButton type="button" onClick={copyAsText} className="text-xs bg-white">
-            {copied ? "✓ Copied!" : "Copy Text"}
+            {copied ? "Copied!" : "Copy Text"}
           </GhostButton>
 
           <PrimaryButton type="button" onClick={handleDownloadPdf} className="text-xs gap-1.5 shadow-sm">
@@ -580,8 +580,8 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           {/* Section Navigation Tabs */}
           <div className="flex overflow-x-auto rounded-lg border border-line bg-white/70 p-1 text-xs gap-1">
             {[
-              { id: "layout", label: "🎨 ATS Layout & Themes" },
-              { id: "intermediate", label: "📝 Intermediate Data Override" },
+              { id: "layout", label: "ATS Layout & Themes" },
+              { id: "intermediate", label: "Intermediate Data Override" },
               { id: "personal", label: "1. Personal" },
               { id: "experience", label: `2. Experience (${experiences.length})` },
               { id: "education", label: `3. Education (${educations.length})` },
@@ -620,9 +620,10 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <PrimaryButton
                   type="button"
                   onClick={handleDownloadPdf}
-                  className="text-xs py-1.5 px-3"
+                  className="text-xs py-1.5 px-3 flex items-center gap-1.5"
                 >
-                  ✓ Approve &amp; Download PDF
+                  <Check size={13} strokeWidth={2.5} />
+                  <span>Approve &amp; Download PDF</span>
                 </PrimaryButton>
               </div>
 
@@ -929,18 +930,18 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <p className="text-xs font-bold text-neutral-800">
                   ATS Scanner Compliance Guarantee
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600">
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-ink/75">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-600 font-bold">✓</span> Workday Verified
+                    <Check size={12} className="text-emerald-400 font-bold" /> Workday Verified
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-600 font-bold">✓</span> Greenhouse Verified
+                    <Check size={12} className="text-emerald-400 font-bold" /> Greenhouse Verified
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-600 font-bold">✓</span> Lever Verified
+                    <Check size={12} className="text-emerald-400 font-bold" /> Lever Verified
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-600 font-bold">✓</span> Taleo / iCIMS Verified
+                    <Check size={12} className="text-emerald-400 font-bold" /> Taleo / iCIMS Verified
                   </div>
                 </div>
               </div>
@@ -1458,13 +1459,15 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
             </div>
             <div className="flex items-center gap-2">
               {isDemo && (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">
-                  👁 Demo Preview
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/30">
+                  <Eye size={11} />
+                  <span>Demo Preview</span>
                 </span>
               )}
               {fitToOnePage && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                  📄 1-Page Locked
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                  <FileText size={11} />
+                  <span>1-Page Locked</span>
                 </span>
               )}
               <button

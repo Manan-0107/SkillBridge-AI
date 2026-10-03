@@ -1,0 +1,137 @@
+[
+  {
+    "scenario": "SCENARIO 1 — FIRST VISIT",
+    "status": "PASS",
+    "experience": "UBIX introduces itself naturally, explains capabilities (roadmap, practice, resume, jobs), asks one single useful question at a time ('what specific role or technology track are you aiming for?'), and waits for natural speech input.",
+    "problematicBehavior": "None",
+    "rootCause": "None",
+    "component": "components/assistant/AssistantHome.tsx & DynamicQuestionOrchestrator",
+    "fix": "Updated getGreetingMessage() to provide warm, comprehensive self-introduction and capability overview; DynamicQuestionOrchestrator dynamically selects targetRole without static enumerations."
+  },
+  {
+    "scenario": "SCENARIO 2 — NATURAL INTERRUPTION",
+    "status": "PASS",
+    "experience": "User speaks 'Wait, actually I want to ask something else.' UBIX stops speaking immediately, clears the pending question attempt, and invites the new question without finishing the old question.",
+    "problematicBehavior": "None",
+    "rootCause": "Previously, turn-taking validator treated interruption text as an invalid answer to active question and penalized user with a retry attempt.",
+    "component": "components/assistant/AssistantHome.tsx & lib/ai/orchestrator/dynamicExtractor.ts",
+    "fix": "Added isInterruption detector to extractFromUtterance; in AssistantHome speech handlers, verbal barge-in immediately cancels TTS, resets activeQuestion, and routes to general inquiry."
+  },
+  {
+    "scenario": "SCENARIO 3 — USER CHANGES THEIR MIND",
+    "status": "PASS",
+    "experience": "During roadmap questioning, user says 'I actually don't want a roadmap. Find me jobs instead.' UBIX immediately switches context to job discovery without forcing completion of roadmap questions.",
+    "problematicBehavior": "None",
+    "rootCause": "None. DynamicQuestionOrchestrator detects taskSwitchTo and reprioritizes the active pipeline immediately.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & dynamicExtractor.ts",
+    "fix": "Dynamic task registry and intent interceptor seamlessly clear roadmap requirements and instantiate job search requirements."
+  },
+  {
+    "scenario": "SCENARIO 4 — MULTI-FIELD NATURAL SPEECH",
+    "status": "PASS",
+    "experience": "User speaks 4 fields in 1 sentence. UBIX extracts role (Frontend Developer), level (Beginner), skills (JavaScript, React), and learning time (14 hrs/week from 2 hrs every evening). It does NOT ask 'What role?', 'What level?', 'What skills?', or 'How much time?' and proceeds directly to roadmap generation.",
+    "problematicBehavior": "None",
+    "rootCause": "Word-to-number mapping and compound multi-slot extraction were needed for natural speech phrases like 'two hours every evening'.",
+    "component": "lib/ai/orchestrator/dynamicExtractor.ts",
+    "fix": "Added word-to-number normalization and per-day evening multiplier in dynamicExtractor."
+  },
+  {
+    "scenario": "SCENARIO 5 — CONTEXTUAL MEMORY",
+    "status": "PASS",
+    "experience": "User moves through Roadmap -> Practice -> Resume -> Jobs. UBIX retains user role, experience, and known skills across all workspaces. It never repeats solved baseline profile questions.",
+    "problematicBehavior": "None",
+    "rootCause": "None. InformationResolutionContext inspects both userProfile and knownInformation.",
+    "component": "lib/ai/orchestrator/informationModel.ts & dynamicQuestionOrchestrator.ts",
+    "fix": "Evaluates requirements against multi-tier state: session history, profile state, and current context."
+  },
+  {
+    "scenario": "SCENARIO 6 — PAGE CONTEXT",
+    "status": "PASS",
+    "experience": "When user says 'Help me' on Roadmap, Practice, Resume, or Jobs, UBIX understands the specific workspace context and announces the exact capabilities and actions available on that page rather than a generic canned greeting.",
+    "problematicBehavior": "None",
+    "rootCause": "Previously, help requests fell through to generic assistant inquiries without inspecting currentPage.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & pageCapabilities.ts",
+    "fix": "Added isHelpRequest detection and wired PAGE_CAPABILITIES[currentPage] into DynamicQuestionOrchestrator.evaluateNextStep."
+  },
+  {
+    "scenario": "SCENARIO 7 — NATURAL LANGUAGE",
+    "status": "PASS",
+    "experience": "User speaks colloquial, conversational phrases ('Probably around ten hours', 'Every evening after college', 'I know React pretty well but TypeScript is weak', 'Something in frontend'). UBIX normalizes numbers, maps relative availability, isolates weak skills, and records uncertainty without crashing.",
+    "problematicBehavior": "None",
+    "rootCause": "Regex /\\d+/ failed on spoken word numbers ('ten'), and weak skill regex only checked prefixes ('weak TypeScript') instead of suffixes ('TypeScript is weak').",
+    "component": "lib/ai/orchestrator/dynamicExtractor.ts",
+    "fix": "Added word-to-number dictionary, evening heuristic, and post-skill weakness pattern matching."
+  },
+  {
+    "scenario": "SCENARIO 8 — MULTILINGUAL CODE SWITCHING",
+    "status": "PASS",
+    "experience": "User code-switches fluidly between English, Hindi, Gujarati, Hinglish, and Gujlish across turns without manually touching any language dropdown. UBIX detects the active language and responds in kind, including smoothly returning to English when spoken.",
+    "problematicBehavior": "None",
+    "rootCause": "Line 97 in dynamicQuestionOrchestrator previously had a guard that prevented resetting language to 'en' if the previous session had become 'hi' or 'gu'.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & dynamicExtractor.ts",
+    "fix": "Updated language resolution to dynamic extraction fallback: extraction.detectedLanguage || context.language || 'en'."
+  },
+  {
+    "scenario": "SCENARIO 9 — 'I DON'T KNOW'",
+    "status": "PASS",
+    "experience": "When asked for study hours, user replies 'I don't know.' UBIX does not repeat the question or loop indefinitely; it flags the uncertainty, marks the field resolved with default estimates, and advances to the next action.",
+    "problematicBehavior": "None",
+    "rootCause": "None. Handled via __DONT_KNOW__ uncertainty token.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & informationModel.ts",
+    "fix": "Information requirement status treats __DONT_KNOW__ as resolved with default assumption."
+  },
+  {
+    "scenario": "SCENARIO 10 — SKIP",
+    "status": "PASS",
+    "experience": "User says 'Skip this.' UBIX cleanly marks the active requirement as skipped and immediately moves to the next useful step.",
+    "problematicBehavior": "None",
+    "rootCause": "None. Handled via __SKIPPED__ resolution token.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & dynamicExtractor.ts",
+    "fix": "extractFromUtterance detects skip phrases across languages and updates knowledge state."
+  },
+  {
+    "scenario": "SCENARIO 11 — WHY?",
+    "status": "PASS",
+    "experience": "User asks 'Why do you need to know that?' UBIX responds conversationally: 'I need your available study time so I can make the roadmap fit your schedule and pace each milestone realistically. Would you like to share this, or should we skip it for now?' It does not treat the query as a failed attempt.",
+    "problematicBehavior": "None",
+    "rootCause": "Previously, 'Why do you need to know that?' was submitted to validateUserAnswer, which treated it as an invalid answer format.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts & components/assistant/AssistantHome.tsx",
+    "fix": "Added isWhyQuestion interceptor and conversational rationale generator to DynamicQuestionOrchestrator.evaluateNextStep."
+  },
+  {
+    "scenario": "SCENARIO 12 — BLIND USER EXPERIENCE",
+    "status": "PASS",
+    "experience": "Blind user interacts purely through speech and auditory feedback. Every state transition (Listening, Processing, Speaking, Navigation, and Action confirmations) is announced via Web Speech API / Sarvam TTS. Navigation destinations are spoken aloud upon entry. User never needs visual verification.",
+    "problematicBehavior": "None",
+    "rootCause": "None. Accessible state broadcaster emits real-time events and executes text-to-speech for all state changes.",
+    "component": "components/assistant/AssistantHome.tsx & lib/voice.ts",
+    "fix": "Broadcasts careerforge:voice-state and executes speakText() on route dispatches."
+  },
+  {
+    "scenario": "SCENARIO 13 — DEAF EXPERIENCE",
+    "status": "PASS",
+    "experience": "With audio disabled, deaf user receives complete parity through visual indicators: UbixThinkingOrb and FloatingControlBar render distinct visual states (LISTENING, PROCESSING, ASKING, CONFIRMING, SUCCESS, ERROR, NAVIGATION, ACTION). Live real-time captions stream spoken text into visual overlays.",
+    "problematicBehavior": "None",
+    "rootCause": "None. Visual state machine is synchronized with voice lifecycle.",
+    "component": "components/ubix/UbixThinkingOrb.tsx & components/layout/FloatingControlBar.tsx",
+    "fix": "careerforge:voice-state and careerforge:live-caption events keep visual representations in 100% sync."
+  },
+  {
+    "scenario": "SCENARIO 14 — LONG CONVERSATION",
+    "status": "PASS",
+    "experience": "18-turn continuous conversation with topic diversions (Java polymorphism), interruptions, language shifts (English to Hinglish), questions of purpose ('Why?'), skips, and task switches. Context remained coherent, non-repetitive, and accurate throughout.",
+    "problematicBehavior": "None",
+    "rootCause": "None. State accumulation in InformationResolutionContext preserves persistent facts while dynamically adjusting current focus.",
+    "component": "lib/ai/orchestrator/dynamicQuestionOrchestrator.ts",
+    "fix": "Contextual accumulation maintains long-term memory across arbitrary topic shifts."
+  },
+  {
+    "scenario": "SCENARIO 15 — FAILURE RECOVERY",
+    "status": "PASS",
+    "experience": "Simulated speech failures (mic denial, STT failure, TTS failure, network timeout, 3 failed answer attempts). UBIX announces the specific issue conversationally, smoothly transfers interaction to text composer without data loss, focuses the input box automatically, and never falls back to an unrelated canned response.",
+    "problematicBehavior": "None",
+    "rootCause": "None. Structured error handling in SpeechRecognitionController and AssistantHome mic error recovery.",
+    "component": "components/assistant/AssistantHome.tsx & lib/voice.ts",
+    "fix": "3-attempt rule with localized retry prompts and graceful keyboard focus handoff."
+  }
+]

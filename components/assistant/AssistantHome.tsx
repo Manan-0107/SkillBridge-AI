@@ -1,10 +1,19 @@
 "use client";
 
 import { FormEvent, useRef, useState, useEffect, ChangeEvent, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { useApp } from "@/lib/store";
 import { FeatureId, ResumeTab, ParsedIntent } from "@/lib/intent";
-import { speakText, stopSpeaking, detectTextLanguage } from "@/lib/voice";
-import { useSharedTranscript, requestSharedVoiceStart } from "@/hooks/useSharedTranscript";
+import {
+  speakText,
+  stopSpeaking,
+  startSpeechRecognition,
+  SpeechRecognitionController,
+  isSpeechRecognitionSupported,
+  normalizeSpokenEmail,
+  detectTextLanguage,
+  setGlobalVoiceLanguage,
+} from "@/lib/voice";
 import { LANGUAGE_LIST, getSupportedLanguage } from "@/lib/speech/languages";
 import { SpeechProviderType, QuestionState, ExpectedAnswerType, VoiceState, AnswerType } from "@/lib/speech/types";
 import {
@@ -14,7 +23,20 @@ import {
 } from "@/lib/speech/questionFlow";
 import { extractAnswerFromTranscript } from "@/lib/speech/answerExtractor";
 import { getResumeStepPrompt } from "@/lib/conversationalResume";
+import { DynamicQuestionOrchestrator, extractFromUtterance } from "@/lib/ai/orchestrator";
 import { ShareModal } from "./ShareModal";
+import { CareerContextPanel } from "./CareerContextPanel";
+import dynamic from "next/dynamic";
+import { UbixThinkingOrb } from "@/components/ubix/UbixThinkingOrb";
+import { UbixBorderBeam } from "@/components/ubix/UbixBorderBeam";
+
+const UbixAtmosphere = dynamic(
+  () =>
+    import("@/components/ubix/UbixAtmosphere").then(
+      (mod) => mod.UbixAtmosphere
+    ),
+  { ssr: false }
+);
 
 export type Msg = {
   id: string;
@@ -25,6 +47,9 @@ export type Msg = {
   intent?: ParsedIntent;
   redirecting?: boolean;
   engine?: string;
+  isFallback?: boolean;
+  note?: string;
+  thinking?: string[];
 };
 
 export interface Conversation {
@@ -36,6 +61,8 @@ export interface Conversation {
   pinned?: boolean;
   archived?: boolean;
 }
+
+
 
 const STORAGE_KEY = "careerforge.conversations";
 
@@ -51,6 +78,19 @@ const quickPills = [
   { label: "Portfolio project ideas", prompt: "Give me standout production project ideas for my portfolio" },
 ];
 
+export type VoiceStatusState =
+  | "idle"
+  | "initializing"
+  | "ready"
+  | "listening"
+  | "processing"
+  | "speaking"
+  | "waiting_for_answer"
+  | "saving_answer"
+  | "navigating"
+  | "error"
+  | "recovering";
+
 export function AssistantHome({
   onRedirect,
 }: {
@@ -58,6 +98,7 @@ export function AssistantHome({
 }) {
   const {
     user,
+    signIn,
     setTargetRole,
     voiceMode,
     setVoiceMode,
@@ -73,7 +114,8 @@ export function AssistantHome({
   } = useApp();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"all" | "pinned" | "archived">("all");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,7 +130,8 @@ export function AssistantHome({
   } | null>(null);
   const [parsingDoc, setParsingDoc] = useState(false);
 
-  // ─── Voice & Silence Detection State ───────────────────────────────────────
+  // ─── Voice & Silence Detection State (7-State Machine) ─────────────────────
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatusState>("idle");
   const [listening, setListening] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [liveSpokenText, setLiveSpokenText] = useState<string | null>(null);
@@ -97,6 +140,7 @@ export function AssistantHome({
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   const [activeQuestion, setActiveQuestion] = useState<QuestionState | null>(null);
   const [textFallbackActive, setTextFallbackActive] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   // Share & Toast State
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -110,6 +154,7 @@ export function AssistantHome({
   const isAISpeakingRef = useRef(false);
   const activeQuestionRef = useRef<QuestionState | null>(null);
   activeQuestionRef.current = activeQuestion;
+  const speechControllerRef = useRef<SpeechRecognitionController | null>(null);
   const speechBaseTextRef = useRef<string>("");
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const silenceCountdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -135,6 +180,7 @@ export function AssistantHome({
   useEffect(() => {
     return () => {
       stopSpeaking();
+      speechControllerRef.current?.stop();
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (silenceCountdownIntervalRef.current) clearInterval(silenceCountdownIntervalRef.current);
     };
@@ -155,8 +201,18 @@ export function AssistantHome({
 
   const stopListening = useCallback(() => {
     clearSilenceTimers();
+    speechControllerRef.current?.stop();
     setListening(false);
+    setVoiceStatus((prev) => (prev === "error" || prev === "recovering" ? prev : "idle"));
   }, [clearSilenceTimers]);
+
+  const stopAllVoice = useCallback(() => {
+    stopSpeaking();
+    stopListening();
+    isAISpeakingRef.current = false;
+    setSpeakingMsgId(null);
+    setLiveSpokenText(null);
+  }, [stopListening]);
 
   const startSilenceAutoSendCountdown = useCallback(() => {
     clearSilenceTimers();
@@ -176,7 +232,11 @@ export function AssistantHome({
     // Auto-send when 3.5s silence is reached
     silenceTimerRef.current = setTimeout(() => {
       clearSilenceTimers();
+      if (speechControllerRef.current) {
+        speechControllerRef.current.stop();
+      }
       setListening(false);
+      setVoiceStatus("processing");
 
       const textToSend = inputRef.current.trim();
       if (textToSend) {
@@ -187,66 +247,141 @@ export function AssistantHome({
     }, 3500);
   }, [clearSilenceTimers]);
 
-  // Transcripts arrive from the one site-wide recogniser (VoiceContext), not a
-  // recogniser owned here — see hooks/useSharedTranscript.
-  const handleSharedTranscript = useCallback(
-    (transcript: string, isFinal: boolean) => {
-      if (!transcript) return;
-
-      const detected = detectTextLanguage(transcript);
-      if (detected && voiceLanguage === "auto" && detected !== voiceLang) {
-        setVoiceLang(detected);
-      }
-
-      // ── Verbal Barge-In Interruption Check ──
-      const lower = transcript.toLowerCase().trim();
-      if (
-        lower === "stop" ||
-        lower === "wait" ||
-        lower === "pause" ||
-        lower === "રોકો" ||
-        lower === "रुको" ||
-        lower === "arrête"
-      ) {
-        stopAllVoice();
-        return;
-      }
-
-      // ── Extract the clean answer based on the active question type ──
-      const currentQ = activeQuestionRef.current;
-      const targetType = currentQ?.answerType || currentQ?.expectedType || "free_text";
-      const langForExtraction = voiceLanguage !== "auto" ? voiceLanguage : detected || "en";
-      const extraction = extractAnswerFromTranscript(transcript, targetType, langForExtraction);
-      const cleanAnswer = extraction.extractedAnswer || transcript.trim();
-
-      setInput(cleanAnswer);
-      inputRef.current = cleanAnswer;
-
-      if (isFinal) startSilenceAutoSendCountdown();
-    },
-    [startSilenceAutoSendCountdown, voiceLang, voiceLanguage]
-  );
-
-  useSharedTranscript(handleSharedTranscript, listening);
-
   const startListening = useCallback(() => {
-    if (isAISpeakingRef.current || speakingMsgId || textFallbackActive) {
-      console.warn("[Voice Guard] Cannot start listening while AI is speaking or in text fallback mode.");
-      return;
+    // Barge-in: if AI is currently speaking, stop it immediately so user can talk
+    if (isAISpeakingRef.current || speakingMsgId) {
+      stopSpeaking();
+      isAISpeakingRef.current = false;
+      setSpeakingMsgId(null);
+      setLiveSpokenText(null);
     }
+
     setMicError(null);
     clearSilenceTimers();
-    setListening(true);
-    requestSharedVoiceStart();
-  }, [clearSilenceTimers, speakingMsgId, textFallbackActive]);
+    setTextFallbackActive(false);
+    setVoiceMode(true);
+    setVoiceStatus("initializing");
+
+    const controller = startSpeechRecognition({
+      lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      onTranscript: (transcript: string, isFinal?: boolean) => {
+        if (transcript) {
+          // Detect spoken language if auto mode is enabled
+          const detected = detectTextLanguage(transcript);
+          if (detected && voiceLanguage === "auto" && detected !== voiceLang) {
+            setVoiceLang(detected);
+            setVoiceLanguage(detected);
+            setGlobalVoiceLanguage(detected);
+          }
+
+          // ── Verbal Barge-In Interruption Check ──
+          const lower = transcript.toLowerCase().trim();
+          if (
+            lower === "stop" ||
+            lower === "wait" ||
+            lower === "pause" ||
+            lower === "રોકો" ||
+            lower === "रुको" ||
+            lower === "arrête"
+          ) {
+            stopAllVoice();
+            return;
+          }
+
+          // ── Verbal Interruption or Task Switch Check ──
+          const intentCheck = extractFromUtterance(transcript);
+          if (intentCheck.isInterruption || intentCheck.taskSwitchTo) {
+            if (isAISpeakingRef.current || speakingMsgId) {
+              stopSpeaking();
+              isAISpeakingRef.current = false;
+              setSpeakingMsgId(null);
+              setLiveSpokenText(null);
+            }
+            activeQuestionRef.current = null;
+            setActiveQuestion(null);
+          }
+
+          // ── Extract Answer or Preserve Raw Intent ──
+          let cleanAnswer = transcript.trim();
+          const currentQ = activeQuestionRef.current;
+          if (
+            currentQ &&
+            !intentCheck.isInterruption &&
+            !intentCheck.taskSwitchTo &&
+            !intentCheck.isWhyQuestion &&
+            !intentCheck.isSkip &&
+            !intentCheck.isUnknownOrDontKnow &&
+            !intentCheck.isHelpRequest
+          ) {
+            const targetType = currentQ?.answerType || currentQ?.expectedType || "free_text";
+            const langForExtraction = voiceLanguage !== "auto" ? voiceLanguage : detected || "en";
+            const extraction = extractAnswerFromTranscript(transcript, targetType, langForExtraction);
+            cleanAnswer = extraction.extractedAnswer || transcript.trim();
+          }
+
+          // ── Put Extracted / Intent Text into Existing Input Box ──
+          setInput(cleanAnswer);
+          inputRef.current = cleanAnswer;
+
+          if (isFinal) {
+            startSilenceAutoSendCountdown();
+          }
+        }
+      },
+      onListeningChange: (isList: boolean) => {
+        setListening(isList);
+        if (isList) {
+          setVoiceStatus("listening");
+        } else {
+          clearSilenceTimers();
+          setVoiceStatus((prev) => (prev === "error" || prev === "recovering" ? prev : "idle"));
+        }
+      },
+      onError: (err: string) => {
+        console.warn("[AssistantHome Mic Error]:", err);
+        setMicError(err);
+        setListening(false);
+        clearSilenceTimers();
+        setVoiceStatus("error");
+        // Transition to recovering, never stuck on listening
+        setTimeout(() => {
+          setVoiceStatus("recovering");
+          setTimeout(() => {
+            setVoiceStatus("idle");
+          }, 2000);
+        }, 1500);
+      },
+    });
+
+    if (!controller) {
+      setMicError("Microphone speech recognition is not supported in this browser.");
+      setListening(false);
+      setVoiceStatus("error");
+      setTimeout(() => {
+        setVoiceStatus("recovering");
+        setTimeout(() => setVoiceStatus("idle"), 2000);
+      }, 1500);
+      return;
+    }
+
+    speechControllerRef.current = controller;
+  }, [clearSilenceTimers, setVoiceLanguage, setVoiceMode, speakingMsgId, startSilenceAutoSendCountdown, stopAllVoice, voiceLang, voiceLanguage]);
 
   const toggleListening = useCallback(() => {
     if (listening) {
       stopListening();
     } else {
+      setTextFallbackActive(false);
+      if (isAISpeakingRef.current || speakingMsgId) {
+        stopSpeaking();
+        isAISpeakingRef.current = false;
+        setSpeakingMsgId(null);
+        setLiveSpokenText(null);
+      }
+      setVoiceMode(true);
       startListening();
     }
-  }, [listening, startListening, stopListening]);
+  }, [listening, setVoiceMode, speakingMsgId, startListening, stopListening]);
 
   // ─── Tab-Switch / Minimize Auto-Pause & Resume with Direct Question ──────────
   useEffect(() => {
@@ -287,12 +422,60 @@ export function AssistantHome({
     };
   }, [listening, voiceMode, voiceLang, resumeDraftState, accessibilityPrefs, startListening, stopListening]);
 
-  const stopAllVoice = () => {
-    stopSpeaking();
-    stopListening();
-    setSpeakingMsgId(null);
-    setLiveSpokenText(null);
-  };
+  // ─── Global FloatingControlBar / Alt+V Mic Toggle Sync ─────────────────────
+  useEffect(() => {
+    const handleToggleMic = (e: Event) => {
+      const customEvent = e as CustomEvent<{ active?: boolean }>;
+      if (customEvent.detail?.active === true) {
+        if (!listening) {
+          setTextFallbackActive(false);
+          setVoiceMode(true);
+          startListening();
+        }
+      } else if (customEvent.detail?.active === false) {
+        if (listening) {
+          stopListening();
+        }
+      } else {
+        toggleListening();
+      }
+    };
+
+    window.addEventListener("careerforge:toggle-mic", handleToggleMic);
+    return () => {
+      window.removeEventListener("careerforge:toggle-mic", handleToggleMic);
+    };
+  }, [listening, setVoiceMode, startListening, stopListening, toggleListening]);
+
+  // ─── Broadcast Assistant Voice State to FloatingControlBar & A11y Announcements ─
+  useEffect(() => {
+    const state: "idle" | "listening" | "processing" | "speaking" | "error" =
+      micError
+        ? "error"
+        : listening
+        ? "listening"
+        : busy
+        ? "processing"
+        : speakingMsgId || isAISpeakingRef.current
+        ? "speaking"
+        : "idle";
+
+    window.dispatchEvent(
+      new CustomEvent("careerforge:voice-state", {
+        detail: { state },
+      })
+    );
+  }, [listening, busy, speakingMsgId, micError]);
+
+  useEffect(() => {
+    if (liveSpokenText) {
+      window.dispatchEvent(
+        new CustomEvent("careerforge:live-caption", {
+          detail: { text: liveSpokenText, speaker: "ubix" },
+        })
+      );
+    }
+  }, [liveSpokenText]);
 
   const toggleSpeech = (msgId: string, text: string) => {
     if (speakingMsgId === msgId) {
@@ -369,25 +552,60 @@ export function AssistantHome({
     }
   };
 
+function generateChatTitle(prompt: string): string {
+  const p = prompt.trim();
+  const lower = p.toLowerCase();
+  
+  if (lower.includes("frontend") || lower.includes("front end")) return "Frontend Developer Roadmap";
+  if (lower.includes("backend") || lower.includes("back end")) return "Backend Development";
+  if (lower.includes("fullstack") || lower.includes("full stack")) return "Full-Stack Strategy";
+  if (lower.includes("resume") || lower.includes("cv")) return "Resume Improvement";
+  if (lower.includes("interview") || lower.includes("mock")) return "Interview Preparation";
+  if (lower.includes("salary") || lower.includes("compensation")) return "Salary Insights";
+  if (lower.includes("job") || lower.includes("career")) return "Career Planning";
+  if (lower.includes("polymorphism") || lower.includes("oop") || lower.includes("java")) return "Java Polymorphism";
+  if (lower.includes("react") || lower.includes("next")) return "React Architecture";
+  if (lower.includes("python") || lower.includes("ai") || lower.includes("machine learning")) return "Python & AI Track";
+  if (lower.includes("cloud") || lower.includes("aws") || lower.includes("devops")) return "DevOps & Cloud";
+
+  const words = p.replace(/[?.,!/\\;:'"()[\]{}]/g, "").split(/\s+/).filter(Boolean).slice(0, 4);
+  const title = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return title.length > 30 ? title.slice(0, 30) + "…" : title || "New Career Chat";
+}
+
   // ─── 1. Load Conversations from LocalStorage ────────────────────────────────
+  // Phase 10: On a new visit / fresh start: OPEN A NEW CHAT.
+  // Do NOT automatically reopen the last active conversation.
+  // Previous conversations remain in history. The user can intentionally click to reopen.
   useEffect(() => {
+    let existingList: Conversation[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: Conversation[] = JSON.parse(raw);
-        if (parsed.length > 0) {
-          setConversations(parsed);
-          const firstActive = parsed.find((c) => !c.archived) || parsed[0];
-          setActiveConvId(firstActive.id);
-          return;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          existingList = parsed;
         }
       }
     } catch {
       // ignore
     }
 
-    createNewConversation();
-  }, [user?.name, user?.email]);
+    const newId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newConv: Conversation = {
+      id: newId,
+      title: "New Career Chat",
+      messages: [getGreetingMessage()],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      archived: false,
+    };
+
+    const combined = [newConv, ...existingList.filter((c) => c.id !== newId)];
+    setConversations(combined);
+    setActiveConvId(newId);
+  }, []);
 
   // ─── 2. Persist Conversations ───────────────────────────────────────────────
   const saveConversations = (updated: Conversation[]) => {
@@ -405,13 +623,13 @@ export function AssistantHome({
       id: "intro-1",
       role: "assistant",
       time: now,
-      text: `Hi! I'm your career assistant. I can help you build or improve your resume, find skills to learn, discover projects, and find jobs. You can talk to me or type. How would you like to continue?`,
+      text: "Hello! I'm UBIX, your career navigation and workspace copilot. I can help you build custom learning roadmaps, practice technical interviews, tailor your resume, and discover verified job matches. To get us started, what career path or technical role are you looking to pursue?",
     };
   };
 
   // ─── 3. New Chat Action ────────────────────────────────────────────────────
   const createNewConversation = () => {
-    const newId = `conv-${Date.now()}`;
+    const newId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newConv: Conversation = {
       id: newId,
       title: "New Career Chat",
@@ -456,16 +674,51 @@ export function AssistantHome({
     }
   };
 
-  const deleteConversation = (convId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const clearAllConversations = () => {
+    if (typeof window !== "undefined" && !window.confirm("Are you sure you want to delete all chat history? This cannot be undone.")) {
+      return;
+    }
+    const cleanId = `conv-${Date.now()}`;
+    const freshConv: Conversation = {
+      id: cleanId,
+      title: "New Career Chat",
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      archived: false,
+    };
+    saveConversations([freshConv]);
+    setActiveConvId(cleanId);
+    setInput("");
+    setAttachedFile(null);
+    clearSilenceTimers();
+    showToast("All chat history deleted");
+  };
+
+  const deleteConversation = (convId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const filtered = conversations.filter((c) => c.id !== convId);
     if (filtered.length === 0) {
-      createNewConversation();
+      const cleanId = `conv-${Date.now()}`;
+      const freshConv: Conversation = {
+        id: cleanId,
+        title: "New Career Chat",
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pinned: false,
+        archived: false,
+      };
+      saveConversations([freshConv]);
+      setActiveConvId(cleanId);
+      showToast("Chat deleted. Started clean chat.");
     } else {
       saveConversations(filtered);
       if (convId === activeConvId) {
         setActiveConvId(filtered[0].id);
       }
+      showToast("Chat deleted");
     }
   };
 
@@ -531,6 +784,24 @@ export function AssistantHome({
     if (activeTimer) clearTimeout(activeTimer);
     setRedirectCountdown(null);
     setBusy(false);
+
+    const featureFeedback: Record<FeatureId, string> = {
+      roadmap: "Your career roadmap is now open. You can review your next learning steps.",
+      practice: "Your technical practice hub is now open. You can drill questions with instant feedback.",
+      resume: "Your resume workspace is now open. You can analyze, tailor, or build your resume.",
+      local: "Job discovery is now open. You can explore live opportunities and real-time alerts.",
+      courses: "Your curated course catalog is now open. You can explore learning resources.",
+    };
+
+    const announcement = featureFeedback[feature] || `Your ${feature} workspace is now open.`;
+    showToast(announcement);
+
+    if (voiceMode || isAISpeakingRef.current) {
+      speakText(announcement, {
+        lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
+      });
+    }
+
     onRedirect(feature, tab);
   };
 
@@ -548,16 +819,30 @@ export function AssistantHome({
     // ── Turn-Taking Question Validation & 3-Attempt Fallback ──
     const currentQ = activeQuestionRef.current;
     if (currentQ && !currentQ.answered && userMsgText) {
-      const valResult = validateUserAnswer(
-        userMsgText,
-        currentQ.expectedType,
-        voiceLanguage !== "auto" ? voiceLanguage : "en"
-      );
+      const intentCheck = extractFromUtterance(userMsgText);
 
-      if (!valResult.valid) {
-        currentQ.attempts += 1;
-        setActiveQuestion({ ...currentQ });
-        activeQuestionRef.current = { ...currentQ };
+      // Handle user interruption or task-switching mid-question: release question cleanly
+      if (intentCheck.isInterruption || intentCheck.taskSwitchTo) {
+        currentQ.answered = true;
+        setActiveQuestion(null);
+        activeQuestionRef.current = null;
+      } else if (intentCheck.isSkip || intentCheck.isUnknownOrDontKnow) {
+        currentQ.answered = true;
+        setActiveQuestion(null);
+        activeQuestionRef.current = null;
+      } else if (intentCheck.isWhyQuestion || intentCheck.isHelpRequest) {
+        // Explaining "Why" or asking for "Help" must never penalize the user with a retry attempt
+      } else {
+        const valResult = validateUserAnswer(
+          userMsgText,
+          currentQ.expectedType,
+          voiceLanguage !== "auto" ? voiceLanguage : "en"
+        );
+
+        if (!valResult.valid) {
+          currentQ.attempts += 1;
+          setActiveQuestion({ ...currentQ });
+          activeQuestionRef.current = { ...currentQ };
 
         if (currentQ.attempts >= 3) {
           // ── 3-ATTEMPT RULE: AUTOMATIC TEXT FALLBACK ──
@@ -580,7 +865,7 @@ export function AssistantHome({
               id: `fallback-${Date.now()}`,
               role: "assistant",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              text: `🎤 Voice assistant paused.\n\n${fallbackText}`,
+              text: `Voice assistant paused.\n\n${fallbackText}`,
               engine: "CareerForge AI",
             },
           ];
@@ -593,10 +878,10 @@ export function AssistantHome({
           setBusy(false);
           scrollToBottom();
 
-          // Auto-focus keyboard input immediately
-          requestAnimationFrame(() => {
+          // Auto-focus keyboard input immediately (background-safe)
+          setTimeout(() => {
             textareaRef.current?.focus();
-          });
+          }, 50);
           return;
         } else {
           // ── REPEAT / RETRY QUESTION WITH EMPATHETIC GUIDANCE ──
@@ -644,7 +929,7 @@ export function AssistantHome({
                 if (voiceMode && !textFallbackActive) {
                   setTimeout(() => {
                     if (!isAISpeakingRef.current) startListening();
-                  }, 300);
+                  }, 650);
                 }
               },
               onError: () => {
@@ -664,63 +949,80 @@ export function AssistantHome({
         setActiveQuestion({ ...currentQ });
         activeQuestionRef.current = { ...currentQ };
 
-        if (currentQ.id === "onboarding_name") {
-          const nextQ: QuestionState = {
-            id: "onboarding_career",
-            question: `Nice to meet you, ${valResult.value}. What kind of career are you interested in?`,
-            answerType: "job_role",
-            expectedType: "job_role",
-            attempts: 0,
-            maxAttempts: 3,
-            answered: false,
-          };
-          setActiveQuestion(nextQ);
-          activeQuestionRef.current = nextQ;
-        } else if (currentQ.id === "onboarding_career") {
+        if (currentQ.id === "onboarding_career" || currentQ.id === "targetRole") {
           setTargetRole(valResult.value);
+        }
+
+        const dynamicDecision = DynamicQuestionOrchestrator.evaluateNextStep(
+          {
+            currentPage: "assistant",
+            userProfile: {
+              name: user?.name,
+              email: user?.email,
+              targetRole: user?.targetRole || (currentQ.id === "targetRole" || currentQ.id === "onboarding_career" ? valResult.value : undefined),
+              skills: userSkills,
+              missingSkills,
+              location: currentLocation || undefined,
+            },
+            knownInformation: {
+              ...(user?.name ? { fullName: user.name, name: user.name } : {}),
+              ...(user?.targetRole ? { targetRole: user.targetRole } : {}),
+              ...(currentQ.id ? { [currentQ.id]: valResult.value } : {}),
+            },
+            language: voiceLanguage !== "auto" ? voiceLanguage : voiceLang !== "auto" ? voiceLang : "en",
+          },
+          userMsgText
+        );
+
+        if (dynamicDecision.shouldAsk && dynamicDecision.nextRequirementToAsk) {
+          const nextReq = dynamicDecision.nextRequirementToAsk;
+          const expectedTypeMap: Record<string, ExpectedAnswerType> = {
+            fullName: "name",
+            name: "name",
+            email: "email",
+            targetRole: "job_role",
+            location: "location",
+            availableLearningTime: "short_text",
+            experienceLevel: "short_text",
+            practiceTopic: "short_text",
+            workMode: "choice",
+          };
+
           const nextQ: QuestionState = {
-            id: "onboarding_has_resume",
-            question: "Do you already have a resume?",
-            answerType: "yes_no",
-            expectedType: "yes_no",
+            id: nextReq.key,
+            question: dynamicDecision.phrasedQuestion || `Could you tell me your ${nextReq.description}?`,
+            answerType: expectedTypeMap[nextReq.key] || "short_text",
+            expectedType: expectedTypeMap[nextReq.key] || "short_text",
             attempts: 0,
             maxAttempts: 3,
             answered: false,
           };
           setActiveQuestion(nextQ);
           activeQuestionRef.current = nextQ;
-        } else if (currentQ.id === "onboarding_has_resume") {
-          if (valResult.value === true) {
-            setActiveQuestion(null);
-            activeQuestionRef.current = null;
-          } else {
-            const nextQ: QuestionState = {
-              id: "resume_step_1",
-              question: "Let's build your resume together! What is your full name?",
-              answerType: "name",
-              expectedType: "name",
-              attempts: 0,
-              maxAttempts: 3,
-              answered: false,
-            };
-            setActiveQuestion(nextQ);
-            activeQuestionRef.current = nextQ;
-          }
+        } else {
+          setActiveQuestion(null);
+          activeQuestionRef.current = null;
         }
       }
     }
+  }
 
     let fullPromptForLlm = userMsgText;
     if (docInfo) {
+      const truncatedDoc =
+        docInfo.text.length > 6000
+          ? `${docInfo.text.slice(0, 6000)}\n\n[... Remaining content truncated for token limits ...]`
+          : docInfo.text;
       fullPromptForLlm = userMsgText
-        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${docInfo.text}`
-        : `Please review and analyze my attached document: ${docInfo.name}\n\n${docInfo.text}`;
+        ? `${userMsgText}\n\n[Attached Document: ${docInfo.name}]\n${truncatedDoc}`
+        : `Please review and analyze my attached document: ${docInfo.name}\n\n${truncatedDoc}`;
     }
 
     let chatTitle = activeConversation.title;
     if (chatTitle === "New Career Chat" || chatTitle === "New Conversation") {
-      const displayTitle = userMsgText || `Review: ${docInfo?.name || "Document"}`;
-      chatTitle = displayTitle.slice(0, 32) + (displayTitle.length > 32 ? "…" : "");
+      chatTitle = userMsgText
+        ? generateChatTitle(userMsgText)
+        : `Review: ${docInfo?.name || "Document"}`;
     }
 
     const nextMessages: Msg[] = [
@@ -767,17 +1069,46 @@ export function AssistantHome({
           },
           targetRole: user?.targetRole || "frontend",
           voiceMode,
-          language: voiceLanguage !== "auto" ? voiceLanguage : undefined,
+          language:
+            voiceLanguage !== "auto"
+              ? voiceLanguage
+              : voiceLang !== "auto"
+                ? voiceLang
+                : undefined,
           conversationLanguageState: {
-            detectedLanguage: voiceLanguage !== "auto" ? voiceLanguage : "en",
+            detectedLanguage:
+              voiceLanguage !== "auto"
+                ? voiceLanguage
+                : voiceLang !== "auto"
+                  ? voiceLang
+                  : "en",
           },
           currentPage: "assistant",
-          accessibilityPrefs,
+          accessibilityPrefs: {
+            ...accessibilityPrefs,
+            voiceLanguage:
+              voiceLanguage !== "auto"
+                ? voiceLanguage
+                : voiceLang !== "auto"
+                  ? voiceLang
+                  : undefined,
+          },
           resumeDraftState,
         }),
       });
 
-      if (!res.ok) throw new Error("Chat request failed");
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => null);
+        const errorMsg =
+          errorJson?.error?.message ||
+          errorJson?.message ||
+          (res.status === 401
+            ? "Please sign in to interact with the assistant."
+            : res.status === 503 && errorJson?.error?.code === "AI_PROVIDER_NOT_CONFIGURED"
+              ? "AI assistance is not configured yet. Please configure an AI provider key on the server."
+              : `AI Assistant request failed (${res.status})`);
+        throw new Error(errorMsg);
+      }
       const data = await res.json();
 
       if (data.resumeDraftState) {
@@ -790,6 +1121,45 @@ export function AssistantHome({
           if (data.toolCall.parameters.interactionMode === "voice") {
             setVoiceMode(true);
           }
+        } else if (data.toolCall.tool === "updateUserProfile" && data.toolCall.parameters) {
+          const { email: updatedEmail, name: updatedName, targetRole: updatedRole } = data.toolCall.parameters;
+          if (updatedEmail) {
+            void signIn(updatedEmail, updatedName || user?.name);
+            try {
+              fetch("/api/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  user: {
+                    email: updatedEmail,
+                    name: updatedName || user?.name || "Candidate",
+                    authProvider: "email",
+                    targetRole: updatedRole || user?.targetRole,
+                  },
+                  state: {},
+                }),
+              }).catch(() => {});
+            } catch {}
+          }
+          if (updatedRole && updatedRole !== "__SKIPPED__" && updatedRole !== "__DONT_KNOW__") {
+            setTargetRole(updatedRole);
+          }
+        } else if (data.toolCall.tool === "startPractice") {
+          const topic = data.toolCall.parameters?.topic || "Technical Practice";
+          showToast(`Starting practice drill: ${topic}`);
+          window.dispatchEvent(new CustomEvent("careerforge:start-practice", { detail: { topic } }));
+          setTimeout(() => {
+            executeRedirect("practice");
+          }, 1500);
+        } else if (data.toolCall.tool === "navigateTo" && data.toolCall.parameters?.page) {
+          const target = data.toolCall.parameters.page as FeatureId;
+          setTimeout(() => {
+            executeRedirect(target);
+          }, 1500);
+        } else if (data.toolCall.tool === "searchJobs") {
+          setTimeout(() => {
+            executeRedirect("local");
+          }, 1500);
         }
       }
 
@@ -818,7 +1188,10 @@ export function AssistantHome({
           text: replyText,
           intent,
           redirecting: hasFeature,
-          engine: data.engine || "CareerForge AI",
+          engine: data.engine || (data.isFallback ? "Fallback (limited)" : "CareerForge AI"),
+          isFallback: Boolean(data.isFallback),
+          note: data.note || (data.isFallback ? "Running in limited mode" : undefined),
+          thinking: Array.isArray(data.thinking) ? data.thinking : undefined,
         },
       ];
 
@@ -852,7 +1225,7 @@ export function AssistantHome({
             if (voiceMode && !textFallbackActive) {
               setTimeout(() => {
                 if (!isAISpeakingRef.current) startListening();
-              }, 300);
+              }, 650);
             }
           },
           onError: () => {
@@ -864,22 +1237,38 @@ export function AssistantHome({
       }
 
       setBusy(false);
-      if (hasFeature && data.feature && (userMsgText.toLowerCase().startsWith("open") || userMsgText.toLowerCase().startsWith("take me to") || userMsgText.toLowerCase().startsWith("go to"))) {
-        setRedirectCountdown(3);
-        const timer = setTimeout(() => {
-          executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
-        }, 3200);
-        setActiveTimer(timer);
+      if (hasFeature && data.feature && !data.toolCall) {
+        const lowerPrompt = userMsgText.toLowerCase();
+        if (
+          lowerPrompt.startsWith("open") ||
+          lowerPrompt.startsWith("take me to") ||
+          lowerPrompt.startsWith("go to") ||
+          lowerPrompt.startsWith("show") ||
+          lowerPrompt.startsWith("view") ||
+          lowerPrompt.startsWith("start") ||
+          lowerPrompt === "yes" ||
+          lowerPrompt === "sure"
+        ) {
+          setRedirectCountdown(3);
+          const timer = setTimeout(() => {
+            executeRedirect(data.feature as FeatureId, data.resumeTab as ResumeTab);
+          }, 3200);
+          setActiveTimer(timer);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[AssistantHome] LLM call error:", err);
+      const errorMessageText =
+        err?.message && err.message !== "Chat request failed"
+          ? err.message
+          : "I encountered an issue connecting to the AI assistant service. Please check your connection and try again.";
       const fallbackMessages: Msg[] = [
         ...nextMessages,
         {
           id: `ai-${Date.now()}`,
           role: "assistant",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          text: "I am right here with you. Would you like to review your career roadmap, find top courses, or practice interview questions?",
+          text: errorMessageText,
         },
       ];
       saveConversations(
@@ -888,6 +1277,13 @@ export function AssistantHome({
         )
       );
       setBusy(false);
+
+      // Acoustic feedback for blind users when voice mode is active
+      if (voiceMode && accessibilityPrefs?.speechOutput !== false && !textFallbackActive) {
+        speakText(errorMessageText, {
+          lang: "en-US",
+        });
+      }
     }
   };
   runPromptRef.current = runPrompt;
@@ -895,7 +1291,10 @@ export function AssistantHome({
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     clearSilenceTimers();
-    if (listening) setListening(false);
+    if (listening) {
+      speechControllerRef.current?.stop();
+      setListening(false);
+    }
     const value = input;
     setInput("");
     runPrompt(value);
@@ -909,15 +1308,154 @@ export function AssistantHome({
 
   const emptyThread = messages.length <= 1;
 
+  const renderComposer = (isCentered: boolean) => (
+    <form
+      onSubmit={onSubmit}
+      className={`relative flex flex-col rounded-2xl border transition-all duration-200 overflow-hidden ${
+        isCentered
+          ? "border-white/10 bg-surface/85 p-3.5 shadow-lg focus-within:border-accent/50 focus-within:shadow-[0_0_32px_rgba(120,227,238,0.12)] focus-within:bg-surface/95"
+          : "border-white/[0.08] bg-surface/90 p-3 shadow-xs focus-within:border-accent/40 focus-within:shadow-[0_0_24px_rgba(120,227,238,0.08)]"
+      }`}
+    >
+      <UbixBorderBeam active={listening || busy} duration={6} />
+      {/* Attached Document Preview Badge */}
+      {attachedFile && (
+        <div className="mb-2 flex items-center justify-between rounded-xl border border-white/10 bg-surface px-3 py-1.5 text-xs text-white">
+          <div className="flex items-center gap-2 truncate">
+            <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="font-semibold truncate">{attachedFile.name}</span>
+            <span className="text-[10px] text-ink/60">Ready to review</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAttachedFile(null)}
+            className="rounded p-1 text-ink/60 hover:text-danger cursor-pointer flex items-center justify-center"
+            title="Remove attachment"
+          >
+            <CloseIcon className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Textarea Input with Instant Enter Submission */}
+      <label htmlFor={isCentered ? "assistant-composer-centered" : "assistant-composer"} className="sr-only">
+        Message ubix Assistant
+      </label>
+      <textarea
+        id={isCentered ? "assistant-composer-centered" : "assistant-composer"}
+        ref={isCentered ? undefined : textareaRef}
+        value={input}
+        onFocus={() => setComposerFocused(true)}
+        onBlur={() => setComposerFocused(false)}
+        onChange={(e) => {
+          setInput(e.target.value);
+          inputRef.current = e.target.value;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as any).isComposing) {
+            e.preventDefault();
+            if (input.trim() || attachedFile) {
+              const val = input;
+              setInput("");
+              inputRef.current = "";
+              runPrompt(val);
+            }
+          }
+        }}
+        rows={isCentered ? 2 : 1}
+        placeholder={
+          attachedFile
+            ? `Ask anything about ${attachedFile.name}...`
+            : "Ask anything about your work, career, or what you're learning..."
+        }
+        className="max-h-36 min-h-[44px] w-full resize-none bg-transparent px-2 py-1 text-sm text-white placeholder:text-ink/40 focus:outline-none"
+      />
+
+      {/* Bottom Control Bar inside Composer */}
+      <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] mt-1">
+        {/* Left Controls: Clean Attach & Collapsed Voice Indicator */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={parsingDoc}
+            title="Attach document (PDF, DOCX, TXT)"
+            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-surface px-3 py-1 text-xs font-medium text-ink/80 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {parsingDoc ? (
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            ) : (
+              <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
+            )}
+            <span className="hidden sm:inline">Attach</span>
+          </button>
+
+          {/* Integrated Physical Voice Control Hub (§14) */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            aria-pressed={listening}
+            aria-label={`Voice: currently ${listening ? "listening" : busy ? "processing" : "idle"}. Click to toggle. Shortcut: Alt+V`}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+              listening
+                ? "ubix-voice-btn-listening"
+                : busy
+                ? "ubix-voice-btn-busy"
+                : "ubix-voice-btn-idle"
+            }`}
+            title={listening ? "Listening... click to pause" : "Voice dictation (or press Alt+V)"}
+          >
+            <MicIcon className={`w-3.5 h-3.5 ${listening ? "ubix-voice-icon-active animate-pulse" : "ubix-voice-icon-idle"}`} />
+
+            <span>
+              {listening
+                ? (silenceCountdown ? `Listening (${silenceCountdown}s)` : "Listening…")
+                : busy
+                ? "Processing…"
+                : "Voice"}
+            </span>
+          </button>
+
+          {micError && (
+            <span className="text-[10px] text-danger truncate max-w-[140px]">
+              {micError}
+            </span>
+          )}
+        </div>
+
+        {/* Right: Clean Send Button */}
+        <button
+          type="submit"
+          disabled={busy || (!input.trim() && !attachedFile)}
+          aria-label="Send prompt"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
+            input.trim() || attachedFile
+              ? "bg-accent text-bg font-bold hover:opacity-90 scale-100 cursor-pointer active:scale-95"
+              : "bg-white/10 text-white/30 cursor-not-allowed opacity-50"
+          }`}
+          title="Send prompt (or press Enter)"
+        >
+          <ArrowUpIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </form>
+  );
+
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] overflow-hidden bg-paper">
+    <div data-assistant-home="true" className="flex h-[calc(100vh-3rem)] overflow-hidden bg-bg text-ink">
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-ink px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-20 right-6 z-50 rounded-xl bg-surface border border-ink/15 px-4 py-2.5 text-xs font-semibold text-ink shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
           {toastMessage}
         </div>
       )}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {toastMessage ||
+          (micError ? `Microphone error: ${micError}` :
+            voiceStatus === "listening" ? "Voice assistant is listening." :
+            voiceStatus === "speaking" ? "Voice assistant is speaking." : "")}
+      </div>
 
       {/* Share Conversation Modal Dialog */}
       <ShareModal
@@ -929,50 +1467,50 @@ export function AssistantHome({
 
       {/* ─── LEFT AI SIDEBAR (Vertical List of Chats) ───────────────────────── */}
       <aside
-        className={`flex flex-col border-r border-line bg-white transition-all duration-200 z-20 ${
+        className={`flex flex-col border-r border-ink/10 bg-surface/90 text-ink transition-all duration-200 z-20 ${
           sidebarOpen ? "w-72 sm:w-80 shrink-0" : "w-0 -translate-x-full overflow-hidden border-none"
         }`}
       >
         {/* Top Action: New Chat */}
-        <div className="p-3.5 border-b border-line space-y-3">
+        <div className="p-3.5 border-b border-ink/10 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-display text-base italic text-ink">
-              Assistant
+            <span className="font-semibold text-sm tracking-tight text-ink">
+              Conversations
             </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink sm:hidden"
+              className="rounded-lg p-1 text-ink/60 hover:bg-bg hover:text-ink transition-colors sm:hidden flex items-center justify-center"
               title="Close sidebar"
             >
-              ✕
+              <CloseIcon className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <button
             type="button"
             onClick={createNewConversation}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink py-2.5 px-3 text-xs font-semibold text-white shadow-xs hover:bg-ink/90 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-bg border border-ink/20 hover:border-accent hover:text-accent py-2 px-3 text-xs font-semibold text-ink shadow-xs transition-colors cursor-pointer"
           >
-            <span className="text-sm font-bold">+</span>
+            <span className="text-sm font-bold leading-none">+</span>
             <span>New Chat</span>
           </button>
         </div>
 
         {/* Vertical Navigation Sections */}
-        <div className="p-2 space-y-1 border-b border-line">
+        <div className="p-2 space-y-1 border-b border-ink/10">
           <button
             type="button"
             onClick={() => setSidebarTab("all")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "all"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <ChatBubbleIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
-            <span className="flex-1 text-left">All Recent Chats</span>
-            <span className="text-[11px] text-graphite/55">
+            <ChatBubbleIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="flex-1 text-left">All Chats</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => !c.archived).length}
             </span>
           </button>
@@ -980,15 +1518,15 @@ export function AssistantHome({
           <button
             type="button"
             onClick={() => setSidebarTab("pinned")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "pinned"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <PinIcon filled className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="flex-1 text-left">Pinned &amp; Starred</span>
-            <span className="text-[11px] text-graphite/55">
+            <PinIcon filled className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="flex-1 text-left">Pinned</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => c.pinned && !c.archived).length}
             </span>
           </button>
@@ -996,15 +1534,15 @@ export function AssistantHome({
           <button
             type="button"
             onClick={() => setSidebarTab("archived")}
-            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
               sidebarTab === "archived"
-                ? "bg-mist text-ink font-semibold"
-                : "text-graphite hover:bg-paper hover:text-ink"
+                ? "bg-bg text-ink font-semibold border border-ink/15 shadow-xs"
+                : "text-ink/70 hover:bg-bg/50 hover:text-ink"
             }`}
           >
-            <ArchiveIcon className="w-3.5 h-3.5 text-graphite/80 shrink-0" />
-            <span className="flex-1 text-left">Archived Chats</span>
-            <span className="text-[11px] text-graphite/55">
+            <ArchiveIcon className="w-3.5 h-3.5 text-ink/60 shrink-0" />
+            <span className="flex-1 text-left">Archived</span>
+            <span className="rounded-full bg-surface border border-ink/15 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
               {conversations.filter((c) => c.archived).length}
             </span>
           </button>
@@ -1012,14 +1550,14 @@ export function AssistantHome({
 
         {/* Vertical Conversation List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-graphite/60">
+          <p className="px-3 pt-2 pb-1 text-[11px] font-medium text-ink/60">
             {sidebarTab === "pinned" ? "Pinned" : sidebarTab === "archived" ? "Archive" : "History"}
           </p>
 
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-xs text-graphite/55">
+            <div className="p-4 text-center text-xs text-ink/60">
               {sidebarTab === "pinned"
-                ? "No pinned chats. Click the pin icon to keep important chats at top."
+                ? "No pinned chats."
                 : sidebarTab === "archived"
                 ? "No archived conversations."
                 : "No previous chats."}
@@ -1031,44 +1569,55 @@ export function AssistantHome({
                 <div
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
-                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActiveConvId(conv.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isActive}
+                  aria-label={`Open conversation ${conv.title}`}
+                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
                     isActive
-                      ? "bg-mist font-semibold text-ink"
-                      : "text-graphite hover:bg-paper hover:text-ink"
+                      ? "bg-bg font-semibold text-ink border border-ink/15 shadow-xs"
+                      : "text-ink/75 hover:bg-bg/60 hover:text-ink"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-amber-600 shrink-0" />}
+                    {conv.pinned && <PinIcon filled className="w-3 h-3 text-accent shrink-0" />}
                     <span className="truncate">{conv.title}</span>
                   </div>
 
-                  {/* Actions on Hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => togglePin(conv.id, e)}
                       title={conv.pinned ? "Unpin chat" : "Pin chat to top"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-amber-600 transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-accent transition-colors"
                     >
-                      <PinIcon filled={conv.pinned} className="w-3 h-3" />
+                      <PinIcon filled={conv.pinned} className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(conv.id, e)}
                       title={conv.archived ? "Unarchive chat" : "Archive chat"}
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-ink transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-ink transition-colors"
                     >
-                      <ArchiveIcon className="w-3 h-3" />
+                      <ArchiveIcon className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       type="button"
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Delete chat"
-                      className="rounded p-1 text-graphite/55 hover:bg-mist hover:text-red-600 transition-colors"
+                      className="rounded p-1 text-ink/60 hover:bg-surface hover:text-danger transition-colors"
                     >
-                      <TrashIcon className="w-3 h-3" />
+                      <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -1076,18 +1625,37 @@ export function AssistantHome({
             })
           )}
         </div>
+
+        {/* Sidebar Footer: Delete All Chats */}
+        <div className="p-3 border-t border-ink/10 bg-surface">
+          <button
+            type="button"
+            onClick={clearAllConversations}
+            disabled={conversations.length === 0 || (conversations.length === 1 && conversations[0].messages.length === 0)}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-danger hover:border-danger/30 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Delete all chat history and start fresh"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+            <span>Delete All Chats</span>
+          </button>
+        </div>
       </aside>
 
       {/* ─── MAIN CHAT VIEW ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg text-ink relative">
+        {/* Subtle Three.js Atmosphere (GPU-friendly, felt before noticed) */}
+        <UbixAtmosphere
+          composerFocused={composerFocused}
+          voiceStatus={voiceStatus}
+        />
         
         {/* Top Chat Toolbar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-line bg-white px-3 sm:px-4 py-2 gap-2">
-          <div className="flex items-center gap-2">
+        <div className="relative z-10 flex flex-wrap items-center justify-between border-b border-ink/10 bg-surface/80 px-3 sm:px-4 py-2.5 gap-2 backdrop-blur-md text-ink">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl border border-ink/15 bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-bg shadow-xs transition-colors cursor-pointer"
               title="Toggle Sidebar"
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
@@ -1095,273 +1663,189 @@ export function AssistantHome({
               <span className="hidden sm:inline">{sidebarOpen ? "Hide Chats" : "Show Chats"}</span>
             </button>
 
-            <span className="text-xs font-semibold text-ink truncate max-w-[140px] sm:max-w-xs">
-              {activeConversation?.title || "Career Copilot"}
+            <span className="text-xs font-medium text-ink truncate max-w-[160px] sm:max-w-xs">
+              {activeConversation?.title || "Assistant"}
             </span>
 
-            {/* Dynamic Real-Time Voice State Status Badge */}
-            {speakingMsgId && (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            {/* Dynamic Voice State Status Badge */}
+            {voiceStatus === "speaking" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-success/30 bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 Speaking
               </span>
             )}
-            {!speakingMsgId && listening && (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
+            {voiceStatus === "listening" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-accent">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 Listening
               </span>
             )}
-            {!speakingMsgId && !listening && busy && (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
-                <span className="h-1.5 w-1.5 rounded-full bg-graphite/50" />
-                Thinking
+            {voiceStatus === "initializing" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-ink/40 animate-pulse" />
+                Initializing
               </span>
             )}
-            {textFallbackActive && !listening && !speakingMsgId && (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-graphite">
-                <span className="h-1.5 w-1.5 rounded-full bg-graphite/40" />
+            {voiceStatus === "processing" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                Processing
+              </span>
+            )}
+            {voiceStatus === "error" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-danger/30 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-danger">
+                <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+                Mic error
+              </span>
+            )}
+            {voiceStatus === "recovering" && (
+              <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-accent">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-ping" />
+                Recovering
+              </span>
+            )}
+            {voiceStatus === "idle" && textFallbackActive && (
+              <span className="flex items-center gap-1.5 rounded-full border border-ink/15 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-ink/60">
+                <span className="h-1.5 w-1.5 rounded-full bg-ink/40" />
                 Text mode
               </span>
             )}
           </div>
-
-          {/* Voice Toolbar: Provider, Language, Repeat, Stop, Mute */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {/* Language Selector Dropdown */}
-            <select
-              value={voiceLanguage}
-              onChange={(e) => setVoiceLanguage(e.target.value)}
-              title="Select speech and assistant language"
-              aria-label="Speech Language Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer"
-            >
-              <option value="auto">🌐 Auto Detect Language</option>
-              {LANGUAGE_LIST.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.flag} {l.nativeName} ({l.name})
-                </option>
-              ))}
-            </select>
-
-            {/* Speech Provider Dropdown */}
-            <select
-              value={speechProvider}
-              onChange={(e) => setSpeechProvider(e.target.value as SpeechProviderType)}
-              title="Speech Provider Strategy"
-              aria-label="Speech Provider Selector"
-              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs font-medium text-graphite hover:bg-mist focus:outline-none focus:ring-1 focus:ring-accent/40 cursor-pointer hidden md:inline-block"
-            >
-              <option value="auto">⚡ Auto (Web → Azure → Google)</option>
-              <option value="web">🌐 Web Speech API (Free)</option>
-              <option value="azure">☁️ Microsoft Azure Speech</option>
-              <option value="google">☁️ Google Cloud Speech</option>
-            </select>
-
-            {/* Repeat Button */}
-            <button
-              type="button"
-              onClick={repeatLastResponse}
-              title="Repeat last spoken response"
-              aria-label="Repeat last spoken response"
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium text-graphite hover:bg-paper hover:text-ink transition-colors cursor-pointer"
-            >
-              <SpeakerIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Repeat</span>
-            </button>
-
-            {/* Stop Speaking / Listening Button */}
-            {(speakingMsgId || listening) && (
-              <button
-                type="button"
-                onClick={stopAllVoice}
-                title="Stop audio and listening immediately"
-                aria-label="Stop audio and listening"
-                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer"
-              >
-                <StopIcon className="w-3 h-3 text-white" />
-                <span>Stop</span>
-              </button>
-            )}
-
-            {/* Mute / Unmute Toggle */}
-            <button
-              type="button"
-              onClick={toggleMute}
-              title={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              aria-label={accessibilityPrefs.speechOutput ? "Mute Voice Output" : "Enable Voice Output"}
-              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${
-                accessibilityPrefs.speechOutput
-                  ? "border-accent/25 bg-accent/10 text-accent hover:bg-accent/20"
-                  : "border-line bg-mist text-graphite/80 hover:bg-mist"
-              }`}
-            >
-              <SpeakerIcon className={`w-3.5 h-3.5 ${accessibilityPrefs.speechOutput ? "" : "opacity-40"}`} />
-              <span className="hidden sm:inline">{accessibilityPrefs.speechOutput ? "Voice on" : "Muted"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShareModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2 py-1 text-xs font-semibold text-graphite hover:bg-paper shadow-xs cursor-pointer"
-              title="Share conversation link or transcript"
-              aria-label="Share Conversation"
-            >
-              <ShareHeaderIcon className="w-3.5 h-3.5 text-graphite" />
-              <span className="hidden sm:inline">Share</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={createNewConversation}
-              className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-graphite hover:bg-paper cursor-pointer shadow-xs"
-              title="Start new chat"
-              aria-label="Start New Chat"
-            >
-              <span>+ New</span>
-            </button>
-          </div>
         </div>
 
         {/* Scrollable Conversation Stream */}
-        <div ref={listRef} className="flex-1 overflow-y-auto">
+        <div ref={listRef} className="relative z-10 flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-3xl flex-col px-4 py-8 md:py-12">
             {emptyThread && (
-              <div className="mb-10 max-w-xl space-y-5">
-                <h1 className="font-display text-4xl italic leading-[1.1] text-ink md:text-5xl">
-                  {userDisplayName ? `Hello, ${userDisplayName}.` : "Hello."}
-                  <span className="block text-graphite">Where should we start?</span>
-                </h1>
+              <div className="my-auto max-w-xl w-full mx-auto py-12 md:py-16 animate-slideUp">
+                {/* Minimal atmospheric greeting */}
+                <div className="flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="space-y-3">
+                    <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+                      ubix
+                    </span>
+                    <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
+                      What are you working on?
+                    </h1>
+                  </div>
 
-                <p className="max-w-md text-sm leading-relaxed text-graphite">
-                  I can help you build or sharpen your resume, choose skills to learn,
-                  find projects worth doing, and track down jobs. Speak or type &mdash;
-                  whichever is easier.
-                </p>
-
-                {/* Primary Voice vs Text Entry Options */}
-                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  {/* Contextual Single Next Step (Section 12: Calm text link with subtle hover depth) */}
                   <button
                     type="button"
-                    onClick={() => {
-                      const initialQ: QuestionState = {
-                        id: "onboarding_name",
-                        question: "Hi! I'm your career assistant. What would you like me to call you?",
-                        answerType: "name",
-                        expectedType: "name",
-                        attempts: 0,
-                        maxAttempts: 3,
-                        answered: false,
-                      };
-                      setActiveQuestion(initialQ);
-                      activeQuestionRef.current = initialQ;
-                      setVoiceMode(true);
-                      setTextFallbackActive(false);
-                      stopListening();
-                      isAISpeakingRef.current = true;
-                      speakText(
-                        "Hi! I'm your career assistant. I'll guide you step by step. You can speak naturally, and you can interrupt me anytime. What would you like me to call you?",
-                        {
-                          lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US",
-                          onStart: () => {
-                            isAISpeakingRef.current = true;
-                            stopListening();
-                          },
-                          onEnd: () => {
-                            isAISpeakingRef.current = false;
-                            setTimeout(() => {
-                              if (!isAISpeakingRef.current) startListening();
-                            }, 300);
-                          },
-                          onError: () => {
-                            isAISpeakingRef.current = false;
-                          },
-                        }
-                      );
-                    }}
-                    className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/90 cursor-pointer"
+                    onClick={() => onRedirect("roadmap")}
+                    className="inline-flex items-center gap-2 text-xs font-medium text-ink/60 hover:text-accent transition-colors group cursor-pointer"
                   >
-                    <MicIcon className="w-4 h-4 text-paper" />
-                    <span>Start talking</span>
+                    <span className="font-mono text-[10px] text-accent">●</span>
+                    <span>Continue your journey: {user?.targetRole ? `${user.targetRole.charAt(0).toUpperCase() + user.targetRole.slice(1)} Career Track` : "Career Roadmap"}</span>
+                    <span className="transform group-hover:translate-x-0.5 transition-transform text-accent">→</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      textareaRef.current?.focus();
-                    }}
-                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-graphite underline decoration-line underline-offset-4 transition-colors hover:text-ink cursor-pointer"
-                  >
-                    <span>Type instead</span>
-                  </button>
+                  {/* Centered Composer Input */}
+                  <div className="w-full text-left pt-2">
+                    {renderComposer(true)}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Message Stream */}
-            <div className="space-y-6 w-full">
+            <div
+              className="space-y-6 w-full"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
+              aria-label="ubix conversation"
+            >
               {messages.map((m) => {
                 const isUser = m.role === "user";
                 return (
                   <div
                     key={m.id}
-                    className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
+                    className={`flex flex-col animate-messageIn ${isUser ? "items-end" : "items-start"}`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-graphite/55 px-1">
-                      <span>{isUser ? userDisplayName : "CareerForge AI"}</span>
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-medium ubix-chat-meta-bar px-1">
+                      <span>{isUser ? userDisplayName : "ubix Assistant"}</span>
                       {m.engine && !isUser && (
-                        <span className="text-[10px] text-graphite/45">
-                          {m.engine}
+                        <span className={`text-[10px] ${m.isFallback ? "text-amber-400/90 font-mono" : "ubix-chat-subtext"}`}>
+                          {m.engine}{m.note ? ` · ${m.note}` : ""}
                         </span>
                       )}
                       {!isUser && (
-                        <button
-                          type="button"
-                          onClick={() => toggleSpeech(m.id, m.text)}
-                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
-                            speakingMsgId === m.id
-                              ? "bg-accent/10 text-accent border border-accent/25"
-                              : "text-graphite/80 hover:bg-mist hover:text-ink"
-                          }`}
-                          title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
-                        >
-                          {speakingMsgId === m.id ? (
-                            <>
-                              <StopIcon className="w-2.5 h-2.5 text-accent" />
-                              <span>Stop</span>
-                            </>
-                          ) : (
-                            <>
-                              <SpeakerIcon className="w-2.5 h-2.5" />
-                              <span>Listen</span>
-                            </>
-                          )}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleSpeech(m.id, m.text)}
+                            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer ${
+                              speakingMsgId === m.id
+                                ? "ubix-chat-btn-active"
+                                : "ubix-chat-btn-idle"
+                            }`}
+                            title={speakingMsgId === m.id ? "Stop reading aloud" : "Click-to-Voice (Listen Aloud)"}
+                          >
+                            {speakingMsgId === m.id ? (
+                              <>
+                                <StopIcon className="w-2.5 h-2.5 ubix-voice-icon-active" />
+                                <span>Stop</span>
+                              </>
+                            ) : (
+                              <>
+                                <SpeakerIcon className="w-2.5 h-2.5 ubix-voice-icon-idle" />
+                                <span>Listen</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                navigator.clipboard.writeText(m.text);
+                                setToastMessage("Copied response to clipboard");
+                                setTimeout(() => setToastMessage(null), 2500);
+                              }
+                            }}
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ubix-chat-btn-idle transition-colors cursor-pointer"
+                            title="Copy response to clipboard"
+                            aria-label="Copy response to clipboard"
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            <span>Copy</span>
+                          </button>
+                        </>
                       )}
-                      {m.time && <span className="text-graphite/45">{m.time}</span>}
+                      {m.time && <span className="ubix-chat-subtext">{m.time}</span>}
                     </div>
 
                     <div className="space-y-2 max-w-[90%] sm:max-w-[80%]">
                       {m.attachedDocName && (
-                        <div className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-2.5 py-1 text-xs text-graphite w-fit">
-                          <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
+                        <div className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-surface px-2.5 py-1 text-xs text-ink w-fit">
+                          <PaperclipIcon className="w-3.5 h-3.5 text-accent" />
                           <span className="font-medium truncate max-w-[200px]">{m.attachedDocName}</span>
                         </div>
                       )}
 
                       <div
-                        className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
+                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-ink text-paper rounded-tr-xs"
-                            : "bg-white text-ink rounded-tl-xs border border-line/60"
+                            ? "ubix-chat-msg-user font-medium"
+                            : "ubix-chat-msg-assistant"
                         }`}
                       >
-                        <p className="whitespace-pre-line">{m.text}</p>
+                        {isUser ? (
+                          <p className="whitespace-pre-line">{m.text}</p>
+                        ) : (
+                          <div className="prose-cf">
+                            <ReactMarkdown>{m.text}</ReactMarkdown>
+                          </div>
+                        )}
                       </div>
 
                       {/* Interactive Workspace Action */}
                       {m.intent?.feature && (
-                        <div className="rounded-xl border border-line bg-paper p-4 shadow-xs space-y-2.5 animate-in fade-in zoom-in-98 duration-150">
+                        <div className="rounded-xl border border-ink/15 bg-surface p-4 shadow-xs space-y-2.5 animate-in fade-in duration-150">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="flex h-2 w-2 rounded-full bg-accent" />
@@ -1370,18 +1854,18 @@ export function AssistantHome({
                               </span>
                             </div>
                             {m.redirecting && redirectCountdown !== null && (
-                              <span className="text-[11px] font-medium text-graphite">
+                              <span className="text-[11px] font-medium text-accent">
                                 Opening in 3s
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-line">
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-ink/10">
                             {m.redirecting && (
                               <button
                                 type="button"
                                 onClick={cancelRedirect}
-                                className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors cursor-pointer"
+                                className="rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface transition-colors cursor-pointer"
                               >
                                 Stay in Chat
                               </button>
@@ -1389,7 +1873,7 @@ export function AssistantHome({
                             <button
                               type="button"
                               onClick={() => executeRedirect(m.intent!.feature!, m.intent!.resumeTab)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-white hover:bg-ink/90 transition-colors shadow-sm cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/20 bg-bg px-4 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent transition-colors shadow-xs cursor-pointer"
                             >
                               <span>Open {m.intent.featureTitle || "Tool"}</span>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1405,15 +1889,16 @@ export function AssistantHome({
               })}
 
               {busy && redirectCountdown === null && (
-                <div className="flex flex-col items-start">
-                  <div className="mb-1 text-[11px] font-medium text-graphite/55 px-1">
-                    CareerForge AI is thinking…
+                <div className="flex flex-col items-start animate-messageIn">
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink/50 px-1">
+                    <UbixThinkingOrb state="thinking" size="sm" />
+                    <span>ubix is thinking</span>
                   </div>
-                  <div className="rounded-2xl rounded-tl-xs border border-line bg-white px-4 py-3 shadow-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-graphite/50 animate-bounce" />
+                  <div className="rounded-2xl border border-ink/10 bg-surface px-4 py-3">
+                    <div className="flex items-center gap-1" aria-label="Assistant is thinking" role="status">
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce [animation-delay:-0.3s]" aria-hidden="true" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce [animation-delay:-0.15s]" aria-hidden="true" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-ink/30 animate-bounce" aria-hidden="true" />
                     </div>
                   </div>
                 </div>
@@ -1422,221 +1907,33 @@ export function AssistantHome({
           </div>
         </div>
 
-        {/* ─── CLEAN BOTTOM PROMPT COMPOSER & PILLS MATCHING PHOTO 3 ─────────── */}
-        <div className="border-t border-line bg-white/95 px-4 pb-5 pt-3 backdrop-blur-md">
-          <div className="mx-auto max-w-3xl space-y-3">
-            
-            {/* Live Spoken Text & Captions Visualizer for Accessibility */}
-            {(liveSpokenText || listening || speakingMsgId) && (
-              <div
-                role="region"
-                aria-label="Live Voice Captions"
-                aria-live="polite"
-                className="flex items-center justify-between rounded-xl border border-accent/25 bg-accent/10 px-3.5 py-2 text-xs text-accent shadow-sm animate-in fade-in slide-in-from-bottom-2"
-              >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-ping" />
-                  <div className="truncate">
-                    <span className="font-semibold text-accent">
-                      {listening ? "Listening" : "Speaking"}
-                      <span className="mx-1.5 text-accent/40">/</span>
-                    </span>
-                    <span className="font-normal text-accent">
-                      {listening ? (input ? `"${input}"` : "Speak now, I'm listening") : liveSpokenText}
-                    </span>
-                  </div>
-                </div>
+        {/* Hidden Document File Input (Mounted Once) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt,.md,.rtf"
+          onChange={handleFileUpload}
+          className="hidden"
+          id="ai-doc-upload"
+        />
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={stopAllVoice}
-                    className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/25 transition-colors cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Hidden Document File Input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.txt,.md,.rtf"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="ai-doc-upload"
-            />
-
-            {/* AI Rounded Card Box */}
-            <form
-              onSubmit={onSubmit}
-              className="relative flex flex-col rounded-2xl sm:rounded-3xl border border-line bg-paper p-3 shadow-sm focus-within:border-graphite focus-within:bg-white focus-within:ring-2 focus-within:ring-ink/5 transition-colors"
-            >
-              {/* Attached Document Preview Badge */}
-              {attachedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-xl border border-line bg-white px-3 py-1.5 text-xs text-ink animate-in fade-in shadow-2xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <PaperclipIcon className="w-3.5 h-3.5 text-accent shrink-0" />
-                    <span className="font-semibold truncate">{attachedFile.name}</span>
-                    <span className="text-[10px] text-graphite/55">Ready to review</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAttachedFile(null)}
-                    className="rounded p-1 text-graphite/55 hover:text-red-600 cursor-pointer"
-                    title="Remove attachment"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Textarea Input with Instant Enter Submission */}
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  inputRef.current = e.target.value;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as any).isComposing) {
-                    e.preventDefault();
-                    if (input.trim() || attachedFile) {
-                      const val = input;
-                      setInput("");
-                      inputRef.current = "";
-                      runPrompt(val);
-                    }
-                  }
-                }}
-                rows={1}
-                placeholder={
-                  attachedFile
-                    ? `Ask anything about ${attachedFile.name}...`
-                    : "Message CareerForge AI or attach a document..."
-                }
-                className="max-h-36 min-h-[36px] w-full resize-none bg-transparent px-1 py-1 text-sm text-ink placeholder:text-graphite/55 focus:outline-none"
-              />
-
-              {/* Bottom Control Bar inside Composer */}
-              <div className="flex items-center justify-between pt-2 border-t border-line mt-1">
-                {/* Left Controls: Clean Attach & Unlimited Voice */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={parsingDoc}
-                    title="Attach document (PDF, DOCX, TXT)"
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-graphite hover:bg-mist hover:text-ink transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    {parsingDoc ? (
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-graphite border-t-transparent animate-spin" />
-                    ) : (
-                      <PaperclipIcon className="w-3.5 h-3.5 text-graphite/80" />
-                    )}
-                    <span className="hidden sm:inline">Attach</span>
-                  </button>
-
-                  {/* Voice Dictation (Auto-detects language, auto-sends on 3-4s pause) */}
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
-                      listening
-                        ? "bg-ink text-paper"
-                        : "text-graphite hover:bg-mist hover:text-ink"
-                    }`}
-                    title={
-                      listening
-                        ? "Listening... will auto-send after 3-4s of silence"
-                        : "Voice Dictation in any language (Auto-sends on pause)"
-                    }
-                  >
-                    <MicIcon className={`w-3.5 h-3.5 ${listening ? "text-paper" : "text-graphite/80"}`} />
-                    <span>{listening ? (silenceCountdown ? `Auto-sending in ${silenceCountdown}s…` : "Listening…") : "Voice"}</span>
-                  </button>
-
-                  {micError && (
-                    <span className="text-[10px] text-red-600 truncate max-w-[140px]">
-                      {micError}
-                    </span>
-                  )}
-                </div>
-
-                {/* Right: Circular Send Button (↑) */}
-                <button
-                  type="submit"
-                  disabled={busy || (!input.trim() && !attachedFile)}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-xs ${
-                    input.trim() || attachedFile
-                      ? "bg-ink text-white hover:bg-ink/90 scale-100 cursor-pointer"
-                      : "bg-mist text-graphite/55 cursor-not-allowed opacity-60"
-                  }`}
-                  title="Send prompt (or press Enter)"
-                >
-                  <ArrowUpIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </form>
-
-            {/* ─── HORIZONTAL SCROLLABLE PROMPT CAROUSEL MATCHING PHOTO 3 ───────── */}
-            <div className="relative flex items-center group/carousel">
-              {/* Left Scroll Button */}
-              <button
-                type="button"
-                onClick={() => scrollPrompts("left")}
-                disabled={!canScrollLeft}
-                aria-label="Scroll prompts left"
-                className={`absolute left-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
-                  canScrollLeft
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
-                }`}
-              >
-                <ChevronLeftIcon className="w-4 h-4" />
-              </button>
-
-              {/* Scroll Container */}
-              <div
-                ref={promptScrollRef}
-                onScroll={checkPromptScroll}
-                className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1 w-full"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {quickPills.map((pill) => (
-                  <button
-                    key={pill.label}
-                    type="button"
-                    onClick={() => runPrompt(pill.prompt)}
-                    className="shrink-0 rounded-full border border-line bg-white px-3.5 py-1.5 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    {pill.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Right Scroll Button (Matching Photo 3) */}
-              <button
-                type="button"
-                onClick={() => scrollPrompts("right")}
-                disabled={!canScrollRight}
-                aria-label="Scroll prompts right"
-                className={`absolute right-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white/95 shadow-sm backdrop-blur-xs transition-colors ${
-                  canScrollRight
-                    ? "opacity-100 hover:bg-mist cursor-pointer text-ink"
-                    : "opacity-0 pointer-events-none text-graphite/55"
-                }`}
-              >
-                <ChevronRightIcon className="w-4 h-4" />
-              </button>
+        {/* ─── BOTTOM COMPOSER (Active when thread has conversation messages) ─── */}
+        {!emptyThread && (
+          <div className="border-t border-white/[0.06] bg-bg/95 px-4 pb-6 pt-3 backdrop-blur-md">
+            <div className="mx-auto max-w-3xl">
+              {renderComposer(false)}
             </div>
-
           </div>
-        </div>
+        )}
       </div>
+
+      {/* ─── RIGHT AI SIDEBAR (Career Context Co-Pilot) ────────────────────── */}
+      <CareerContextPanel
+        isOpen={contextPanelOpen}
+        onClose={() => setContextPanelOpen(false)}
+        onSendPrompt={(p) => runPrompt(p)}
+        onNavigate={(feat, tab) => onRedirect(feat as FeatureId, tab as ResumeTab)}
+      />
     </div>
   );
 }
@@ -1772,3 +2069,13 @@ function StopIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
     </svg>
   );
 }
+
+function CloseIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+

@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { useApp } from "@/lib/store";
 import { Section } from "@/components/ui/Section";
 import { Card, PrimaryButton, GhostButton, Tag } from "@/components/ui/Primitives";
-import { speakText, stopSpeaking } from "@/lib/voice";
-import { useSharedTranscript, requestSharedVoiceStart } from "@/hooks/useSharedTranscript";
+import { startSpeechRecognition, SpeechRecognitionController, speakText, stopSpeaking } from "@/lib/voice";
+import { Check, RotateCcw, Volume2, Square, Sparkles, HelpCircle, BrainCircuit } from "lucide-react";
+import {
+  AdaptiveAssessmentEngine,
+  AssessmentState,
+  AdaptiveQuestion,
+  AssessmentDifficulty,
+} from "@/lib/ai/orchestrator/adaptiveAssessment";
+import { recordPracticeSubmission, initPracticeTelemetryListener } from "@/lib/practice/telemetryQueue";
 
 export interface PracticeQuestion {
   id: string;
@@ -378,12 +385,35 @@ const externalPracticeTools = [
 
 const STORAGE_SCORE_KEY = "careerforge.practice_scorecard";
 
+export type PracticeTrack = "Technical Interview" | "DSA" | "Communication" | "System Design";
+
 export function PracticeHub() {
   const { user } = useApp();
   const role = user?.targetRole || "frontend";
-  const questions = PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend;
+  const allRoleQuestions = PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend;
 
+  const [selectedTrack, setSelectedTrack] = useState<PracticeTrack | null>(null);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+
+  // Filter questions based on selectedTrack
+  const questions = selectedTrack
+    ? allRoleQuestions.filter((q) => {
+        if (selectedTrack === "Technical Interview") return q.type === "Technical";
+        if (selectedTrack === "System Design") return q.type === "System Design";
+        if (selectedTrack === "Communication") return q.type === "Behavioral";
+        if (selectedTrack === "DSA") return q.type === "Technical";
+        return true;
+      }).length > 0
+      ? allRoleQuestions.filter((q) => {
+          if (selectedTrack === "Technical Interview") return q.type === "Technical";
+          if (selectedTrack === "System Design") return q.type === "System Design";
+          if (selectedTrack === "Communication") return q.type === "Behavioral";
+          if (selectedTrack === "DSA") return q.type === "Technical";
+          return true;
+        })
+      : allRoleQuestions
+    : allRoleQuestions;
+
   const [userAnswer, setUserAnswer] = useState("");
   const [listening, setListening] = useState(false);
   const [speakingQuestion, setSpeakingQuestion] = useState(false);
@@ -393,13 +423,14 @@ export function PracticeHub() {
   const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
   const [isQuizCompleted, setIsQuizCompleted] = useState(false);
 
-  const speechBaseTextRef = useRef<string>("");
+  // ─── Adaptive Assessment Engine Integration (Phase 15) ─────────────────────
+  const [adaptiveSession, setAdaptiveSession] = useState<AssessmentState | null>(null);
+  const [activeAdaptiveQuestion, setActiveAdaptiveQuestion] = useState<AdaptiveQuestion | null>(null);
+  const [nextAdaptiveQuestion, setNextAdaptiveQuestion] = useState<AdaptiveQuestion | null>(null);
+  const [adaptiveFeedback, setAdaptiveFeedback] = useState<string | null>(null);
 
-  // Dictation into the answer box, fed by the one site-wide recogniser.
-  useSharedTranscript((transcript) => {
-    const base = speechBaseTextRef.current;
-    setUserAnswer(base ? `${base} ${transcript}` : transcript);
-  }, listening);
+  const speechControllerRef = useRef<SpeechRecognitionController | null>(null);
+  const speechBaseTextRef = useRef<string>("");
   const activeQuestion = questions[activeQuestionIdx] || questions[0];
 
   // Load completed questions from localStorage
@@ -412,14 +443,73 @@ export function PracticeHub() {
     }
   }, []);
 
+  // Offline-resilient telemetry background sync listener
+  useEffect(() => {
+    const cleanup = initPracticeTelemetryListener();
+    return cleanup;
+  }, []);
+
   // Cleanup speech synthesis & recognition on unmount
   useEffect(() => {
     return () => {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
+      speechControllerRef.current?.stop();
     };
   }, []);
+
+  // ─── Assessment Doubt Handling (Section 6) ──────────────────────────────────
+  const [doubtExplanation, setDoubtExplanation] = useState<string | null>(null);
+
+  const handleResolveDoubt = useCallback(async (userQuery: string) => {
+    // 1. Pause assessment, keep exact activeQuestionIdx and userAnswer intact
+    if (listening) {
+      speechControllerRef.current?.stop();
+      setListening(false);
+    }
+    stopSpeaking();
+
+    const standardDef = activeQuestion.standardConcept;
+    const prompt = `The user is answering assessment question: "${activeQuestion.question}". They have a doubt/question: "${userQuery}". Please provide a helpful, concise clarification to resolve their doubt without giving away the entire answer, then encourage them to resume answering.`;
+
+    try {
+      const res = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || "Let me clarify this question for you.";
+        setDoubtExplanation(reply);
+        speakText(reply, {
+          lang: "en-US",
+          onEnd: () => {
+            // Smoothly return to exact pending question
+            speakText(`Whenever you're ready, please continue your answer to: ${activeQuestion.question}`, { lang: "en-US" });
+          },
+        });
+      }
+    } catch {
+      const fallback = `Here is a clarification on ${standardDef.title}: ${standardDef.definition}. You can continue answering the question whenever you're ready.`;
+      setDoubtExplanation(fallback);
+      speakText(fallback, { lang: "en-US" });
+    }
+  }, [activeQuestion, listening]);
+
+  useEffect(() => {
+    const handleDoubtEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ query: string }>;
+      if (custom.detail?.query) {
+        void handleResolveDoubt(custom.detail.query);
+      }
+    };
+    window.addEventListener("careerforge:practice-doubt", handleDoubtEvent);
+    return () => window.removeEventListener("careerforge:practice-doubt", handleDoubtEvent);
+  }, [handleResolveDoubt]);
 
   // Vocalize Question Text
   const handleReadQuestion = () => {
@@ -462,31 +552,71 @@ export function PracticeHub() {
   // Toggle Voice Dictation without duplicate transcript echo
   const handleToggleListening = () => {
     if (listening) {
+      speechControllerRef.current?.stop();
       setListening(false);
       return;
     }
+
     speechBaseTextRef.current = userAnswer.trim();
-    setListening(true);
-    requestSharedVoiceStart();
+
+    const controller = startSpeechRecognition({
+      lang: "en-US",
+      onTranscript: (transcript: string) => {
+        const base = speechBaseTextRef.current;
+        const combined = base ? `${base} ${transcript}` : transcript;
+        setUserAnswer(combined);
+      },
+      onListeningChange: (isList: boolean) => setListening(isList),
+      onError: () => setListening(false),
+    });
+    speechControllerRef.current = controller;
   };
 
-  // Explanation Heuristic: Outputs an objective, standardized definition of the correct concept
-  const handleEvaluate = async () => {
-    if (!userAnswer.trim() || evaluating) return;
+  // Explanation Heuristic: Evaluates user answer via AdaptiveAssessmentEngine and reveals standard concept definition
+  const handleEvaluate = async (forceDontKnow = false) => {
+    if ((!userAnswer.trim() && !forceDontKnow) || evaluating) return;
     setEvaluating(true);
     setExplanationOutput(null);
+
+    const isDontKnow = forceDontKnow || /don['’]?t\s*know|no\s*idea|skip|not\s*sure/i.test(userAnswer.trim());
+    let evaluation: "correct" | "partial" | "incorrect" | "dont_know" = "partial";
+    if (isDontKnow) {
+      evaluation = "dont_know";
+    } else {
+      const words = userAnswer.trim().split(/\s+/).length;
+      if (words >= 25) evaluation = "correct";
+      else if (words >= 10) evaluation = "partial";
+      else evaluation = "incorrect";
+    }
+
+    if (adaptiveSession && activeAdaptiveQuestion) {
+      const turn = AdaptiveAssessmentEngine.recordTurn(
+        adaptiveSession,
+        activeAdaptiveQuestion,
+        isDontKnow ? "I don't know" : userAnswer,
+        evaluation
+      );
+      setAdaptiveSession(turn.nextState);
+      setAdaptiveFeedback(turn.feedback);
+      if (turn.nextQuestion) {
+        setNextAdaptiveQuestion(turn.nextQuestion);
+      }
+      if (turn.nextState.completed) {
+        setIsQuizCompleted(true);
+      }
+    }
 
     const standardDef = activeQuestion.standardConcept;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
             {
               role: "user",
-              content: `Please provide an objective, standardized technical breakdown of this interview concept.\n\nQuestion: "${activeQuestion.question}"\n\nStandard Topic: "${standardDef.title}"\n\nProvide the explanation in structured markdown format with:\n- **Standard Technical Definition**\n- **Core Principles & Architectural Trade-Offs**\n- **Production Best Practices**\n\nOutput only the objective standard concept definition rather than grading the user's specific text.`,
+              content: `Please provide an objective, standardized technical breakdown of this interview concept.\n\nQuestion: "${activeAdaptiveQuestion?.questionText || activeQuestion.question}"\n\nStandard Topic: "${standardDef.title}"\n\nProvide the explanation in structured markdown format with:\n- **Standard Technical Definition**\n- **Core Principles & Architectural Trade-Offs**\n- **Production Best Practices**\n\nOutput only the objective standard concept definition rather than grading the user's specific text.`,
             },
           ],
         }),
@@ -522,17 +652,29 @@ export function PracticeHub() {
       } catch {
         // ignore
       }
+
+      // Record telemetry into offline-resilient queue with idempotency
+      void recordPracticeSubmission({
+        track: (selectedTrack as string) || "frontend",
+        questionId: activeQuestion.id,
+        evaluation,
+      });
     }
   };
 
   const handleNextQuestion = () => {
-    if (activeQuestionIdx === questions.length - 1) {
+    if (nextAdaptiveQuestion) {
+      setActiveAdaptiveQuestion(nextAdaptiveQuestion);
+      setNextAdaptiveQuestion(null);
+    }
+    if (adaptiveSession?.completed || activeQuestionIdx === questions.length - 1) {
       // Finished the final question
       setIsQuizCompleted(true);
     } else {
       setActiveQuestionIdx((prev) => prev + 1);
       setUserAnswer("");
       setExplanationOutput(null);
+      setAdaptiveFeedback(null);
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
@@ -546,39 +688,127 @@ export function PracticeHub() {
     setActiveQuestionIdx(0);
     setUserAnswer("");
     setExplanationOutput(null);
+    setAdaptiveFeedback(null);
+    if (selectedTrack) {
+      const session = AdaptiveAssessmentEngine.createSession(selectedTrack, "fundamental");
+      setAdaptiveSession(session);
+      setActiveAdaptiveQuestion({
+        questionText: (PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend)[0]?.question || `Explain fundamental concepts of ${selectedTrack}`,
+        subconcept: "core fundamentals",
+        difficulty: "fundamental",
+        questionNumber: 1,
+      });
+    }
   };
 
   const completedCount = Object.keys(completedIds).filter((id) =>
     questions.some((q) => q.id === id)
   ).length;
 
+  if (!selectedTrack) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center animate-slideUp">
+        <div className="space-y-3">
+          <span className="font-display text-xs uppercase tracking-[0.24em] text-ink/60 font-semibold select-none">
+            ubix
+          </span>
+          <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
+            Practice
+          </h1>
+          <p className="text-sm text-ink/60 max-w-sm mx-auto">
+            Choose what you want to improve.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-10">
+          {(
+            [
+              { id: "Technical Interview", label: "Technical Interview", desc: "Core language & framework concepts" },
+              { id: "DSA", label: "DSA", desc: "Algorithms & data structure patterns" },
+              { id: "Communication", label: "Communication", desc: "Behavioral & architectural discussions" },
+              { id: "System Design", label: "System Design", desc: "Distributed scale & performance" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setSelectedTrack(item.id);
+                const session = AdaptiveAssessmentEngine.createSession(item.id, "fundamental");
+                setAdaptiveSession(session);
+                setActiveAdaptiveQuestion({
+                  questionText: (PRACTICE_QUESTIONS[role] || PRACTICE_QUESTIONS.frontend)[0]?.question || `Explain fundamental concepts of ${item.id}`,
+                  subconcept: "core fundamentals",
+                  difficulty: "fundamental",
+                  questionNumber: 1,
+                });
+                setActiveQuestionIdx(0);
+                setUserAnswer("");
+                setExplanationOutput(null);
+                setAdaptiveFeedback(null);
+              }}
+              className="group relative flex flex-col items-start p-5 rounded-2xl border border-white/[0.08] bg-surface/60 hover:bg-surface/90 hover:border-accent/40 hover:shadow-[0_4px_24px_rgba(120,227,238,0.08)] transition-all cursor-pointer text-left"
+            >
+              <span className="text-sm font-semibold text-white group-hover:text-accent transition-colors">
+                {item.label}
+              </span>
+              <span className="text-xs text-ink/50 mt-1">
+                {item.desc}
+              </span>
+              <span className="mt-4 text-[11px] font-mono text-accent group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 font-semibold">
+                Start drill →
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Section
-      id="practice"
-      eyebrow="Interview Simulator"
-      title="Standard Concept Practice &amp; Knowledge Verification"
-      description="Practice core technical, behavioral, and system design concepts with speech recognition, audio synthesis, and standardized definitions."
-    >
+    <div className="max-w-3xl mx-auto py-8 px-4 animate-slideUp">
+      {/* Slim Top Drill Bar */}
+      <div className="flex items-center justify-between pb-4 mb-6 border-b border-ink/8">
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedTrack(null);
+            setUserAnswer("");
+            setExplanationOutput(null);
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink/60 hover:text-white transition-colors cursor-pointer"
+        >
+          <span>←</span>
+          <span>Back to Practice</span>
+        </button>
+
+        <span className="text-xs font-mono text-accent uppercase tracking-wider font-semibold">
+          {selectedTrack}
+        </span>
+      </div>
+
       {/* ─── QUIZ COMPLETION GLOBAL SUMMARY VIEW ─────────────────────────── */}
       {isQuizCompleted ? (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-          <div className="rounded-2xl border border-emerald-300 bg-emerald-50/40 p-6 sm:p-8 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-emerald-200 pb-5">
+          <div className="rounded-2xl border border-ink/15 bg-surface p-6 sm:p-8 shadow-sm text-ink">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-ink/15 pb-5">
               <div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                  ✓ Quiz Completed
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success border border-success/30 uppercase tracking-wider">
+                  <Check size={12} strokeWidth={2.5} />
+                  <span>Quiz Completed</span>
                 </span>
-                <h3 className="font-display text-2xl italic text-neutral-900 mt-2">
+                <h3 className="font-sans text-2xl font-bold tracking-tight text-ink mt-2">
                   Global Concept Summary: {role.toUpperCase()} Track
                 </h3>
-                <p className="text-xs text-neutral-600 mt-1">
+                <p className="text-xs text-ink/75 mt-1">
                   Comprehensive reference guide of all standard industry definitions and architectural principles tested in this session.
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
-                <PrimaryButton type="button" onClick={handleRestartQuiz} className="text-xs">
-                  ↺ Practice Again
+                <PrimaryButton type="button" onClick={handleRestartQuiz} className="text-xs flex items-center gap-1.5">
+                  <RotateCcw size={13} />
+                  <span>Practice Again</span>
                 </PrimaryButton>
               </div>
             </div>
@@ -588,27 +818,27 @@ export function PracticeHub() {
               {questions.map((q, i) => (
                 <div
                   key={q.id}
-                  className="rounded-xl border border-line bg-white p-5 shadow-2xs space-y-3"
+                  className="rounded-xl border border-ink/15 bg-bg p-5 shadow-xs space-y-3"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-ink/15 pb-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white text-xs font-bold">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-xs font-bold text-neutral-900 uppercase">
+                      <span className="text-xs font-bold text-ink uppercase">
                         {q.standardConcept.title}
                       </span>
                     </div>
                     <Tag>{q.type}</Tag>
                   </div>
 
-                  <p className="text-xs font-medium text-neutral-500 italic">
+                  <p className="text-xs font-medium text-ink/80 italic">
                     &ldquo;{q.question}&rdquo;
                   </p>
 
-                  <div className="rounded-lg bg-neutral-50 p-3.5 text-xs text-neutral-800 leading-relaxed space-y-2 border border-neutral-200/80">
-                    <p className="font-semibold text-neutral-900">Standard Concept Definition:</p>
-                    <div className="prose prose-sm max-w-none text-neutral-700 font-sans">
+                  <div className="rounded-lg bg-surface/80 p-3.5 text-xs text-ink leading-relaxed space-y-2 border border-ink/15">
+                    <p className="font-bold text-ink">Standard Concept Definition:</p>
+                    <div className="prose prose-sm max-w-none text-ink/85 font-sans">
                       <ReactMarkdown>
                         {q.standardConcept.definition}
                       </ReactMarkdown>
@@ -616,10 +846,10 @@ export function PracticeHub() {
                   </div>
 
                   <div className="space-y-1 pt-1">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-accent">
                       Key Takeaways &amp; Architectural Standards:
                     </p>
-                    <ul className="list-disc pl-4 text-xs text-neutral-600 space-y-0.5">
+                    <ul className="list-disc pl-4 text-xs text-ink/80 space-y-0.5">
                       {q.standardConcept.keyTakeaways.map((t) => (
                         <li key={t}>{t}</li>
                       ))}
@@ -634,64 +864,75 @@ export function PracticeHub() {
         /* ─── ACTIVE QUESTION DRILL VIEW ──────────────────────────────────── */
         <div>
           {/* Session Progress Header */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-white px-5 py-3 shadow-2xs">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-ink">
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white font-bold text-xs">
-                {activeQuestionIdx + 1}/{questions.length}
-              </span>
+              {/* Progress dots */}
+              <div className="flex items-center gap-1">
+                {questions.map((q, idx) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveQuestionIdx(idx);
+                      setUserAnswer("");
+                      setExplanationOutput(null);
+                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                        window.speechSynthesis.cancel();
+                      }
+                      setSpeakingQuestion(false);
+                      setVocalizingExplanation(false);
+                    }}
+                    className={`h-6 w-6 rounded-full text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                      activeQuestionIdx === idx
+                        ? "bg-accent text-bg ring-1 ring-accent/30 font-bold"
+                        : completedIds[q.id]
+                        ? "bg-success/20 text-success border border-success/40"
+                        : "bg-surface-elevated text-ink/60 border border-white/10 hover:border-accent/50"
+                    }`}
+                    title={`Question ${idx + 1}: ${q.type}`}
+                    aria-label={`Go to question ${idx + 1}`}
+                  >
+                    {completedIds[q.id] ? <Check size={11} strokeWidth={2.5} /> : idx + 1}
+                  </button>
+                ))}
+              </div>
               <div>
-                <p className="text-xs font-semibold text-ink">Active Question Drill</p>
-                <p className="text-[11px] text-graphite">
-                  Target Role: <strong className="capitalize text-neutral-900">{role}</strong> ({completedCount} Completed)
+                <p className="text-xs font-semibold text-ink">
+                  Q{activeQuestionIdx + 1} <span className="text-ink/40 font-normal">of {questions.length}</span>
+                </p>
+                <p className="text-[11px] text-ink/50">
+                  {completedCount} answered · <span className="capitalize text-accent font-medium">{role}</span> track
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {questions.map((q, idx) => (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveQuestionIdx(idx);
-                    setUserAnswer("");
-                    setExplanationOutput(null);
-                    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                      window.speechSynthesis.cancel();
-                    }
-                    setSpeakingQuestion(false);
-                    setVocalizingExplanation(false);
-                  }}
-                  className={`h-7 w-7 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeQuestionIdx === idx
-                      ? "bg-neutral-900 text-white ring-2 ring-neutral-400"
-                      : completedIds[q.id]
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200"
-                  }`}
-                  title={`Question ${idx + 1}: ${q.type}`}
-                >
-                  {completedIds[q.id] ? "✓" : idx + 1}
-                </button>
-              ))}
-
-              <GhostButton
-                type="button"
-                onClick={() => setIsQuizCompleted(true)}
-                className="text-xs ml-2 py-1 px-2.5 bg-neutral-50"
-              >
-                Global Summary →
-              </GhostButton>
-            </div>
+            <GhostButton
+              type="button"
+              onClick={() => setIsQuizCompleted(true)}
+              className="text-xs py-1 px-3"
+            >
+              View summary →
+            </GhostButton>
           </div>
 
           {/* Main Question Card */}
-          <div className="mb-10 rounded-2xl border border-neutral-300 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4 mb-4">
+          <div className="mb-8 rounded-2xl border border-ink/10 bg-surface/60 p-5 sm:p-6 text-ink">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-ink/8 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <Tag>{activeQuestion.type}</Tag>
-                <span className="text-xs font-semibold text-graphite uppercase tracking-wider">
-                  Question {activeQuestionIdx + 1} of {questions.length}
+                {adaptiveSession && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[10px] font-bold text-accent border border-accent/30 uppercase tracking-wider">
+                    <Sparkles size={10} />
+                    <span>{adaptiveSession.currentDifficulty}</span>
+                  </span>
+                )}
+                {adaptiveSession && (
+                  <span className="text-[11px] font-mono text-ink/70">
+                    Mastery: {adaptiveSession.score}/100
+                  </span>
+                )}
+                <span className="text-[11px] font-semibold text-ink/40 uppercase tracking-widest">
+                  Q{activeQuestionIdx + 1} / {questions.length}
                 </span>
               </div>
 
@@ -702,31 +943,50 @@ export function PracticeHub() {
                   onClick={handleReadQuestion}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                     speakingQuestion
-                      ? "bg-neutral-900 text-white animate-pulse"
-                      : "bg-mist text-graphite hover:bg-neutral-200 hover:text-ink"
+                      ? "bg-accent text-bg animate-pulse"
+                      : "bg-surface-elevated text-ink hover:bg-surface border border-white/10"
                   }`}
                   title="Read question aloud (Speech Synthesis)"
                 >
-                  <span>{speakingQuestion ? "⏹ Stop Audio" : "🔊 Listen to Question"}</span>
+                  {speakingQuestion ? (
+                    <>
+                      <Square className="w-3 h-3 text-bg fill-current" />
+                      <span>Stop</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-accent" />
+                      <span>Listen</span>
+                    </>
+                  )}
                 </button>
 
                 {/* Question Switcher */}
                 <button
                   type="button"
                   onClick={handleNextQuestion}
-                  className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-graphite hover:border-ink hover:text-ink transition-colors cursor-pointer"
+                  className="rounded-full border border-ink/15 bg-bg px-3 py-1 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors cursor-pointer"
                 >
-                  {activeQuestionIdx === questions.length - 1 ? "Finish & Summary →" : "Next Question →"}
+                  {activeQuestionIdx === questions.length - 1 ? "Finish →" : "Next →"}
                 </button>
               </div>
             </div>
 
+            {/* Adaptive Feedback Banner */}
+            {adaptiveFeedback && (
+              <div className="mb-4 p-3 rounded-xl bg-accent/10 border border-accent/25 text-xs text-ink flex items-center gap-2 animate-in fade-in">
+                <BrainCircuit size={15} className="text-accent shrink-0" />
+                <span className="font-medium">{adaptiveFeedback}</span>
+              </div>
+            )}
+
             {/* Question Title */}
-            <h3 className="font-display text-lg sm:text-xl italic text-ink leading-relaxed">
-              &ldquo;{activeQuestion.question}&rdquo;
+            <h3 className="font-sans text-base sm:text-lg font-bold text-ink leading-relaxed">
+              &ldquo;{activeAdaptiveQuestion?.questionText || activeQuestion.question}&rdquo;
             </h3>
-            <p className="mt-2 text-xs text-graphite bg-mist/60 p-2.5 rounded-lg border border-line/60">
-              💡 <strong>Standard Focus:</strong> {activeQuestion.hint}
+            <p className="mt-2 text-xs text-ink/60 bg-ink/5 p-2.5 rounded-lg border border-ink/8">
+              <strong className="text-accent font-mono uppercase tracking-widest text-[10px] mr-1.5">Focus:</strong>
+              {activeQuestion.hint}
             </p>
 
             {/* User Answer Textarea & Voice Input */}
@@ -737,7 +997,7 @@ export function PracticeHub() {
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
                   placeholder="Record your response via voice dictation or type your thoughts here..."
-                  className="w-full rounded-xl border border-line bg-mist/30 p-3.5 text-sm text-ink placeholder:text-graphite/60 focus:border-ink focus:bg-white focus:outline-none transition-all"
+                  className="w-full rounded-xl border border-ink/15 bg-bg p-3.5 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none transition-all"
                 />
               </div>
 
@@ -748,32 +1008,45 @@ export function PracticeHub() {
                   onClick={handleToggleListening}
                   className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                     listening
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-mist text-ink hover:bg-line"
+                      ? "bg-danger text-white animate-pulse"
+                      : "bg-bg text-ink hover:bg-surface border border-ink/15"
                   }`}
                 >
-                  <span className={`inline-block h-2 w-2 rounded-full ${listening ? "bg-white animate-ping" : "bg-red-500"}`} />
-                  <span>{listening ? "Recording... Click to Stop" : "🎙️ Voice Input (Speech-to-Text)"}</span>
+                  <span className={`inline-block h-2 w-2 rounded-full ${listening ? "bg-white animate-ping" : "bg-danger"}`} />
+                  <span>{listening ? "Recording... Click to Stop" : "Voice Input (Speech-to-Text)"}</span>
                 </button>
 
-                {/* Reveal Standard Explanation Button */}
-                <PrimaryButton
-                  type="button"
-                  onClick={handleEvaluate}
-                  disabled={evaluating || !userAnswer.trim()}
-                >
-                  {evaluating ? "Generating Concept Explanation…" : "Reveal Standard Concept Explanation"}
-                </PrimaryButton>
+                {/* Action Buttons: I don't know + Submit Answer */}
+                <div className="flex items-center gap-2">
+                  <GhostButton
+                    type="button"
+                    onClick={() => handleEvaluate(true)}
+                    disabled={evaluating}
+                    className="text-xs py-1.5 px-3 border border-ink/20"
+                    title="Honestly declare a knowledge gap to receive fundamental concept reinforcement"
+                  >
+                    <HelpCircle size={13} className="mr-1 inline text-ink/60" />
+                    <span>I don&apos;t know / Skip</span>
+                  </GhostButton>
+
+                  <PrimaryButton
+                    type="button"
+                    onClick={() => handleEvaluate(false)}
+                    disabled={evaluating || !userAnswer.trim()}
+                  >
+                    {evaluating ? "Evaluating…" : "Submit Answer"}
+                  </PrimaryButton>
+                </div>
               </div>
             </div>
 
             {/* Objective Concept Explanation Output */}
             {explanationOutput && (
-              <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50/90 p-5 text-xs leading-relaxed text-ink space-y-3 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+              <div className="mt-6 rounded-xl border border-ink/15 bg-bg p-5 text-xs leading-relaxed text-ink space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-ink/15 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="font-bold text-neutral-900 text-sm">Objective Concept Explanation</span>
+                    <span className="flex h-2 w-2 rounded-full bg-success" />
+                    <span className="font-bold text-ink text-sm">Objective Concept Explanation</span>
                   </div>
 
                   {/* SpeechSynthesis Vocalization Button */}
@@ -782,29 +1055,29 @@ export function PracticeHub() {
                     onClick={() => handleReadExplanation(explanationOutput)}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
                       vocalizingExplanation
-                        ? "bg-neutral-900 text-white animate-pulse"
-                        : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                        ? "bg-accent text-white font-bold animate-pulse"
+                        : "bg-surface border border-ink/15 text-ink hover:bg-bg"
                     }`}
                   >
-                    <span>{vocalizingExplanation ? "⏹ Stop Vocalization" : "🔊 Vocalize Explanation"}</span>
+                    <span>{vocalizingExplanation ? "Stop Vocalization" : "Vocalize Explanation"}</span>
                   </button>
                 </div>
 
-                {/* Formatted Markdown Rendering without Escaped Asterisks */}
-                <div className="prose prose-sm max-w-none text-neutral-800 pt-1 font-sans">
+                {/* Formatted Markdown Rendering */}
+                <div className="prose prose-sm max-w-none text-ink/85 pt-1 font-sans">
                   <ReactMarkdown
                     components={{
                       strong: ({ ...props }) => (
-                        <strong className="font-bold text-neutral-950" {...props} />
+                        <strong className="font-bold text-ink" {...props} />
                       ),
                       h3: ({ ...props }) => (
-                        <h3 className="font-bold text-sm text-neutral-900 mt-2 mb-1" {...props} />
+                        <h3 className="font-bold text-sm text-ink mt-2 mb-1" {...props} />
                       ),
                       ul: ({ ...props }) => (
-                        <ul className="list-disc pl-4 space-y-1 my-2" {...props} />
+                        <ul className="list-disc pl-4 space-y-1 my-2 text-ink/80" {...props} />
                       ),
                       p: ({ ...props }) => (
-                        <p className="mb-2 leading-relaxed" {...props} />
+                        <p className="mb-2 leading-relaxed text-ink/80" {...props} />
                       ),
                     }}
                   >
@@ -812,11 +1085,11 @@ export function PracticeHub() {
                   </ReactMarkdown>
                 </div>
 
-                <div className="flex justify-end pt-3 border-t border-neutral-200">
+                <div className="flex justify-end pt-3 border-t border-ink/15">
                   <button
                     type="button"
                     onClick={handleNextQuestion}
-                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-all cursor-pointer"
+                    className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white hover:opacity-90 transition-all cursor-pointer"
                   >
                     {activeQuestionIdx === questions.length - 1 ? "Finish Quiz & View Summary →" : "Proceed to Next Concept →"}
                   </button>
@@ -826,29 +1099,6 @@ export function PracticeHub() {
           </div>
         </div>
       )}
-
-      {/* Gamified Coding Environments & Reference Sandboxes */}
-      <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-graphite">
-        External Practice Environments &amp; Reference Sandboxes
-      </h4>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {externalPracticeTools.map((tool) => (
-          <a
-            key={tool.name}
-            href={tool.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block border-2 border-black p-8 transition-colors hover:bg-black hover:text-white"
-          >
-            <p className="text-xs font-medium uppercase tracking-wide">{tool.role}</p>
-            <p className="mt-2 text-xl font-black">{tool.name}</p>
-            <p className="mt-2 text-xs leading-relaxed">{tool.description}</p>
-            <p className="mt-4 text-xs font-black uppercase tracking-widest underline underline-offset-4">
-              Launch Sandbox
-            </p>
-          </a>
-        ))}
-      </div>
-    </Section>
+    </div>
   );
 }

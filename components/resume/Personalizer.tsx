@@ -4,6 +4,7 @@ import { useState } from "react";
 import { marketSkills } from "@/lib/data";
 import { RoleId } from "@/lib/types";
 import { PrimaryButton, GhostButton } from "@/components/ui/Primitives";
+import { Check, Edit3 } from "lucide-react";
 
 export function Personalizer({
   role,
@@ -44,13 +45,13 @@ export function Personalizer({
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-graphite">1. Existing Resume Content</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/60">1. Existing Resume Content</p>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           rows={12}
           placeholder="Paste summary, job bullets, or project achievements to tailor for your target role…"
-          className="w-full rounded-xl border border-line bg-white p-4 text-sm text-ink placeholder:text-graphite/60 focus:border-ink focus:outline-none shadow-2xs"
+          className="w-full rounded-xl border border-ink/15 bg-bg p-4 text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent shadow-xs"
         />
         <PrimaryButton onClick={personalize} disabled={loading || !input.trim()} className="mt-3">
           {loading ? "Tailoring Content…" : "Tailor Content for Target Role"}
@@ -59,12 +60,13 @@ export function Personalizer({
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink/60">
             2. Intermediate Tailored Output (Editable)
           </p>
           {output && (
-            <span className="text-[11px] text-emerald-700 font-semibold">
-              Live Editable Field ✓
+            <span className="flex items-center gap-1 text-[11px] text-success font-semibold">
+              <Check size={12} strokeWidth={2.5} />
+              <span>Live Editable Field</span>
             </span>
           )}
         </div>
@@ -75,21 +77,22 @@ export function Personalizer({
               value={output}
               onChange={(e) => setOutput(e.target.value)}
               rows={12}
-              className="w-full rounded-xl border border-emerald-300 bg-emerald-50/20 p-4 text-sm text-ink focus:border-emerald-600 focus:bg-white focus:outline-none shadow-2xs leading-relaxed"
+              className="w-full rounded-xl border border-success/30 bg-success/5 p-4 text-sm text-ink focus:border-success focus:bg-bg focus:outline-none shadow-xs leading-relaxed"
               placeholder="Tailored text will appear here. You can manually edit any line..."
             />
             {onTransferToBuilder && (
               <GhostButton
                 type="button"
                 onClick={() => onTransferToBuilder(output)}
-                className="w-full justify-center bg-neutral-900 text-white hover:bg-neutral-800 text-xs py-2.5 shadow-sm"
+                className="w-full justify-center bg-ink text-bg hover:opacity-90 text-xs py-2.5 shadow-sm flex items-center gap-1.5"
               >
-                ✏️ Transfer to Resume Builder (Intermediate Edit Mode) →
+                <Edit3 size={13} />
+                <span>Transfer to Resume Builder (Intermediate Edit Mode) →</span>
               </GhostButton>
             )}
           </div>
         ) : (
-          <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-line bg-white p-6 text-center text-xs text-graphite">
+          <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-ink/15 bg-surface/40 p-6 text-center text-xs text-ink/50">
             Paste your resume text on the left and click Tailor to generate an editable intermediate version.
           </div>
         )}

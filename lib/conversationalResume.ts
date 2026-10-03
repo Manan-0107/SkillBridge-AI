@@ -182,10 +182,23 @@ export function processResumeStepInput(
       };
     }
 
-    const emailCandidate = normalizeSpokenEmail(clean);
+    let emailCandidate = "";
+    const directEmailMatch = clean.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i);
+    if (directEmailMatch) {
+      emailCandidate = directEmailMatch[0].toLowerCase();
+    } else {
+      emailCandidate = normalizeSpokenEmail(clean);
+    }
 
     // Save candidate email and ask for confirmation
     updatedState.email = emailCandidate;
+    const remainingText = clean
+      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "")
+      .replace(/^[,\s]+|[,\s]+$/g, "");
+    if (remainingText && remainingText.length > 2) {
+      updatedState.location = remainingText;
+    }
+
     return {
       nextState: updatedState,
       reply: `I recorded your email as "${emailCandidate}". Is that correct? (Say Yes to confirm or speak the correction)`,

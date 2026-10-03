@@ -142,6 +142,7 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
   const supabaseRef = useRef(createSupabaseBrowserClient());
   /** Guards a single probe cycle from resolving twice (e.g. a late error arriving after speech was already detected). */
   const probeResolvedRef = useRef(false);
+  const activationGenerationRef = useRef(0);
   /** Lets callbacks call the latest start/stop/resetStrikes without depending on `voice`'s ever-changing identity. */
   const voiceRef = useRef<ReturnType<typeof useVoiceCommand> | null>(null);
 
@@ -171,10 +172,9 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
   const { voiceLanguage, setVoiceLanguage } = useApp();
 
   const voice = useVoiceCommand({
-    // Stay enabled through the probe itself, and afterward for as long as
-    // we're in voice mode. Once resolved to text mode, disable — the mic
-    // should not keep running in the background.
-    enabled: isPreferenceLoading || isVoiceMode,
+    // GlobalVoiceDictator is the single owner of the live microphone. Keeping
+    // this probe passive prevents two SpeechRecognition instances from racing.
+    enabled: false,
     lang: voiceLanguage || "en-US",
     onSpeechDetected: resolveAsVoiceMode,
     onFallbackTriggered: resolveAsTextMode,
@@ -197,12 +197,14 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
    * entire duration.
    */
   const runActivationFlow = useCallback(async (options?: { skipStoredPreference?: boolean }) => {
+    const generation = ++activationGenerationRef.current;
     probeResolvedRef.current = false;
     setIsPreferenceLoading(true);
     setIsVoiceMode(false);
 
     if (!options?.skipStoredPreference) {
       const stored = await fetchStoredPreference();
+      if (generation !== activationGenerationRef.current) return;
       if (stored === true) {
         probeResolvedRef.current = true;
         setIsVoiceMode(false);
@@ -211,18 +213,16 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // No usable stored preference (or explicitly bypassed) — probe live.
-    // No gesture, no button: start listening the instant we decide to probe.
-    voiceRef.current?.resetStrikes();
-    setHasRequestedPermission(true);
-    voiceRef.current?.start();
+    // Do not open a second microphone here. GlobalVoiceDictator owns the live
+    // conversation and will request permission from an explicit user action.
+    setIsVoiceMode(true);
+    setIsPreferenceLoading(false);
+    setHasRequestedPermission(false);
   }, []);
 
-  // Kick off the activation flow once, on mount (home page entry).
   useEffect(() => {
     void runActivationFlow();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [runActivationFlow]);
 
   // Re-run on auth changes: a different user signing in must get *their*
   // preference and their own fresh probe, not the previous session's.
@@ -245,11 +245,12 @@ export function GlobalVoiceProvider({ children }: { children: ReactNode }) {
 
   const requestVoiceStart = useCallback(() => {
     setHasRequestedPermission(true);
-    voiceRef.current?.start();
+    window.dispatchEvent(new CustomEvent("careerforge:voice-start"));
   }, []);
 
   const retryVoiceMode = useCallback(() => {
     void runActivationFlow({ skipStoredPreference: true });
+    window.dispatchEvent(new CustomEvent("careerforge:voice-start"));
   }, [runActivationFlow]);
 
   const switchToTextMode = useCallback(() => {
