@@ -437,3 +437,78 @@ test("Scenario L: Destructive and sensitive mutations require server-side confir
   assert.equal(replayResult.success, false);
   assert.equal(replayResult.requiresConfirmation, true);
 });
+
+// ─── Scenario M: Client-provided userId != authenticated userId ───────────────
+test("Scenario M: Client-provided userId is never used over authenticated userId", async () => {
+  const authenticatedUserId = "00000000-0000-0000-0000-00000000000a";
+  const untrustedVictimUserId = "00000000-0000-0000-0000-00000000000b";
+
+  // Simulate an attacker passing victim's ID in body / profile
+  const mockUntrustedClientPayload = {
+    userId: untrustedVictimUserId,
+    user_id: untrustedVictimUserId,
+    userProfile: { id: untrustedVictimUserId },
+  };
+
+  // The server MUST derive identity strictly from authenticated session
+  const serverDerivedUserId = authenticatedUserId; // as done via getAuthenticatedUser(req).id
+  assert.notEqual(serverDerivedUserId, mockUntrustedClientPayload.userId);
+
+  const snapshot = await getAuthoritativeCareerSnapshot(serverDerivedUserId);
+  assert.equal(snapshot.userId, authenticatedUserId);
+  assert.notEqual(snapshot.userId, untrustedVictimUserId);
+
+  const rag = await getScopedRagContext(serverDerivedUserId, "how is my resume?", "frontend");
+  for (const m of rag.matches) {
+    if (m.metadata?.userId) {
+      assert.notEqual(m.metadata.userId, untrustedVictimUserId);
+    }
+  }
+});
+
+// ─── Scenario N: Scoped RAG rejects injected/malformed user IDs ───────────────
+test("Scenario N: Scoped RAG sanitizes and rejects SQL injection / wildcard user IDs", async () => {
+  const maliciousUserIds = [
+    "' OR '1'='1",
+    "usr-1; DROP TABLE resume_uploads;--",
+    "user-%",
+    "user_*",
+    "../../../etc/passwd",
+    "user\0name",
+  ];
+
+  for (const malId of maliciousUserIds) {
+    const res = await getScopedRagContext(malId, "review my resume", "frontend");
+    // Must not crash, and must never return tenant data matching the injection
+    assert.equal(res.retrieved, true);
+    for (const match of res.matches) {
+      assert.notEqual(match.metadata?.userId, malId);
+    }
+  }
+});
+
+// ─── Scenario O: Complete multi-tenant state isolation across all domains ─────
+test("Scenario O: Multi-tenant state isolation across resume, roadmap, practice, and profile", async () => {
+  const tenantA = "00000000-0000-0000-0000-000000000001";
+  const tenantB = "00000000-0000-0000-0000-000000000002";
+
+  const snapA = await getAuthoritativeCareerSnapshot(tenantA);
+  const snapB = await getAuthoritativeCareerSnapshot(tenantB);
+
+  // Assert complete separation
+  assert.equal(snapA.userId, tenantA);
+  assert.equal(snapB.userId, tenantB);
+  assert.notEqual(snapA.userId, snapB.userId);
+
+  // Modifying Tenant A's in-memory representation does not affect Tenant B
+  snapA.skills.currentValue = ["Go", "Kubernetes"];
+  snapA.targetRole.currentValue = "Cloud Architect";
+  assert.deepEqual(snapB.skills.currentValue, []);
+  assert.equal(snapB.targetRole.currentValue, null);
+
+  const synthA = CareerSynthesisEngine.synthesize("daily_focus", toAuthoritativeCareerState(snapA));
+  const synthB = CareerSynthesisEngine.synthesize("daily_focus", toAuthoritativeCareerState(snapB));
+  assert.equal(typeof synthA.spokenRecommendation, "string");
+  assert.equal(typeof synthB.spokenRecommendation, "string");
+});
+

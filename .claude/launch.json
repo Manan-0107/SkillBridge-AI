@@ -4,7 +4,7 @@
     {
       "name": "careerforge-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "careerforge", "run", "dev"],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
     }

@@ -229,6 +229,18 @@ describe("PHASE 8 — Final Staging, Deployment Rehearsal & Go-Live Validation",
     assert.equal(headerMap.get("Referrer-Policy"), "strict-origin-when-cross-origin");
     assert.ok(headerMap.get("Strict-Transport-Security")?.includes("max-age=31536000"));
     assert.ok(headerMap.get("Permissions-Policy")?.includes("microphone=(self)"));
+
+    // Verify Content-Security-Policy (CSP)
+    const csp = headerMap.get("Content-Security-Policy");
+    assert.ok(csp, "Must enforce Content-Security-Policy");
+    assert.ok(csp.includes("default-src 'self'"));
+    assert.ok(csp.includes("object-src 'none'"));
+    assert.ok(csp.includes("base-uri 'self'"));
+    assert.ok(csp.includes("frame-ancestors 'none'"));
+    assert.ok(csp.includes("form-action 'self'"));
+    assert.ok(csp.includes("https://translate.google.com"));
+    assert.ok(!csp.includes("'unsafe-eval'"), "Must NOT allow unsafe-eval");
+    assert.ok(!csp.includes("script-src *"), "Must NOT allow wildcard script-src");
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

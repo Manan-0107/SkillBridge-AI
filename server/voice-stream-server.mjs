@@ -479,9 +479,13 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
     try {
       const pythonPort = process.env.PYTHON_AI_PORT || '8000';
       const intentUrl = `http://127.0.0.1:${pythonPort}/api/voice/intent`;
+      const internalSecret = process.env.INTERNAL_IPC_SECRET || process.env.SESSION_SECRET || 'careerforge-internal-ipc-secret-min-32-chars';
       const response = await fetch(intentUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': internalSecret,
+        },
         body: JSON.stringify({
           text: userText,
           sessionId,

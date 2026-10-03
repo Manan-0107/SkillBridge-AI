@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SESSION_CONFIG } from "@/lib/security/session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,13 @@ export async function POST() {
     success: true,
     message: "Logged out successfully",
   });
+
+  try {
+    const supabaseServer = createSupabaseServerClient();
+    await supabaseServer.auth.signOut();
+  } catch {
+    // Supabase unconfigured or offline; handled gracefully
+  }
 
   res.cookies.set(SESSION_CONFIG.cookieName, "", {
     ...SESSION_CONFIG.cookieOptions,

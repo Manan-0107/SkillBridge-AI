@@ -192,24 +192,35 @@ function searchLocalCorpus(query: string, corpus: RagMatch[], limit = 4): RagMat
   return scored.slice(0, limit);
 }
 
+function sanitizeUserId(id: unknown): string | null {
+  if (typeof id !== "string") return null;
+  const trimmed = id.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  // Disallow SQL wildcards, null bytes, quotes, spaces, control characters
+  if (/[\0\s\r\n%_'"\\;<>]/.test(trimmed)) return null;
+  // Allowed identifier: standard UUID, usr-xxx, user-xxx, or alphanumeric with hyphens/underscores
+  if (!/^(usr-|user-)?[a-zA-Z0-9_-]+$/i.test(trimmed)) return null;
+  return trimmed;
+}
+
 // ─── Main Scoped RAG Retrieval Engine ─────────────────────────────────────────
 export async function getScopedRagContext(
   arg1: string | null | undefined,
   arg2?: string,
   arg3?: string
 ): Promise<ScopedRagResult> {
-  let userId: string | null | undefined;
+  let rawUserId: string | null | undefined;
   let query: string;
   let targetRole: string | undefined;
 
   if (arg3 !== undefined) {
     // Called as (userId, query, targetRole)
-    userId = arg1;
+    rawUserId = arg1;
     query = arg2 || "";
     targetRole = arg3;
   } else if (arg1 === null || arg1 === undefined) {
     // Called as (null | undefined, query)
-    userId = arg1;
+    rawUserId = arg1;
     query = arg2 || "";
     targetRole = undefined;
   } else {
@@ -220,16 +231,18 @@ export async function getScopedRagContext(
         arg1.startsWith("user-") ||
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(arg1))
     ) {
-      userId = arg1;
+      rawUserId = arg1;
       query = arg2 || "";
       targetRole = undefined;
     } else {
       // Called as (query, targetRole)
-      userId = undefined;
+      rawUserId = undefined;
       query = arg1 || "";
       targetRole = arg2;
     }
   }
+
+  const userId = sanitizeUserId(rawUserId);
 
   const domain = classifyScopedDomain(query);
 
