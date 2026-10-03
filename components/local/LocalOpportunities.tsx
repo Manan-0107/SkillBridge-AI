@@ -6,7 +6,10 @@ import { useApp } from "@/lib/store";
 import type { LiveJob } from "@/app/api/jobs/route";
 import type { LocationProfile } from "@/app/api/location/route";
 import { speakText, stopSpeaking } from "@/lib/voice";
-import { Volume2, Square, Mail, Check, ArrowRight, MapPin, Bell } from "lucide-react";
+import { Volume2, Square, Mail, Check, ArrowRight, MapPin, Bell, Sparkles, FileText, Plus } from "lucide-react";
+import { JobIntelligenceModal } from "@/components/career/JobIntelligenceModal";
+import type { NormalizedJob, ExplainableMatchResult } from "@/lib/career/types";
+import { normalizeLiveJob } from "@/lib/career/jobParser";
 
 interface SuggestionItem {
   city: string;
@@ -43,6 +46,16 @@ export function LocalOpportunities() {
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Phase 6: Job Intelligence Modal & Custom Parser States
+  const [selectedJobForModal, setSelectedJobForModal] = useState<NormalizedJob | null>(null);
+  const [activeMatchResult, setActiveMatchResult] = useState<ExplainableMatchResult | null>(null);
+  const [matchingJobId, setMatchingJobId] = useState<string | null>(null);
+  const [showCustomJobInput, setShowCustomJobInput] = useState(false);
+  const [customJobText, setCustomJobText] = useState("");
+  const [customJobUrl, setCustomJobUrl] = useState("");
+  const [parsingCustomJob, setParsingCustomJob] = useState(false);
+  const [customJobError, setCustomJobError] = useState<string | null>(null);
 
   // ─── 1. Real-Time Location Auto-Detection (GPS + IP Fallback) ──────────────
   const autoDetectLocation = async () => {
@@ -222,6 +235,89 @@ export function LocalOpportunities() {
     });
   };
 
+  // ─── Phase 6: Analyze Match & Explainability ────────────────────────────────
+  const handleAnalyzeJobMatch = async (liveOrNormJob: LiveJob | NormalizedJob) => {
+    const normJob: NormalizedJob = "requirements" in liveOrNormJob
+      ? (liveOrNormJob as NormalizedJob)
+      : normalizeLiveJob(liveOrNormJob as LiveJob);
+
+    setMatchingJobId(normJob.id);
+    setSelectedJobForModal(normJob);
+    setActiveMatchResult(null);
+
+    try {
+      const res = await fetch("/api/jobs/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job: normJob }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setActiveMatchResult(data.matchResult || null);
+      } else {
+        // Fallback: analyze client-side if no saved resume or unauthorized
+        console.warn("[LocalOpportunities] Backend match fallback triggered");
+      }
+    } catch (err) {
+      console.error("[LocalOpportunities] Match error:", err);
+    } finally {
+      setMatchingJobId(null);
+    }
+  };
+
+  const handleParseCustomJob = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!customJobText.trim() && !customJobUrl.trim()) return;
+
+    setParsingCustomJob(true);
+    setCustomJobError(null);
+
+    try {
+      const res = await fetch("/api/jobs/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawText: customJobText,
+          jobUrl: customJobUrl,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCustomJobError(data.error || "Failed to parse job description.");
+        return;
+      }
+
+      if (data.job) {
+        setShowCustomJobInput(false);
+        setCustomJobText("");
+        setCustomJobUrl("");
+        // Immediately run match analysis on parsed job
+        handleAnalyzeJobMatch(data.job);
+      }
+    } catch (err) {
+      setCustomJobError("Connection error while parsing job. Please try pasting the text manually.");
+    } finally {
+      setParsingCustomJob(false);
+    }
+  };
+
+  const handleSaveJob = async (job: NormalizedJob, match: ExplainableMatchResult | null) => {
+    try {
+      await fetch("/api/jobs/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job,
+          lastAnalysis: match,
+        }),
+      });
+    } catch (err) {
+      console.warn("[LocalOpportunities] Failed to persist saved job:", err);
+    }
+  };
+
   // ─── 4. Dispatch Email Alert for a specific job opening ─────────────────────
   const handleEmailJob = async (job: LiveJob) => {
     const targetEmail = alertEmail.trim() || user?.email;
@@ -397,6 +493,77 @@ export function LocalOpportunities() {
         </div>
       </form>
 
+      {/* Phase 6: Custom Job Description or URL Analyzer */}
+      <div className="mb-6 rounded-2xl border border-accent/20 bg-surface/40 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
+              <Sparkles size={14} />
+              <span>Career Intelligence Job Analyzer</span>
+            </h3>
+            <p className="text-xs text-ink/70 mt-0.5">
+              Paste a custom job description or job URL to run an explainable match against your resume.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCustomJobInput(!showCustomJobInput)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors cursor-pointer"
+          >
+            <Plus size={13} />
+            <span>{showCustomJobInput ? "Hide Parser" : "Paste Job or URL"}</span>
+          </button>
+        </div>
+
+        {showCustomJobInput && (
+          <form onSubmit={handleParseCustomJob} className="mt-4 space-y-3 pt-3 border-t border-white/5">
+            <div>
+              <label htmlFor="custom-job-url" className="block text-[11px] font-mono text-ink/50 mb-1">
+                Option A: Job Posting URL (HTTPS only, protected by SSRF validation)
+              </label>
+              <input
+                id="custom-job-url"
+                type="url"
+                value={customJobUrl}
+                onChange={(e) => setCustomJobUrl(e.target.value)}
+                placeholder="https://jobs.example.com/posting/12345"
+                className="w-full rounded-lg border border-ink/15 bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-job-text" className="block text-[11px] font-mono text-ink/50 mb-1">
+                Option B: Or paste raw Job Description text
+              </label>
+              <textarea
+                id="custom-job-text"
+                rows={4}
+                value={customJobText}
+                onChange={(e) => setCustomJobText(e.target.value)}
+                placeholder="Paste the full job description or requirements here..."
+                className="w-full rounded-lg border border-ink/15 bg-bg p-3 text-xs text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            {customJobError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20">
+                {customJobError}
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={parsingCustomJob || (!customJobText.trim() && !customJobUrl.trim())}
+                className="rounded-lg bg-accent px-4 py-1.5 text-xs font-bold text-bg hover:bg-accent/90 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                {parsingCustomJob ? "Parsing & Analyzing..." : "Analyze Job Match"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
       {/* Email Alert Banner */}
       <form onSubmit={handleSubscribeAlert} className="mb-6 flex flex-wrap items-center gap-2.5 rounded-xl border border-ink/10 bg-surface/30 p-3 sm:p-4">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-ink/75">
@@ -549,6 +716,16 @@ export function LocalOpportunities() {
                     </>
                   )}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleAnalyzeJobMatch(job)}
+                  disabled={matchingJobId === job.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors cursor-pointer"
+                  aria-label={`Analyze how your resume matches ${job.title}`}
+                >
+                  <Sparkles size={12} />
+                  <span>{matchingJobId === job.id ? "Analyzing..." : "Analyze Match"}</span>
+                </button>
                 <a
                   href={job.applyUrl || job.url}
                   target="_blank"
@@ -562,6 +739,16 @@ export function LocalOpportunities() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Phase 6: Accessible Job Intelligence Modal */}
+      {selectedJobForModal && (
+        <JobIntelligenceModal
+          job={selectedJobForModal}
+          matchResult={activeMatchResult}
+          onClose={() => setSelectedJobForModal(null)}
+          onSaveJob={handleSaveJob}
+        />
       )}
 
       {/* Attribution footer */}

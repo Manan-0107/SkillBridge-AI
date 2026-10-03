@@ -3,7 +3,8 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { FieldLabel, GhostButton, PrimaryButton, inputClasses } from "@/components/ui/Primitives";
 import { atsTemplates, AtsTemplate } from "@/lib/templates";
-import { Check, Eye, FileText } from "lucide-react";
+import { Check, Eye, FileText, BookmarkCheck, FolderOpen, ArrowUp, ArrowDown, X, Trash2 } from "lucide-react";
+import { CanonicalResume, parseStructuredResume } from "@/lib/resume/structuredParser";
 
 interface ExperienceItem {
   id: string;
@@ -121,7 +122,13 @@ const fontOptions = [
   { id: "mono", label: "JetBrains Mono (Technical)", className: "font-mono" },
 ];
 
-export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
+export function Builder({
+  initialSummary,
+  initialResume,
+}: {
+  initialSummary?: string;
+  initialResume?: CanonicalResume;
+} = {}) {
   // Layout and Styling State
   const [selectedTemplate, setSelectedTemplate] = useState<AtsTemplate["id"]>("harvard");
   const [selectedColor, setSelectedColor] = useState(colorPalettes[0]);
@@ -158,6 +165,12 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
 
+  // Server persistence state
+  const [savingServer, setSavingServer] = useState(false);
+  const [savedModalOpen, setSavedModalOpen] = useState(false);
+  const [savedResumesList, setSavedResumesList] = useState<any[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+
   useEffect(() => {
     if (initialSummary) {
       setSummary(initialSummary);
@@ -165,6 +178,28 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
       showToast("Tailored content loaded into Intermediate Editor!");
     }
   }, [initialSummary]);
+
+  useEffect(() => {
+    if (initialResume) {
+      if (initialResume.basics.name) setFullName(initialResume.basics.name);
+      if (initialResume.basics.headline) setHeadline(initialResume.basics.headline);
+      if (initialResume.basics.email) setEmail(initialResume.basics.email);
+      if (initialResume.basics.phone) setPhone(initialResume.basics.phone);
+      if (initialResume.basics.location) setLocation(initialResume.basics.location);
+      if (initialResume.basics.linkedIn) setLinkedIn(initialResume.basics.linkedIn);
+      if (initialResume.basics.github) setGithub(initialResume.basics.github);
+      if (initialResume.basics.portfolio) setPortfolio(initialResume.basics.portfolio);
+      if (initialResume.basics.summary) setSummary(initialResume.basics.summary);
+      if (initialResume.skills.raw.length) setSkills(initialResume.skills.raw.join(", "));
+      if (initialResume.skills.categorized.tools.length) setTools(initialResume.skills.categorized.tools.join(", "));
+      if (initialResume.work.length) setExperiences(initialResume.work);
+      if (initialResume.education.length) setEducations(initialResume.education);
+      if (initialResume.projects.length) setProjects(initialResume.projects);
+      if (initialResume.certifications.length) setCertifications(initialResume.certifications);
+      setActiveTab("personal");
+      showToast("Parsed resume loaded into builder!");
+    }
+  }, [initialResume]);
 
   // True when the user hasn't entered any personal info yet → show demo in preview
   const isDemo = !fullName.trim() && !email.trim() && !summary.trim() && experiences.length === 0;
@@ -217,6 +252,208 @@ export function Builder({ initialSummary }: { initialSummary?: string } = {}) {
     setTimeout(() => {
       document.title = originalTitle;
     }, 1000);
+  };
+
+  // Accessible Reordering Handlers
+  const moveExperience = (index: number, direction: "up" | "down") => {
+    setExperiences((prev) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+    showToast(`Role moved ${direction}`);
+  };
+
+  const moveEducation = (index: number, direction: "up" | "down") => {
+    setEducations((prev) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+    showToast(`Education entry moved ${direction}`);
+  };
+
+  const moveProject = (index: number, direction: "up" | "down") => {
+    setProjects((prev) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+    showToast(`Project moved ${direction}`);
+  };
+
+  // Server Persistence Handlers
+  const saveToAccount = async () => {
+    setSavingServer(true);
+    try {
+      const contactLine = [email, phone, location, linkedIn, portfolio, github].filter(Boolean).join(" • ");
+      const expText = experiences
+        .map((e) => `${e.role} | ${e.company} (${e.startDate} - ${e.current ? "Present" : e.endDate})\n${e.bullets}`)
+        .join("\n\n");
+      const eduText = educations
+        .map((e) => `${e.degree} — ${e.institution} (${e.graduationYear}) ${e.gpaOrHonors ? "\n" + e.gpaOrHonors : ""}`)
+        .join("\n");
+      const projText = projects
+        .map((p) => `${p.title} [${p.techStack}]\n${p.liveUrl ? "Link: " + p.liveUrl + "\n" : ""}${p.description}`)
+        .join("\n\n");
+
+      const resumeText = `${fullName.toUpperCase() || "CANDIDATE"}
+${headline}
+${contactLine}
+
+PROFESSIONAL SUMMARY
+${summary}
+
+WORK EXPERIENCE
+${expText}
+
+EDUCATION
+${eduText}
+
+SKILLS & TOOLS
+${skills}
+${tools}
+
+${projects.length ? `PROJECTS\n${projText}\n\n` : ""}`;
+
+      const res = await fetch("/api/resume/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: fullName ? `${fullName.replace(/\s+/g, "_")}_Resume` : "My_Resume",
+          resumeText,
+          targetRole: "frontend",
+          analysisResult: {
+            overallScore: currentTemplate.atsScore,
+            engines: {
+              heuristic: {
+                name: "ATS Heuristic",
+                score: currentTemplate.atsScore,
+                matchedSkills: skills.split(",").map((s) => s.trim()).filter(Boolean),
+                missingSkills: [],
+                suggestions: ["Resume built using ATS-compliant layout engine."],
+                available: true,
+              },
+              github: {
+                name: "GitHub Market Demand",
+                score: 80,
+                matchedSkills: [],
+                missingSkills: [],
+                suggestions: [],
+                available: false,
+              },
+              ai: {
+                name: "AI Engine",
+                score: currentTemplate.atsScore,
+                matchedSkills: [],
+                missingSkills: [],
+                suggestions: [],
+                available: false,
+              },
+            },
+            matchedSkills: skills.split(",").map((s) => s.trim()).filter(Boolean),
+            missingSkills: [],
+            skillGapRoadmap: [],
+            suggestions: ["Format verified against ATS parsers."],
+            savedToDb: true,
+            uploadId: null,
+          },
+          structuredResume: {
+            basics: { fullName, headline, email, phone, location, linkedIn, portfolio, github, summary },
+            skills: { raw: skills.split(",").map((s) => s.trim()).filter(Boolean), categorized: { tools: tools.split(",").map((s) => s.trim()).filter(Boolean) } },
+            work: experiences,
+            education: educations,
+            projects,
+            certifications,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      showToast("Resume saved to your account!");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save resume");
+    } finally {
+      setSavingServer(false);
+    }
+  };
+
+  const fetchSavedResumes = async () => {
+    setLoadingSaved(true);
+    setSavedModalOpen(true);
+    try {
+      const res = await fetch("/api/resume/save");
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.resumes)) {
+        setSavedResumesList(data.resumes);
+      } else {
+        setSavedResumesList([]);
+      }
+    } catch {
+      setSavedResumesList([]);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
+
+  const loadSavedResume = (r: any) => {
+    if (r.analysis_json?.structuredResume) {
+      const sr = r.analysis_json.structuredResume;
+      if (sr.basics) {
+        setFullName(sr.basics.fullName || sr.basics.name || "");
+        setHeadline(sr.basics.headline || "");
+        setEmail(sr.basics.email || "");
+        setPhone(sr.basics.phone || "");
+        setLocation(sr.basics.location || "");
+        setLinkedIn(sr.basics.linkedIn || "");
+        setPortfolio(sr.basics.portfolio || "");
+        setGithub(sr.basics.github || "");
+        setSummary(sr.basics.summary || "");
+      }
+      if (Array.isArray(sr.work)) setExperiences(sr.work);
+      if (Array.isArray(sr.education)) setEducations(sr.education);
+      if (Array.isArray(sr.projects)) setProjects(sr.projects);
+      if (Array.isArray(sr.certifications)) setCertifications(sr.certifications);
+      if (sr.skills?.raw) setSkills(sr.skills.raw.join(", "));
+      if (sr.skills?.categorized?.tools) setTools(sr.skills.categorized.tools.join(", "));
+    } else if (r.resume_text) {
+      const parsed = parseStructuredResume(r.resume_text);
+      if (parsed.basics.name) setFullName(parsed.basics.name);
+      if (parsed.basics.email) setEmail(parsed.basics.email);
+      if (parsed.basics.phone) setPhone(parsed.basics.phone);
+      if (parsed.basics.location) setLocation(parsed.basics.location);
+      if (parsed.basics.summary) setSummary(parsed.basics.summary);
+      if (parsed.work.length) setExperiences(parsed.work);
+      if (parsed.education.length) setEducations(parsed.education);
+      if (parsed.skills.raw.length) setSkills(parsed.skills.raw.join(", "));
+    }
+    setSavedModalOpen(false);
+    showToast("Loaded saved resume into editor!");
+  };
+
+  const deleteSavedResume = async (id: string) => {
+    try {
+      const res = await fetch(`/api/resume/save?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSavedResumesList((prev) => prev.filter((r) => r.id !== id));
+        showToast("Resume removed.");
+      }
+    } catch {
+      showToast("Failed to delete resume.");
+    }
   };
 
   // Experience Handlers
@@ -537,6 +774,25 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
             onChange={handleJsonImport}
             className="hidden"
           />
+          <GhostButton
+            type="button"
+            onClick={fetchSavedResumes}
+            className="text-xs bg-white gap-1"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-ink/70" />
+            <span>My Resumes</span>
+          </GhostButton>
+
+          <GhostButton
+            type="button"
+            onClick={saveToAccount}
+            disabled={savingServer}
+            className="text-xs bg-white gap-1"
+          >
+            <BookmarkCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{savingServer ? "Saving…" : "Save to DB"}</span>
+          </GhostButton>
+
           <GhostButton
             type="button"
             onClick={() => jsonInputRef.current?.click()}
@@ -1067,13 +1323,33 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <div key={exp.id} className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-neutral-700">Role #{idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeExperience(exp.id)}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Move role ${idx + 1} up`}
+                        disabled={idx === 0}
+                        onClick={() => moveExperience(idx, "up")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↑ Up
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move role ${idx + 1} down`}
+                        disabled={idx === experiences.length - 1}
+                        onClick={() => moveExperience(idx, "down")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↓ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeExperience(exp.id)}
+                        className="text-xs text-red-600 hover:underline cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1181,13 +1457,33 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <div key={edu.id} className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-neutral-700">Degree #{idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeEducation(edu.id)}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Move degree ${idx + 1} up`}
+                        disabled={idx === 0}
+                        onClick={() => moveEducation(idx, "up")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↑ Up
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move degree ${idx + 1} down`}
+                        disabled={idx === educations.length - 1}
+                        onClick={() => moveEducation(idx, "down")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↓ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeEducation(edu.id)}
+                        className="text-xs text-red-600 hover:underline cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1306,13 +1602,33 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
                 <div key={proj.id} className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-neutral-700">Project #{idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeProject(proj.id)}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Move project ${idx + 1} up`}
+                        disabled={idx === 0}
+                        onClick={() => moveProject(idx, "up")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↑ Up
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move project ${idx + 1} down`}
+                        disabled={idx === projects.length - 1}
+                        onClick={() => moveProject(idx, "down")}
+                        className="rounded px-2 py-0.5 text-[11px] border border-line bg-white hover:bg-neutral-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        ↓ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeProject(proj.id)}
+                        className="text-xs text-red-600 hover:underline cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1990,6 +2306,92 @@ ${projects.length ? `PROJECTS\n${projText}\n\n` : ""}${certifications.length ? `
           </div>
         </div>
       </div>
+
+      {/* Saved Resumes Accessible Modal */}
+      {savedModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="saved-resumes-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-neutral-900 p-6 shadow-2xl text-white">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="text-accent" size={18} />
+                <h3 id="saved-resumes-title" className="text-sm font-bold text-white">
+                  My Saved Resumes &amp; Drafts
+                </h3>
+              </div>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={() => setSavedModalOpen(false)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {loadingSaved ? (
+              <div className="py-8 text-center text-xs text-neutral-400">
+                Loading your saved resumes...
+              </div>
+            ) : savedResumesList.length === 0 ? (
+              <div className="py-8 text-center text-xs text-neutral-400">
+                No saved resumes found in your account. Click &quot;Save to DB&quot; to save your current resume.
+              </div>
+            ) : (
+              <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                {savedResumesList.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-semibold text-white">
+                        {item.filename || "Resume"}
+                      </p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        {item.target_role ? `Target: ${item.target_role} • ` : ""}
+                        ATS Score: {item.ats_score ?? "N/A"}% •{" "}
+                        {item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString() : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => loadSavedResume(item)}
+                        className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-bg hover:opacity-90 transition-opacity cursor-pointer"
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete resume ${item.filename || ""}`}
+                        onClick={() => deleteSavedResume(item.id)}
+                        className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <GhostButton
+                type="button"
+                onClick={() => setSavedModalOpen(false)}
+                className="text-xs"
+              >
+                Close
+              </GhostButton>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,9 +11,13 @@ import {
   Briefcase,
   FileText,
   ChevronDown,
+  CheckSquare,
+  Award,
 } from "lucide-react";
+import { ApplicationTracker } from "@/components/career/ApplicationTracker";
+import { OfferWorkspace } from "@/components/career/OfferWorkspace";
 
-export type OpportunitiesTab = "radar" | "resume";
+export type OpportunitiesTab = "radar" | "resume" | "applications" | "offers";
 
 export default function OpportunitiesPage() {
   const searchParams = useSearchParams();
@@ -28,7 +32,7 @@ export default function OpportunitiesPage() {
 
   useEffect(() => {
     const tab = searchParams.get("tab") as OpportunitiesTab;
-    if (tab && (tab === "radar" || tab === "resume")) {
+    if (tab && (tab === "radar" || tab === "resume" || tab === "applications" || tab === "offers")) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -82,6 +86,48 @@ export default function OpportunitiesPage() {
                 <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] bg-accent rounded-full shadow-[0_0_8px_var(--accent)]" />
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("applications")}
+              aria-pressed={activeTab === "applications"}
+              className={`group relative flex items-center gap-1.5 py-1 text-xs font-medium tracking-wide transition-colors cursor-pointer ${
+                activeTab === "applications"
+                  ? "text-white font-semibold"
+                  : "text-ink/60 hover:text-ink"
+              }`}
+            >
+              <CheckSquare
+                size={13}
+                strokeWidth={2}
+                className={activeTab === "applications" ? "text-accent" : "text-ink/40 group-hover:text-ink/60"}
+              />
+              <span>Applications</span>
+              {activeTab === "applications" && (
+                <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] bg-accent rounded-full shadow-[0_0_8px_var(--accent)]" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("offers")}
+              aria-pressed={activeTab === "offers"}
+              className={`group relative flex items-center gap-1.5 py-1 text-xs font-medium tracking-wide transition-colors cursor-pointer ${
+                activeTab === "offers"
+                  ? "text-white font-semibold"
+                  : "text-ink/60 hover:text-ink"
+              }`}
+            >
+              <Award
+                size={13}
+                strokeWidth={2}
+                className={activeTab === "offers" ? "text-accent" : "text-ink/40 group-hover:text-ink/60"}
+              />
+              <span>Offer Workspace</span>
+              {activeTab === "offers" && (
+                <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] bg-accent rounded-full shadow-[0_0_8px_var(--accent)]" />
+              )}
+            </button>
           </div>
 
           {/* Right: Subtle Track Selector */}
@@ -118,6 +164,16 @@ export default function OpportunitiesPage() {
         {activeTab === "radar" && <LocalOpportunities />}
         {activeTab === "resume" && (
           <ResumeSuite role={role} initialTab="builder" />
+        )}
+        {activeTab === "applications" && (
+          <div className="app-shell flex-1">
+            <ApplicationTracker />
+          </div>
+        )}
+        {activeTab === "offers" && (
+          <div className="app-shell flex-1">
+            <OfferWorkspace />
+          </div>
         )}
       </div>
     </main>

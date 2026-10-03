@@ -37,10 +37,19 @@ export async function verifySessionTokenEdge(
   const [serialized, signature] = parts;
   if (!serialized || !signature) return null;
 
-  const hmacSecret =
-    secret ||
-    process.env.SESSION_SECRET ||
-    "careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars";
+  let hmacSecret = secret || process.env.SESSION_SECRET;
+  if (!hmacSecret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "FATAL SECURITY ERROR: SESSION_SECRET must be explicitly configured in production. Silent fallback is prohibited."
+      );
+    }
+    hmacSecret = "careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars";
+  } else if (process.env.NODE_ENV === "production" && hmacSecret.length < 32) {
+    throw new Error(
+      "FATAL SECURITY ERROR: Production SESSION_SECRET must be at least 32 characters long."
+    );
+  }
 
   try {
     const encoder = new TextEncoder();

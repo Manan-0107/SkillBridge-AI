@@ -11,6 +11,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { isPrivateIp } from "@/lib/security/ssrf";
+import { getClientIp } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,35 +30,11 @@ export interface LocationProfile {
   source: "IP-Geolocation" | "GPS-ReverseGeocode" | "Search" | "Default" | "LOCATION_UNAVAILABLE";
 }
 
-const IPV4_REGEX = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
-
 function isSafePublicIp(ip: string): boolean {
   if (!ip || typeof ip !== "string") return false;
   const trimmed = ip.trim();
-  if (!IPV4_REGEX.test(trimmed) && !IPV6_REGEX.test(trimmed)) return false;
-
-  // Disallow localhost, private, multicast, carrier NAT, link-local
-  if (
-    trimmed === "127.0.0.1" ||
-    trimmed === "::1" ||
-    trimmed === "localhost" ||
-    trimmed.startsWith("10.") ||
-    trimmed.startsWith("192.168.") ||
-    trimmed.startsWith("169.254.") ||
-    trimmed.startsWith("100.64.") ||
-    trimmed.startsWith("198.18.") ||
-    trimmed.startsWith("198.19.") ||
-    trimmed.startsWith("224.") ||
-    trimmed.startsWith("240.") ||
-    trimmed.startsWith("0.") ||
-    trimmed.startsWith("fc00:") ||
-    trimmed.startsWith("fe80:") ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(trimmed)
-  ) {
-    return false;
-  }
-  return true;
+  if (!trimmed || trimmed === "localhost" || trimmed === "127.0.0.1" || trimmed === "::1") return false;
+  return !isPrivateIp(trimmed);
 }
 
 export async function GET(req: NextRequest) {
@@ -186,11 +164,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── 3. Auto-detect from Client IP (Primary Zero-Click Location) ───────────
-    const rawIp =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip")?.trim() ||
-      "";
-
+    const rawIp = getClientIp(req);
     const isSafeIp = isSafePublicIp(rawIp);
 
     // Try ipwho.is

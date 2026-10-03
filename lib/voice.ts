@@ -225,13 +225,25 @@ export function getGlobalVoiceLanguage(): string {
   return currentLanguage || "en-US";
 }
 
+let sharedChimeCtx: AudioContext | null = null;
+function getSharedChimeContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedChimeCtx || sharedChimeCtx.state === "closed") {
+    sharedChimeCtx = new AudioCtx();
+  } else if (sharedChimeCtx.state === "suspended") {
+    void sharedChimeCtx.resume().catch(() => {});
+  }
+  return sharedChimeCtx;
+}
+
 // ─── 2. Accessible Web Audio Chimes for Blind & Disabled Users ─────────────────
 export function playAccessibleChime(type: "start" | "success" | "stop" | "clear" | "navigate" | "focus") {
   if (typeof window === "undefined") return;
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getSharedChimeContext();
+    if (!ctx) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();

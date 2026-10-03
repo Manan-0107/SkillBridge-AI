@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
 
   try {
-    const authUser = await getAuthenticatedUser();
+    const authUser = await getAuthenticatedUser(req);
     if (!authUser) {
       return NextResponse.json(
         {
@@ -418,8 +418,8 @@ export async function POST(req: NextRequest) {
     };
 
     return NextResponse.json(result);
-  } catch (err) {
-    console.error(`[analyze] Unexpected error (${requestId}):`, err);
+  } catch (err: any) {
+    console.error(`[analyze] Unexpected error (${requestId}):`, err?.message || "Analysis failure");
     return NextResponse.json(
       {
         code: "INTERNAL_ERROR",

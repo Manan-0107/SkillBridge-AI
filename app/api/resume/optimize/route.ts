@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
 
   try {
-    const authUser = await getAuthenticatedUser();
+    const authUser = await getAuthenticatedUser(req);
     if (!authUser) {
       return NextResponse.json(
         {
@@ -102,8 +102,8 @@ export async function POST(req: NextRequest) {
     // 2. Fallback Heuristic Optimization (Google XYZ Formula)
     const fallbackVariants = generateHeuristicVariants(trimmed, safeRole, randomVerb, type);
     return NextResponse.json(fallbackVariants);
-  } catch (error) {
-    console.error(`[Optimize API] Error (${requestId}):`, error);
+  } catch (error: any) {
+    console.error(`[Optimize API] Error (${requestId}):`, error?.message || "Optimization error");
     return NextResponse.json(
       {
         code: "INTERNAL_ERROR",
@@ -121,20 +121,26 @@ async function runAiOptimization(text: string, role: string, type: string) {
   const prompt = `You are a Principal Resume Evaluator.
 Rewrite and optimize the following ${type} for a ${role} resume.
 Follow the Google XYZ formula: "Accomplished [X] as measured by [Y] by doing [Z]".
-Make it punchy, metric-driven, and ATS-compliant.
+
+CRITICAL FACTUAL INTEGRITY INSTRUCTIONS:
+- STRICTLY PRESERVE FACTUAL INTEGRITY.
+- DO NOT FABRICATE OR INVENT fake metrics, percentages, team sizes, dollar amounts, or technologies not present in the user's input.
+- Strengthen action verbs, technical clarity, concise phrasing, and ATS keyword relevance.
+- If a measurable metric is absent in the input, provide a clear bracketed placeholder prompt (e.g., "[quantifiable metric: e.g. % faster, latency, or scale]") so the candidate can insert authentic figures.
 
 Original text:
 "${text}"
 
 Respond ONLY with valid JSON in this exact structure:
 {
-  "optimized": "Primary polished high-impact version with strong action verbs and quantified impact",
+  "optimized": "Polished high-impact version with strong action verbs and factual integrity preserved",
   "alternatives": [
-    "Alternative 1 (metric & speed focused)",
-    "Alternative 2 (leadership & architecture focused)"
+    "Alternative 1 (technical clarity focused)",
+    "Alternative 2 (collaboration and delivery focused)"
   ],
-  "atsKeywordsAdded": ["keyword1", "keyword2", "keyword3"],
-  "scoreImprovement": "Enhanced action-verb framing and quantified clarity (AI Suggestion)"
+  "atsKeywordsAdded": ["keyword1", "keyword2"],
+  "scoreImprovement": "Transformed passive phrasing to strong action verb (Factual preservation)",
+  "metricPrompt": "Guidance on authentic metrics to consider adding"
 }`;
 
   try {
@@ -179,26 +185,29 @@ function generateHeuristicVariants(
 
   if (type === "summary") {
     return {
-      optimized: `Results-driven ${role} engineer with proven track record in architecting high-availability systems, optimizing core performance by over 30%, and delivering scalable full-stack features from initial design to production deployment.`,
+      optimized: `Results-driven ${role} specialist experienced in building scalable solutions, streamlining feature delivery, and maintaining robust system performance.`,
       alternatives: [
-        `High-impact ${role} professional specializing in modern component architecture, automated CI/CD pipelines, and cross-functional leadership across agile teams.`,
-        `Passionate ${role} builder focused on metric-driven user experiences, clean code patterns, and cutting latency across production workflows.`,
+        `Proactive ${role} practitioner focused on clean architecture, modern component design, and efficient cross-functional team collaboration.`,
+        `Dedicated ${role} contributor with a strong foundation in end-to-end development, code maintainability, and user-centric workflows.`,
       ],
-      atsKeywordsAdded: ["Scalability", "System Architecture", "Performance Optimization", "Agile Execution"],
-      scoreImprovement: "+28% ATS Parser Legibility",
+      atsKeywordsAdded: ["Scalability", "System Architecture", "Best Practices", "Cross-Functional Collaboration"],
+      scoreImprovement: "Enhanced active voice and role clarity (Factual preservation)",
+      metricPrompt: "Tip: If you have measurable metrics (e.g. latency reduction %, user scale), add them to quantify your impact.",
     };
   }
 
-  // Bullet Point
-  const primaryOptimized = `${verb} ${clean.charAt(0).toLowerCase() + clean.slice(1)}, improving system responsiveness and efficiency by 34% across 10k+ active sessions.`;
+  // Bullet Point: Action verb + user facts + prompt to quantify if not present
+  const lowerStart = clean.charAt(0).toLowerCase() + clean.slice(1);
+  const primaryOptimized = `${verb} ${lowerStart}, optimizing delivery and code reliability [insert measurable outcome, e.g., latency or usage].`;
 
   return {
     optimized: primaryOptimized,
     alternatives: [
-      `Spearheaded modular implementation of ${clean.toLowerCase()}, reducing build latency by 42% and eliminating critical bottlenecks.`,
-      `Engineered and deployed scalable ${clean.toLowerCase()} utilizing modern design standards, accelerating release cycles by 25%.`,
+      `Engineered ${lowerStart} to streamline workflows and improve maintainability across production modules.`,
+      `Implemented and standardized ${lowerStart} adhering to industry best practices and ATS guidelines.`,
     ],
-    atsKeywordsAdded: [verb, "System Performance", "Modular Architecture", "Metric-Driven Delivery"],
-    scoreImprovement: "+35% Impact Rating",
+    atsKeywordsAdded: [verb, "System Performance", "Modular Architecture"],
+    scoreImprovement: "Transformed passive phrasing to strong action verb (Factual preservation)",
+    metricPrompt: "Tip: Replace bracketed text with your authentic performance or adoption metric to complete the XYZ formula.",
   };
 }

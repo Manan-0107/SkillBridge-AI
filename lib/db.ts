@@ -267,3 +267,230 @@ export async function saveResumeWithUserConsistency(params: {
   return { uploadId: upload?.id ?? null };
 }
 
+/**
+ * Safely delete a resume upload belonging strictly to the authenticated user.
+ * Prevents IDOR by validating that user_id matches the session userId.
+ */
+export async function deleteResumeUpload(
+  userId: string,
+  uploadId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase || !userId || !uploadId) {
+    return { success: false, error: "Database not configured or invalid identifiers" };
+  }
+
+  const { error } = await supabase
+    .from("resume_uploads")
+    .delete()
+    .eq("id", uploadId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[DB] deleteResumeUpload error:", error.message);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// ─── Phase 6: Saved Jobs Helpers ──────────────────────────────────────────────
+
+// In-memory fallback stores for local testing / offline development
+const localSavedJobsStore = new Map<string, any[]>();
+const localApplicationsStore = new Map<string, any[]>();
+
+/**
+ * Fetch all saved jobs for a user from their state.saved_jobs array.
+ */
+export async function getUserSavedJobs(userId: string): Promise<any[]> {
+  if (!userId) return [];
+  if (!supabase) {
+    return localSavedJobsStore.get(userId) || [];
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("state")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return localSavedJobsStore.get(userId) || [];
+  }
+
+  const state = (data.state as Record<string, unknown>) || {};
+  return Array.isArray(state.saved_jobs) ? state.saved_jobs : [];
+}
+
+/**
+ * Persists a saved job or updates its match analysis for a user.
+ */
+export async function saveUserSavedJob(
+  userId: string,
+  savedJob: { id: string; job: any; savedAt: string; lastAnalysis?: any; notes?: string }
+): Promise<boolean> {
+  if (!userId || !savedJob?.id) return false;
+
+  const current = await getUserSavedJobs(userId);
+  const filtered = current.filter((j: any) => j.id !== savedJob.id);
+  const updated = [savedJob, ...filtered].slice(0, 50); // Bound to 50 saved jobs
+
+  if (!supabase) {
+    localSavedJobsStore.set(userId, updated);
+    return true;
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      state: { saved_jobs: updated },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("[DB] saveUserSavedJob error:", error.message);
+    localSavedJobsStore.set(userId, updated);
+    return true;
+  }
+  return true;
+}
+
+/**
+ * Deletes a saved job from a user's saved_jobs list.
+ */
+export async function deleteUserSavedJob(userId: string, jobId: string): Promise<boolean> {
+  if (!userId || !jobId) return false;
+
+  const current = await getUserSavedJobs(userId);
+  const updated = current.filter((j: any) => j.id !== jobId && j.job?.id !== jobId);
+
+  if (!supabase) {
+    localSavedJobsStore.set(userId, updated);
+    return true;
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      state: { saved_jobs: updated },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("[DB] deleteUserSavedJob error:", error.message);
+    localSavedJobsStore.set(userId, updated);
+    return true;
+  }
+  return true;
+}
+
+// ─── Phase 7: Application Tracking Helpers ─────────────────────────────────────
+
+/**
+ * Fetch all tracked applications for a user from their state.applications array.
+ */
+export async function getUserApplications(userId: string): Promise<any[]> {
+  if (!userId) return [];
+  if (!supabase) {
+    return localApplicationsStore.get(userId) || [];
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("state")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return localApplicationsStore.get(userId) || [];
+  }
+
+  const state = (data.state as Record<string, unknown>) || {};
+  return Array.isArray(state.applications) ? state.applications : [];
+}
+
+/**
+ * Persists or updates an ApplicationRecord for a user.
+ */
+export async function saveUserApplication(
+  userId: string,
+  application: any
+): Promise<boolean> {
+  if (!userId || !application?.id) return false;
+
+  const current = await getUserApplications(userId);
+  const filtered = current.filter((a: any) => a.id !== application.id);
+  const updated = [application, ...filtered].slice(0, 100); // Bound to 100 applications
+
+  if (!supabase) {
+    localApplicationsStore.set(userId, updated);
+    return true;
+  }
+
+  // Preserve existing state fields (voice, accessibility, saved_jobs)
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("state")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const currentState = (userRow?.state as Record<string, unknown>) || {};
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      state: { ...currentState, applications: updated },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("[DB] saveUserApplication error:", error.message);
+    localApplicationsStore.set(userId, updated);
+    return true;
+  }
+  return true;
+}
+
+/**
+ * Deletes a tracked application belonging strictly to the user.
+ */
+export async function deleteUserApplication(userId: string, applicationId: string): Promise<boolean> {
+  if (!userId || !applicationId) return false;
+
+  const current = await getUserApplications(userId);
+  const updated = current.filter((a: any) => a.id !== applicationId);
+
+  if (!supabase) {
+    localApplicationsStore.set(userId, updated);
+    return true;
+  }
+
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("state")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const currentState = (userRow?.state as Record<string, unknown>) || {};
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      state: { ...currentState, applications: updated },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("[DB] deleteUserApplication error:", error.message);
+    localApplicationsStore.set(userId, updated);
+    return true;
+  }
+  return true;
+}
+
+
+

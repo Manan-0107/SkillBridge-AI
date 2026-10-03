@@ -1,8 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+import { createApiErrorResponse } from "@/lib/errors/apiError";
+
+export const runtime = "nodejs";
+
+const MAX_PAYLOAD_SIZE = 64 * 1024; // 64 KB
 
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const body = await req.json();
+    const contentLength = Number(req.headers.get("content-length"));
+    if (contentLength && contentLength > MAX_PAYLOAD_SIZE) {
+      return createApiErrorResponse(
+        "PAYLOAD_TOO_LARGE",
+        `Payload exceeds maximum limit of ${MAX_PAYLOAD_SIZE / 1024} KB.`,
+        requestId,
+        { statusCode: 413 }
+      );
+    }
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return createApiErrorResponse("BAD_REQUEST", "Invalid JSON request payload.", requestId, {
+        statusCode: 400,
+      });
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return createApiErrorResponse("BAD_REQUEST", "Request payload must be a JSON object.", requestId, {
+        statusCode: 400,
+      });
+    }
+
     const {
       fullName,
       headline,
@@ -91,9 +123,11 @@ export async function POST(req: NextRequest) {
       data: jsonResume,
     });
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", message: error instanceof Error ? error.message : "Invalid payload" },
-      { status: 400 }
+    return createApiErrorResponse(
+      "BAD_REQUEST",
+      error instanceof Error ? error.message : "Invalid payload",
+      requestId,
+      { statusCode: 400 }
     );
   }
 }

@@ -103,6 +103,13 @@ function isPrivateIPv6(ip: string): boolean {
 }
 
 /**
+ * Checks if an IP or hostname is private/loopback/cloud metadata.
+ */
+export function isPrivateIp(ip: string): boolean {
+  return isPrivateOrBlockedHost(ip);
+}
+
+/**
  * Checks whether a given hostname is a private/loopback/cloud metadata address or internal name.
  */
 export function isPrivateOrBlockedHost(hostname: string): boolean {

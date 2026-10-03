@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
 
   try {
-    const authUser = await getAuthenticatedUser();
+    const authUser = await getAuthenticatedUser(req);
     if (!authUser) {
       return NextResponse.json(
         {
@@ -257,8 +257,8 @@ export async function POST(req: NextRequest) {
         subject: emailSubject,
       },
     });
-  } catch (error) {
-    console.error(`[Jobs Alert API] Error (${requestId}):`, error);
+  } catch (error: any) {
+    console.error(`[Jobs Alert API] Error (${requestId}):`, error?.message || "Job alert error");
     return NextResponse.json(
       {
         code: "INTERNAL_ERROR",
