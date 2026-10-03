@@ -51,7 +51,11 @@ export interface SkillEvidenceItem {
   createdAt: string;
   verifiedAt?: string;
   rejectionReason?: string;
+  provenance?: "CONFIRMED" | "SOURCE_VERIFIED" | "INFERRED" | "UNKNOWN" | "USER_PROVIDED";
+  verificationMetadata?: Record<string, unknown>;
 }
+
+export type SkillEvidence = SkillEvidenceItem;
 
 // In-memory store: userId -> Map<evidenceId, SkillEvidenceItem>
 const userEvidenceStores = new Map<string, Map<string, SkillEvidenceItem>>();
