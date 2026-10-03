@@ -12,12 +12,13 @@
 
 import { NextResponse } from "next/server";
 import { checkRedisHealth } from "@/lib/security/rateLimit";
+import { isProductionEnvironment, getEnvironmentName } from "@/lib/security/environment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
-  const isProd = process.env.NODE_ENV === "production";
+  const isProd = isProductionEnvironment();
 
   // 1. Check Redis health
   const redisHealth = await checkRedisHealth();
@@ -67,7 +68,7 @@ export async function GET(): Promise<NextResponse> {
   return NextResponse.json(
     {
       status: isReady ? "ready" : "not_ready",
-      environment: isProd ? "production" : "development",
+      environment: getEnvironmentName(),
       checks,
       timestamp: new Date().toISOString(),
     },

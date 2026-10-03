@@ -229,7 +229,7 @@ export function Analyzer({
         suggestions: enhanced.engines.ai.available
           ? enhanced.suggestions
           : [
-              "AI scoring unavailable — showing keyword-overlap heuristic only. Set GEMINI_API_KEY or GITHUB_TOKEN for full analysis.",
+              "AI scoring unavailable — showing keyword-overlap heuristic only. Advanced AI analysis is currently offline.",
               ...enhanced.suggestions,
             ],
       });

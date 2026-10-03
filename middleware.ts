@@ -30,6 +30,7 @@ import {
   RateLimitResult,
 } from "@/lib/security/rateLimit";
 import { getOrGenerateCorrelationId } from "@/lib/observability/correlation";
+import { isProductionEnvironment } from "@/lib/security/environment";
 
 const PUBLIC_API_ROUTES = new Set<string>([
   "/api/auth/login",
@@ -133,7 +134,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     const referer = req.headers.get("referer");
     const host = req.headers.get("host") || "";
 
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionEnvironment()) {
       if (origin) {
         try {
           const originUrl = new URL(origin);

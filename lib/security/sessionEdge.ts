@@ -4,6 +4,8 @@
  * Zero Node.js runtime dependencies — fully compatible with Next.js Edge Runtime and Middleware.
  */
 
+import { isProductionEnvironment } from "./environment.ts";
+
 export interface SessionPayload {
   userId: string;
   email: string;
@@ -39,13 +41,13 @@ export async function verifySessionTokenEdge(
 
   let hmacSecret = secret || process.env.SESSION_SECRET;
   if (!hmacSecret) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionEnvironment()) {
       throw new Error(
         "FATAL SECURITY ERROR: SESSION_SECRET must be explicitly configured in production. Silent fallback is prohibited."
       );
     }
     hmacSecret = "careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars";
-  } else if (process.env.NODE_ENV === "production" && hmacSecret.length < 32) {
+  } else if (isProductionEnvironment() && hmacSecret.length < 32) {
     throw new Error(
       "FATAL SECURITY ERROR: Production SESSION_SECRET must be at least 32 characters long."
     );

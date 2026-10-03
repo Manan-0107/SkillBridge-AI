@@ -121,20 +121,8 @@ export function buildRateLimitKey(
   return `${category}:ip:${options.ip || "127.0.0.1"}`;
 }
 
-/**
- * Detects whether the current runtime execution context is production or staging.
- * Follows established project environment conventions (NODE_ENV and VERCEL_ENV).
- */
-export function isProductionEnvironment(): boolean {
-  const nodeEnv = process.env.NODE_ENV as string | undefined;
-  return (
-    nodeEnv === "production" ||
-    process.env.VERCEL_ENV === "production" ||
-    nodeEnv === "staging" ||
-    process.env.VERCEL_ENV === "staging" ||
-    process.env.VERCEL_ENV === "preview"
-  );
-}
+import { isProductionEnvironment } from "./environment.ts";
+export { isProductionEnvironment };
 
 /**
  * Resets the in-memory rate limit store (for test suites only).

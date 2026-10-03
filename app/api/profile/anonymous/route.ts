@@ -17,11 +17,12 @@ import path from "path";
 import { upsertUser } from "@/lib/db";
 import { checkRateLimit, checkRateLimitAsync, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import { createApiErrorResponse } from "@/lib/errors/apiError";
+import { isProductionEnvironment } from "@/lib/security/environment";
 
 const COOKIE_NAME = "cf_anon_device";
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: isProductionEnvironment(),
   sameSite: "lax" as const,
   path: "/",
   maxAge: 60 * 60 * 24 * 365, // 1 year

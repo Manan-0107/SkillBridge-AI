@@ -28,18 +28,20 @@ const LEGACY_COOKIE_NAME = "cf_uid";
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GUEST_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+import { isProductionEnvironment } from "./environment.ts";
+
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionEnvironment()) {
       throw new Error(
         "FATAL SECURITY ERROR: SESSION_SECRET must be explicitly configured in production. Silent fallback is prohibited."
       );
     }
-    // Explicit development-only salt (never used when NODE_ENV === 'production')
+    // Explicit development-only salt (never used when isProductionEnvironment() is true)
     return "careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars";
   }
-  if (process.env.NODE_ENV === "production" && secret.length < 32) {
+  if (isProductionEnvironment() && secret.length < 32) {
     throw new Error(
       "FATAL SECURITY ERROR: Production SESSION_SECRET must be at least 32 characters long."
     );
@@ -143,7 +145,7 @@ export const SESSION_CONFIG = {
   legacyCookieName: LEGACY_COOKIE_NAME,
   cookieOptions: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProductionEnvironment(),
     sameSite: "lax" as const,
     path: "/",
     maxAge: 30 * 24 * 60 * 60, // 30 days
