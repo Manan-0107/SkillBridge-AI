@@ -16,6 +16,11 @@ from typing import Dict, Any, List, Optional
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from python_ai.safe_math import evaluate_safe_math
+except ImportError:
+    from safe_math import evaluate_safe_math
+
 USER_AGENT = "CareerForge-Assistant/2.0 (contact@careerforge.local; bot/educational; MCP-Tools)"
 
 
@@ -147,20 +152,14 @@ class MCPToolRegistry:
         }
 
     def mcp_math_physics_solver(self, expression: str) -> Dict[str, Any]:
-        """Solves simple arithmetic, algebra, or physical formulas."""
-        # Simple arithmetic evaluator for safety
-        cleaned = re.sub(r"[^0-9\+\-\*\/\.\(\)\s\^]", "", expression).replace("^", "**")
-        ans = None
-        if cleaned.strip():
-            try:
-                # Safe eval of limited numeric expression
-                ans = eval(cleaned, {"__builtins__": None}, {})
-            except Exception:
-                ans = None
+        """Solves arithmetic, algebra, or physical formulas using a restricted bounded parser with zero eval()."""
+        success, ans, message = evaluate_safe_math(expression)
         return {
             "tool": "math_physics_solver",
             "expression": expression,
-            "result": ans
+            "result": ans,
+            "success": success,
+            "message": message
         }
 
     def mcp_multilingual_mirror(self, target_lang: str, topic: str) -> Dict[str, Any]:

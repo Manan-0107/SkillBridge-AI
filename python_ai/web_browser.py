@@ -96,24 +96,31 @@ class WebBrowser:
         return ""
 
     def fetch_page_content(self, url: str) -> Optional[Dict[str, str]]:
-        """Browses a specific URL, parses HTML, and extracts readable text."""
+        """Browses a specific URL safely with SSRF protections, parses HTML, and extracts readable text."""
         try:
-            resp = requests.get(url, headers=self.headers, timeout=6)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
+            from python_ai.ssrf import safe_fetch_url, SsrfSecurityException
+            status_code, content_text, final_url = safe_fetch_url(
+                url,
+                headers=self.headers,
+                timeout=5,
+                max_redirects=3,
+                max_bytes=524288,  # 512KB max text extraction
+            )
+            if status_code == 200 and content_text:
+                soup = BeautifulSoup(content_text, "html.parser")
                 # Remove scripts, styles, navs
                 for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
                     tag.decompose()
-                title = soup.title.string.strip() if soup.title and soup.title.string else url
+                title = soup.title.string.strip() if soup.title and soup.title.string else final_url
                 paragraphs = [p.get_text().strip() for p in soup.find_all("p") if p.get_text().strip()]
                 body_text = " ".join(paragraphs[:8])[:1200]
                 return {
                     "title": title,
                     "snippet": body_text,
-                    "source": url,
+                    "source": final_url,
                 }
         except Exception as e:
-            print(f"[WebBrowser] URL fetch error ({url}): {e}")
+            print(f"[WebBrowser] Secure URL fetch rejected/failed ({url}): {e}")
         return None
 
     def _format_results_summary(self, results: List[Dict[str, str]]) -> str:
