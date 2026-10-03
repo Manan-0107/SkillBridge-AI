@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "lint:tokens": "node scripts/lint_design_tokens.mjs",
+    "typecheck": "tsc --noEmit",
     "test": "node scripts/lint_design_tokens.mjs && node --import tsx --test tests/unit/*.test.mjs",
     "test:unit": "node --import tsx --test tests/unit/*.test.mjs",
     "test:voice-stress": "node test_voice_stress.mjs",

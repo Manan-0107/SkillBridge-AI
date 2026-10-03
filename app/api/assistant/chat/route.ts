@@ -150,7 +150,9 @@ interface RequestBody {
 }
 
 export async function POST(req: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+  const correlationId = req.headers.get("x-correlation-id") || req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = correlationId;
 
   try {
     const authUser = await getAuthenticatedUser(req);
@@ -310,27 +312,32 @@ DIRECTIVE: Communicate these exact authoritative facts naturally to the user. DO
       );
     }
 
-    return NextResponse.json({
-      ...providerResult.data,
-      isFallback: false,
-      careerStateSnapshot: {
-        userId: authUser.id,
-        targetRole: careerSnapshot.targetRole.currentValue,
-        status: careerSnapshot.targetRole.status,
-        lastUpdated: careerSnapshot.lastUpdated,
-      },
-    });
-  } catch (error) {
-    console.error("[Assistant API] Fatal error:", error);
+    const durationMs = Date.now() - startTime;
     return NextResponse.json(
       {
-        ok: false,
-        error: {
-          code: "AI_PROVIDER_UNAVAILABLE",
-          message: "The AI assistant is temporarily unavailable. Please try again shortly.",
+        ...providerResult.data,
+        isFallback: false,
+        careerStateSnapshot: {
+          userId: authUser.id,
+          targetRole: careerSnapshot.targetRole.currentValue,
+          status: careerSnapshot.targetRole.status,
+          lastUpdated: careerSnapshot.lastUpdated,
         },
       },
-      { status: 503 }
+      {
+        headers: {
+          "x-correlation-id": correlationId,
+          "x-request-id": correlationId,
+        },
+      }
+    );
+  } catch (error) {
+    console.error("[Assistant API] Fatal error:", error);
+    return createApiErrorResponse(
+      "AI_PROVIDER_UNAVAILABLE",
+      "The AI assistant is temporarily unavailable. Please try again shortly.",
+      correlationId,
+      { statusCode: 503 }
     );
   }
 }
@@ -460,13 +467,24 @@ async function callLLMProvider(
         if (!feature && firstCall.toolName === "openResume") {
           feature = "resume";
         }
-      } else if (firstCall.toolName === "searchJobs") {
-        feature = "local";
-      } else if (firstCall.toolName === "searchCourses") {
-        feature = "courses";
-      } else if (firstCall.toolName === "openSkillAnalysis") {
+      } else if (firstCall.toolName === "openRoadmap") {
+        feature = "roadmap";
+      } else if (firstCall.toolName === "showSkillGaps" || firstCall.toolName === "openSkillAnalysis") {
         feature = "resume";
         resumeTab = "analyzer";
+      } else if (firstCall.toolName === "buildResume") {
+        feature = "resume";
+        resumeTab = "builder";
+      } else if (firstCall.toolName === "searchJobs" || firstCall.toolName === "findJobs") {
+        feature = "local";
+      } else if (firstCall.toolName === "searchCourses" || firstCall.toolName === "openLearning") {
+        feature = "courses";
+      } else if (firstCall.toolName === "startPractice") {
+        feature = "practice";
+      } else if (firstCall.toolName === "showProgress") {
+        feature = "practice";
+      } else if (firstCall.toolName === "goHome") {
+        feature = "resume";
       }
     }
 
@@ -518,14 +536,25 @@ function parseActionFromReply(rawReply: string) {
       const parsed = JSON.parse(actionMatch[1]);
       const ALLOWED_TOOL_NAMES = new Set<string>([
         "navigateTo",
+        "openRoadmap",
+        "showSkillGaps",
         "openResume",
+        "buildResume",
         "openSkillAnalysis",
         "searchJobs",
+        "findJobs",
         "searchCourses",
+        "openLearning",
+        "startPractice",
+        "showProgress",
+        "goHome",
+        "goBack",
         "searchProjects",
         "searchGithub",
         "openJob",
         "configureJobAlerts",
+        "modifyProfile",
+        "deleteUserData",
         "updateAccessibilityPreferences",
         "conversationalResumeBuilder",
         "updateUserProfile",
@@ -537,7 +566,9 @@ function parseActionFromReply(rawReply: string) {
         if (parsed.tool === "navigateTo" || parsed.tool === "openResume") {
           feature = sanitizeNavPage(parsed.page || parsed.parameters?.page);
           resumeTab = sanitizeTab(parsed.tab || parsed.parameters?.tab);
-          if (!feature) {
+          if (!feature && parsed.tool === "openResume") {
+            feature = "resume";
+          } else if (!feature) {
             // Unsafe or invalid navigation destination; discard toolCall
             toolCall = null;
           } else {
@@ -548,13 +579,24 @@ function parseActionFromReply(rawReply: string) {
               toolCall.parameters.tab = resumeTab;
             }
           }
-        } else if (parsed.tool === "searchJobs") {
-          feature = "local";
-        } else if (parsed.tool === "searchCourses") {
-          feature = "courses";
-        } else if (parsed.tool === "openSkillAnalysis") {
+        } else if (parsed.tool === "openRoadmap") {
+          feature = "roadmap";
+        } else if (parsed.tool === "showSkillGaps" || parsed.tool === "openSkillAnalysis") {
           feature = "resume";
           resumeTab = "analyzer";
+        } else if (parsed.tool === "buildResume") {
+          feature = "resume";
+          resumeTab = "builder";
+        } else if (parsed.tool === "searchJobs" || parsed.tool === "findJobs") {
+          feature = "local";
+        } else if (parsed.tool === "searchCourses" || parsed.tool === "openLearning") {
+          feature = "courses";
+        } else if (parsed.tool === "startPractice") {
+          feature = "practice";
+        } else if (parsed.tool === "showProgress") {
+          feature = "practice";
+        } else if (parsed.tool === "goHome") {
+          feature = "resume";
         }
       } else if (parsed.feature) {
         feature = sanitizeNavPage(parsed.feature);

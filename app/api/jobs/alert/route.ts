@@ -16,7 +16,7 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { checkRateLimit, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 
 function escapeHtml(str: string): string {
   if (!str) return "";
@@ -58,8 +58,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const rl = checkRateLimit(`job_alert:${authUser.id}`, RATE_LIMIT_PRESETS.jobsAlert);
-    if (!rl.allowed) {
+    const rl = await checkRateLimitAsync(`job_alert:${authUser.id}`, RATE_LIMIT_PRESETS.jobsAlert);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json(
+          {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Service temporarily unavailable. Please try again shortly.",
+            retryable: true,
+            requestId,
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         {
           code: "RATE_LIMITED",

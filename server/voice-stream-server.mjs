@@ -29,6 +29,24 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel / Neutral clear persona
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
+// ─── Safe Operational Metrics & Structured Logging (Zero Secrets/Audio) ─────
+export function logVoiceMetric(event, data = {}) {
+  const safeData = { ...data };
+  delete safeData.token;
+  delete safeData.secret;
+  delete safeData.audio;
+  delete safeData.transcript;
+  delete safeData.password;
+
+  const entry = {
+    timestamp: new Date().toISOString(),
+    service: 'voice-stream-server',
+    event,
+    ...safeData,
+  };
+  console.log(JSON.stringify(entry));
+}
+
 // ─── Cryptographic Session Token Verification ──────────────────────────────
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET;
@@ -205,6 +223,7 @@ server.on('upgrade', (req, socket, head) => {
   // 1. Origin validation
   const origin = req.headers['origin'];
   if (!isOriginAllowed(origin)) {
+    logVoiceMetric('voice.connection.origin_rejected', { origin: origin ? String(origin).slice(0, 100) : 'none' });
     console.warn(`[VUI Security] Handshake rejected: Unauthorized origin "${origin}"`);
     socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
     socket.destroy();
@@ -249,6 +268,7 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   if (!verifiedUser) {
+    logVoiceMetric('voice.connection.auth_failure', { reason: 'missing_or_invalid_session' });
     console.warn(`[VUI Security] Handshake rejected: Missing or invalid session token`);
     socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
     socket.destroy();
@@ -258,6 +278,7 @@ server.on('upgrade', (req, socket, head) => {
   // 3. Concurrent connection limit per user
   const currentCount = userConnectionCounts.get(verifiedUser.userId) || 0;
   if (currentCount >= MAX_CONCURRENT_PER_USER) {
+    logVoiceMetric('voice.connection.rejected', { userId: verifiedUser.userId, reason: 'concurrency_limit_exceeded' });
     console.warn(`[VUI Security] Handshake rejected: User ${verifiedUser.userId} exceeded max concurrent connections (${MAX_CONCURRENT_PER_USER})`);
     socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
     socket.destroy();
@@ -274,6 +295,8 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
   userConnectionCounts.set(userId, (userConnectionCounts.get(userId) || 0) + 1);
 
   const sessionId = `vui_${userId}_${Date.now()}`;
+  const connectTime = Date.now();
+  logVoiceMetric('voice.connection.accepted', { sessionId, userId });
   console.log(`[VUI] Client session opened: ${sessionId} (User: ${userId})`);
 
   clientWs.userId = userId;
@@ -291,6 +314,7 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
   const resetIdleTimer = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
+      logVoiceMetric('voice.connection.idle_timeout', { sessionId, userId, idleMs: IDLE_TIMEOUT_MS });
       console.log(`[VUI Security] Idle timeout reached for session ${sessionId}`);
       try {
         clientWs.close(1000, 'Session idle timeout');
@@ -599,6 +623,7 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
 
     // Check message size limit
     if (message.length > MAX_MESSAGE_SIZE) {
+      logVoiceMetric('voice.connection.oversized', { sessionId, userId, sizeBytes: message.length });
       console.warn(`[VUI Security] Message exceeded MAX_MESSAGE_SIZE (${message.length} > ${MAX_MESSAGE_SIZE})`);
       clientWs.close(1009, 'Message payload too large');
       return;
@@ -611,6 +636,7 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
       messageTimestamps.shift();
     }
     if (messageTimestamps.length > MAX_MESSAGES_PER_SEC) {
+      logVoiceMetric('voice.connection.rate_violation', { sessionId, userId, ratePerSec: messageTimestamps.length });
       console.warn(`[VUI Security] Message rate limit exceeded for session ${sessionId} (${messageTimestamps.length}/s)`);
       clientWs.close(1008, 'Message rate limit exceeded');
       return;
@@ -703,9 +729,12 @@ wss.on('connection', (clientWs, req, verifiedUser) => {
     }
   });
 
-  clientWs.on('close', () => {
+  clientWs.on('close', (code, reasonBuf) => {
     isCleaningUp = true;
-    console.log(`[VUI] Client session closed: ${sessionId}`);
+    const durationMs = Date.now() - connectTime;
+    const reason = reasonBuf ? reasonBuf.toString('utf8') : 'client_closed';
+    logVoiceMetric('voice.connection.disconnected', { sessionId, userId, durationMs, code, reason });
+    console.log(`[VUI] Client session closed: ${sessionId} (duration: ${durationMs}ms)`);
 
     // Clean up rate tracking and connection counts
     const count = userConnectionCounts.get(userId) || 1;

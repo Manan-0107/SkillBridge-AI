@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
-import { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import { createApiErrorResponse } from "@/lib/errors/apiError";
 
 export const runtime = "nodejs";
@@ -43,8 +43,16 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Rate Limiting
-  const rl = checkRateLimit(`practice_telemetry:${authUser.id || clientIp}`, RATE_LIMIT_PRESETS.generalApi);
-  if (rl.isLimited) {
+  const rl = await checkRateLimitAsync(`practice_telemetry:${authUser.id || clientIp}`, RATE_LIMIT_PRESETS.generalApi);
+  if (!rl.allowed || rl.isLimited) {
+    if (rl.status === 503) {
+      return createApiErrorResponse(
+        "SERVICE_UNAVAILABLE",
+        "Service temporarily unavailable. Please try again shortly.",
+        requestId,
+        { statusCode: 503, retryable: true }
+      );
+    }
     return createApiErrorResponse(
       "RATE_LIMITED",
       "Too many telemetry submissions. Please slow down.",

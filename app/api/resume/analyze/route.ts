@@ -32,6 +32,15 @@ const ROLE_TOPICS: Record<string, string[]> = {
   devops:   ["kubernetes", "terraform", "devops", "cicd"],
 };
 
+// FIX #20: In-memory cache for GitHub trending market skills (30-min TTL)
+// Avoids consuming unauthenticated IP rate limits (60 req/hr) and cuts 2-5s latency.
+interface GithubCacheEntry {
+  result: EngineResult;
+  expiresAt: number;
+}
+const githubEngineCache = new Map<string, GithubCacheEntry>();
+const GITHUB_CACHE_TTL_MS = 30 * 60 * 1000;
+
 async function runGithubEngine(role: string): Promise<EngineResult> {
   const base: EngineResult = {
     name: "GitHub Market Demand",
@@ -41,6 +50,12 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
     suggestions: [],
     available: false,
   };
+
+  const now = Date.now();
+  const cached = githubEngineCache.get(role);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
 
   try {
     const topics = ROLE_TOPICS[role] ?? ["software-engineering"];
@@ -73,7 +88,7 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
     const missing = roleSkills.filter((s) => !matched.includes(s));
     const score = roleSkills.length ? Math.round((matched.length / roleSkills.length) * 100) : 0;
 
-    return {
+    const result: EngineResult = {
       name: "GitHub Market Demand",
       score: Math.max(0, Math.min(100, score)),
       matchedSkills: matched,
@@ -83,6 +98,9 @@ async function runGithubEngine(role: string): Promise<EngineResult> {
       ],
       available: true,
     };
+
+    githubEngineCache.set(role, { result, expiresAt: now + GITHUB_CACHE_TTL_MS });
+    return result;
   } catch {
     return base;
   }
@@ -179,6 +197,13 @@ function validateAiSchema(parsed: any): boolean {
   return true;
 }
 
+// FIX #16: Strip HTML tags and enforce length caps on untrusted AI-generated output strings
+function sanitizeAiString(raw: unknown, maxLen = 300): string {
+  if (typeof raw !== "string" && typeof raw !== "number") return "";
+  const cleaned = String(raw).replace(/<[^>]*>/g, "").trim();
+  return cleaned.slice(0, maxLen);
+}
+
 function sanitizeSafeUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);
@@ -198,27 +223,37 @@ function formatAiResult(parsed: any, name: string): EngineResult & { roadmap?: S
     : 82;
 
   const matchedSkills = Array.isArray(parsed.matchedSkills)
-    ? parsed.matchedSkills.map(String).filter((s: string) => s.trim().length > 0)
+    ? parsed.matchedSkills
+        .map((s: unknown) => sanitizeAiString(s, 50))
+        .filter((s: string) => s.length > 0)
+        .slice(0, 30)
     : [];
 
   const missingSkills = Array.isArray(parsed.missingSkills)
-    ? parsed.missingSkills.map(String).filter((s: string) => s.trim().length > 0)
+    ? parsed.missingSkills
+        .map((s: unknown) => sanitizeAiString(s, 50))
+        .filter((s: string) => s.length > 0)
+        .slice(0, 30)
     : [];
 
   const suggestions = Array.isArray(parsed.suggestions)
-    ? parsed.suggestions.map(String).filter((s: string) => s.trim().length > 0)
+    ? parsed.suggestions
+        .map((s: unknown) => sanitizeAiString(s, 300))
+        .filter((s: string) => s.length > 0)
+        .slice(0, 10)
     : [];
 
   const roadmap: SkillGapItem[] = Array.isArray(parsed.skillGapRoadmap)
     ? parsed.skillGapRoadmap
         .filter((item: any) => item && typeof item === "object" && item.skill)
+        .slice(0, 10)
         .map((item: any) => ({
-          skill: String(item.skill || "Core Skill"),
+          skill: sanitizeAiString(item.skill, 60) || "Core Skill",
           priority: item.priority === "high" || item.priority === "low" ? item.priority : "medium",
-          why: String(item.why || "Important for this role"),
+          why: sanitizeAiString(item.why, 300) || "Important for this role",
           resources: Array.isArray(item.resources)
-            ? item.resources.map((r: any) => ({
-                label: String(r?.label || "Learn Resource"),
+            ? item.resources.slice(0, 5).map((r: any) => ({
+                label: sanitizeAiString(r?.label, 80) || "Learn Resource",
                 url: sanitizeSafeUrl(String(r?.url || "")),
               }))
             : [],

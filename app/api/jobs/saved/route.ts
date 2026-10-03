@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import { getUserSavedJobs, saveUserSavedJob, deleteUserSavedJob } from "@/lib/db";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +38,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkRateLimit(`saved_job:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(`saved_job:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json({ error: "Service temporarily unavailable. Please try again shortly." }, { status: 503 });
+      }
       return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 });
     }
 
@@ -84,12 +87,18 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing job ID" }, { status: 400 });
     }
 
+    const currentJobs = await getUserSavedJobs(userId);
+    const existing = currentJobs.find((j: any) => j.id === jobId || j.job?.id === jobId);
+    if (!existing) {
+      return NextResponse.json({ error: "Saved job not found" }, { status: 404 });
+    }
+
     const success = await deleteUserSavedJob(userId, jobId);
     if (!success) {
       return NextResponse.json({ error: "Failed to delete saved job" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedId: jobId });
   } catch (err: unknown) {
     console.error("[DELETE /api/jobs/saved] Error:", err);
     return NextResponse.json({ error: "Failed to delete saved job" }, { status: 500 });

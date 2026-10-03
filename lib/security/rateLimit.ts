@@ -28,6 +28,9 @@ export interface RateLimitResult {
   remaining: number;
   resetMs: number;
   resetInMs: number;
+  status?: number;
+  code?: string;
+  error?: string;
 }
 
 /** Distinct production rate limit policies */
@@ -118,19 +121,39 @@ export function buildRateLimitKey(
   return `${category}:ip:${options.ip || "127.0.0.1"}`;
 }
 
+import { isProductionEnvironment } from "./environment.ts";
+export { isProductionEnvironment };
+
 /**
- * Evaluates rate limit using Upstash Redis REST if configured, otherwise falls back to memory.
+ * Resets the in-memory rate limit store (for test suites only).
+ */
+export function _resetRateLimitStore(): void {
+  rateLimitStore.clear();
+}
+
+/**
+ * Evaluates rate limit asynchronously using Upstash Redis REST when configured.
+ *
+ * PRODUCTION / STAGING BEHAVIOR:
+ * - If Redis credentials are configured: executes atomic distributed rate limit pipeline.
+ * - If Redis credentials are NOT configured: FAILS CLOSED with status 503 (SERVICE_UNAVAILABLE).
+ *   Never silently falls back to per-instance in-memory state in production.
+ * - If Redis infrastructure call fails or times out: FAILS CLOSED with status 503 (SERVICE_UNAVAILABLE).
+ *
+ * DEVELOPMENT / TEST BEHAVIOR:
+ * - Falls back to high-performance in-memory sliding window when Redis is unconfigured or unreachable.
  */
 export async function checkRateLimitAsync(
   key: string,
   config: RateLimitConfig
 ): Promise<RateLimitResult> {
+  const isProd = isProductionEnvironment();
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (redisUrl && redisToken) {
+    let errorCategory: string | undefined;
     try {
-      const now = Date.now();
       const pipelineUrl = `${redisUrl}/pipeline`;
       const res = await fetch(pipelineUrl, {
         method: "POST",
@@ -148,36 +171,164 @@ export async function checkRateLimitAsync(
 
       if (res.ok) {
         const results = await res.json();
-        const currentCount = Number(results[0]?.result ?? 1);
-        const pttl = Math.max(0, Number(results[2]?.result ?? config.windowMs));
+        if (Array.isArray(results) && results[0] && typeof results[0].result !== "undefined") {
+          const currentCount = Number(results[0]?.result ?? 1);
+          const pttl = Math.max(0, Number(results[2]?.result ?? config.windowMs));
 
-        const isLimited = currentCount > config.limit;
-        const remaining = Math.max(0, config.limit - currentCount);
+          const isLimited = currentCount > config.limit;
+          const remaining = Math.max(0, config.limit - currentCount);
 
-        return {
-          isLimited,
-          allowed: !isLimited,
-          limit: config.limit,
-          remaining,
-          resetMs: pttl,
-          resetInMs: pttl,
-        };
+          return {
+            isLimited,
+            allowed: !isLimited,
+            limit: config.limit,
+            remaining,
+            resetMs: pttl,
+            resetInMs: pttl,
+            status: isLimited ? 429 : 200,
+          };
+        }
+        errorCategory = "REDIS_COMMAND_ERROR";
+      } else if (res.status === 401 || res.status === 403) {
+        errorCategory = "REDIS_CONFIGURATION_ERROR";
+      } else {
+        errorCategory = "REDIS_UNAVAILABLE";
       }
-    } catch (err) {
-      console.warn("[RateLimit] Upstash Redis call failed, using in-memory fallback:", err);
+
+      console.error(
+        `[RateLimit] Distributed rate limiter returned unexpected status: ${res.status} category: ${errorCategory}`
+      );
+    } catch (err: any) {
+      const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
+      errorCategory = isTimeout ? "REDIS_TIMEOUT" : "REDIS_UNAVAILABLE";
+      console.error(
+        `[RateLimit] Distributed rate limiter communication/network failure: ${errorCategory}`
+      );
     }
+
+    if (isProd) {
+      console.error(
+        "[RateLimit] Distributed rate limiting unavailable in production environment. Failing closed for security."
+      );
+      return {
+        isLimited: true,
+        allowed: false,
+        limit: config.limit,
+        remaining: 0,
+        resetMs: config.windowMs,
+        resetInMs: config.windowMs,
+        status: 503,
+        code: "SERVICE_UNAVAILABLE",
+        error: "Service temporarily unavailable. Please try again shortly.",
+      };
+    }
+  } else if (isProd) {
+    console.error(
+      "[RateLimit] Distributed rate limiter unconfigured in production environment. Failing closed for security."
+    );
+    return {
+      isLimited: true,
+      allowed: false,
+      limit: config.limit,
+      remaining: 0,
+      resetMs: config.windowMs,
+      resetInMs: config.windowMs,
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      error: "Service temporarily unavailable. Please try again shortly.",
+    };
   }
 
   return checkRateLimit(key, config);
 }
 
+export interface RedisHealthResult {
+  status: "healthy" | "unhealthy" | "unconfigured" | "degraded";
+  latencyMs?: number;
+  errorCategory?: string;
+}
+
+/**
+ * Lightweight operational health check for distributed Redis storage.
+ * Does not execute on high-frequency request paths.
+ */
+export async function checkRedisHealth(): Promise<RedisHealthResult> {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!redisUrl || !redisToken) {
+    return { status: "unconfigured" };
+  }
+
+  const start = Date.now();
+  try {
+    const pipelineUrl = `${redisUrl}/pipeline`;
+    const res = await fetch(pipelineUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${redisToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([["PING"]]),
+      signal: AbortSignal.timeout(1500),
+    });
+
+    const latencyMs = Date.now() - start;
+
+    if (res.ok) {
+      const results = await res.json().catch(() => null);
+      if (Array.isArray(results) && (results[0]?.result === "PONG" || results[0]?.result === "OK" || results[0])) {
+        return { status: "healthy", latencyMs };
+      }
+      return { status: "degraded", latencyMs, errorCategory: "REDIS_COMMAND_ERROR" };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return { status: "unhealthy", latencyMs, errorCategory: "REDIS_CONFIGURATION_ERROR" };
+    }
+    return { status: "unhealthy", latencyMs, errorCategory: "REDIS_UNAVAILABLE" };
+  } catch (err: any) {
+    const latencyMs = Date.now() - start;
+    const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
+    return {
+      status: "unhealthy",
+      latencyMs,
+      errorCategory: isTimeout ? "REDIS_TIMEOUT" : "REDIS_UNAVAILABLE",
+    };
+  }
+}
+
 /**
  * Synchronous in-memory sliding-window rate limit evaluator.
+ *
+ * In production/staging:
+ * In-memory sliding window cannot operate across distributed serverless instances.
+ * If called in production, it fails closed with HTTP 503 to prevent silent single-instance bypass.
+ *
+ * In development/test:
+ * Evaluates sliding window in-memory for zero-dependency local development and deterministic tests.
  */
 export function checkRateLimit(
   key: string,
   config: RateLimitConfig
 ): RateLimitResult {
+  if (isProductionEnvironment()) {
+    console.error(
+      "[RateLimit] Synchronous in-memory rate limiting is prohibited in production. Distributed rate limiter must be evaluated asynchronously. Failing closed for security."
+    );
+    return {
+      isLimited: true,
+      allowed: false,
+      limit: config.limit,
+      remaining: 0,
+      resetMs: config.windowMs,
+      resetInMs: config.windowMs,
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      error: "Service temporarily unavailable. Please try again shortly.",
+    };
+  }
+
   cleanupStore();
 
   const now = Date.now();
@@ -198,6 +349,7 @@ export function checkRateLimit(
       remaining: 0,
       resetMs,
       resetInMs: resetMs,
+      status: 429,
     };
   }
 
@@ -214,5 +366,6 @@ export function checkRateLimit(
     remaining,
     resetMs,
     resetInMs: resetMs,
+    status: 200,
   };
 }

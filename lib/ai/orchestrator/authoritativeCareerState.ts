@@ -13,8 +13,8 @@
  * 5. Every field carries: currentValue, status, confidence, source, updatedAt.
  */
 
-import { supabase } from "@/lib/supabase";
-import { AuthoritativeCareerState, CareerSynthesisEngine } from "./careerStateSynthesis";
+import { supabase } from "../../supabase.ts";
+import { AuthoritativeCareerState, CareerSynthesisEngine } from "./careerStateSynthesis.ts";
 
 export type CareerFieldStatus =
   | "KNOWN"

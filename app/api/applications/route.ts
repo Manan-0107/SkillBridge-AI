@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 import { getUserApplications, saveUserApplication, deleteUserApplication } from "@/lib/db";
 import { createApplicationRecord } from "@/lib/career/copilot";
 import type { ApplicationRecord } from "@/lib/career/types";
@@ -40,8 +40,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkRateLimit(`apps_post:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(`apps_post:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json({ error: "Service temporarily unavailable. Please try again shortly." }, { status: 503 });
+      }
       return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 });
     }
 
@@ -76,7 +79,12 @@ export async function POST(req: NextRequest) {
       const existingList = await getUserApplications(userId);
       const existing = existingList.find((a: ApplicationRecord) => a.id === application.id);
 
-      if (!existing && existingList.length > 0) {
+      // FIX #6: Unconditionally reject unknown IDs — do not skip the ownership
+      // check just because existingList is empty (new users with no applications).
+      // This prevents a client-crafted application object with a fabricated id
+      // from being injected when the list happens to be empty.
+      if (!existing) {
+        // Do not reveal whether the ID belongs to another user
         return NextResponse.json({ error: "Application not found or unauthorized" }, { status: 404 });
       }
 
@@ -117,12 +125,18 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing application id" }, { status: 400 });
     }
 
+    const existingList = await getUserApplications(userId);
+    const existing = existingList.find((a: ApplicationRecord) => a.id === id);
+    if (!existing) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+
     const success = await deleteUserApplication(userId, id);
     if (!success) {
       return NextResponse.json({ error: "Failed to delete application" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedId: id });
   } catch (err: unknown) {
     console.error("[DELETE /api/applications] Error:", err);
     return NextResponse.json({ error: "Failed to delete application" }, { status: 500 });

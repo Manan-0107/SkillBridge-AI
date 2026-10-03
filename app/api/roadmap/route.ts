@@ -1728,7 +1728,7 @@ const roadmapDatastore: Record<TechCategory, { tiers: RoadmapTier[]; title: stri
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
-  const searchParams = req.nextUrl.searchParams;
+  const searchParams = req.nextUrl ? req.nextUrl.searchParams : new URL(req.url, "http://localhost:3000").searchParams;
 
   const categoryParam = (searchParams.get("category") || "frontend") as TechCategory;
   const searchQuery = (searchParams.get("search") || "").toLowerCase().trim();

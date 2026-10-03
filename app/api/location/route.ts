@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { isPrivateIp } from "@/lib/security/ssrf";
-import { getClientIp } from "@/lib/security/rateLimit";
+import { getClientIp, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +39,15 @@ function isSafePublicIp(ip: string): boolean {
 
 export async function GET(req: NextRequest) {
   const requestId = crypto.randomUUID();
+  const clientIp = getClientIp(req);
+
+  const rl = await checkRateLimitAsync(`location:${clientIp}`, RATE_LIMIT_POLICIES.PUBLIC_API);
+  if (!rl.allowed || rl.isLimited) {
+    if (rl.status === 503) {
+      return NextResponse.json({ error: "Service temporarily unavailable. Please try again shortly." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Too many location requests. Please wait a moment." }, { status: 429 });
+  }
 
   try {
     const { searchParams } = new URL(req.url);

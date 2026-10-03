@@ -11,8 +11,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 import { getUserResumes, getUserApplications, saveUserApplication } from "@/lib/db";
 import { parseStructuredResume, type CanonicalResume } from "@/lib/resume/structuredParser";
 import {
@@ -25,6 +26,11 @@ import type {
   ApplicationRecord,
 } from "@/lib/career/types";
 
+// FIX #5: Maximum body size for interview requests
+// A request includes a job object + optional resume object. 256KB is generous
+// for structured JSON while preventing CPU-intensive parsing of huge payloads.
+const MAX_INTERVIEW_BODY_BYTES = 256 * 1024;
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -35,9 +41,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkRateLimit(`interview:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(`interview:${userId}`, RATE_LIMIT_POLICIES.PUBLIC_API);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json({ error: "Service temporarily unavailable. Please try again shortly." }, { status: 503 });
+      }
       return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
+    }
+
+    // FIX #5: Enforce body size limit before parsing to prevent ReDoS via huge payloads
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > MAX_INTERVIEW_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Request body too large. Maximum allowed is 256KB." },
+        { status: 413 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));
@@ -119,7 +137,8 @@ export async function POST(req: NextRequest) {
 
       const newInterview: InterviewRecord = {
         ...interviewRecord,
-        id: interviewRecord.id || `int_${Date.now()}`,
+        // FIX #10: Use crypto.randomUUID() instead of Date.now() to avoid collision
+        id: interviewRecord.id || `int_${crypto.randomUUID()}`,
         applicationId,
         userId,
         status: interviewRecord.status || "SCHEDULED",
@@ -135,7 +154,7 @@ export async function POST(req: NextRequest) {
         timeline: [
           ...(app.timeline || []),
           {
-            id: `evt_${Date.now()}`,
+            id: `evt_${crypto.randomUUID()}`,
             applicationId,
             eventType: "INTERVIEW_SCHEDULED",
             description: `Scheduled ${newInterview.roundType} interview round (${newInterview.format})`,
@@ -179,6 +198,61 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     console.error("[GET /api/interviews] Error:", err);
     return NextResponse.json({ error: "Internal error fetching interviews." }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/interviews?id={interviewId}
+ *
+ * Removes a specific interview from its parent application.
+ * The interview MUST belong to an application owned by the authenticated user.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const url = new URL(req.url, "http://localhost:3000");
+    const interviewId = url.searchParams.get("id");
+    if (!interviewId || typeof interviewId !== "string" || !interviewId.trim()) {
+      return NextResponse.json({ error: "Missing or invalid interview id" }, { status: 400 });
+    }
+
+    const apps = await getUserApplications(userId);
+    let targetApp: ApplicationRecord | undefined;
+    let targetInterviewFound = false;
+
+    for (const app of apps as ApplicationRecord[]) {
+      const interviews: InterviewRecord[] = Array.isArray(app.interviews) ? app.interviews : [];
+      if (interviews.some((i) => i.id === interviewId.trim())) {
+        targetApp = app;
+        targetInterviewFound = true;
+        break;
+      }
+    }
+
+    if (!targetInterviewFound || !targetApp) {
+      return NextResponse.json({ error: "Interview not found." }, { status: 404 });
+    }
+
+    const updatedInterviews = (targetApp.interviews as InterviewRecord[]).filter(
+      (i) => i.id !== interviewId.trim()
+    );
+
+    const updatedApp: ApplicationRecord = {
+      ...targetApp,
+      interviews: updatedInterviews,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveUserApplication(userId, updatedApp);
+
+    return NextResponse.json({ success: true, ok: true, deletedId: interviewId.trim() });
+  } catch (err: unknown) {
+    console.error("[DELETE /api/interviews] Error:", err);
+    return NextResponse.json({ error: "Failed to delete interview." }, { status: 500 });
   }
 }
 

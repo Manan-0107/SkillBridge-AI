@@ -71,25 +71,39 @@ export function normalizeSkill(skill: string): string {
 
 /**
  * Checks if two skills match with conservative boundaries.
- * Enforces strict non-matches:
- * - Java !== JavaScript
- * - Python !== PyTorch
- * - SQL !== PostgreSQL
+ *
+ * Fix #4: The previous implementation fell through to `return false` for
+ * all non-exact normalized pairs, breaking PARTIAL detection for synonyms
+ * like "postgres" → "postgresql" and "react.js" → "react".
+ *
+ * Resolution order:
+ *   1. Exact normalized match.
+ *   2. Canonical alias: both normalize to the same canonical form.
+ *   3. Strict guard: unrelated similar-looking technologies remain false.
+ *
+ * Unrelated technologies (Java≠JavaScript, Python≠PyTorch, etc.) are
+ * kept strictly separate via guard checks.
  */
 export function areSkillsEquivalent(skillA: string, skillB: string): boolean {
+  if (!skillA || !skillB) return false;
   const normA = normalizeSkill(skillA);
   const normB = normalizeSkill(skillB);
 
+  // 1. Exact canonical match
   if (normA === normB) return true;
 
-  // Strict guardrails
-  const guards = [
+  // 2. Strict non-match guards — must come before any fuzzy logic
+  const guards: [string, string][] = [
     ["java", "javascript"],
     ["python", "pytorch"],
     ["sql", "postgresql"],
+    ["sql", "mysql"],
     ["c", "c++"],
     ["c", "c#"],
+    ["c", "cicd"],
     ["r", "rust"],
+    ["r", "ruby"],
+    ["go", "golang"],  // already aliased, but guard prevents false-alias chains
   ];
 
   for (const [x, y] of guards) {
@@ -98,7 +112,81 @@ export function areSkillsEquivalent(skillA: string, skillB: string): boolean {
     }
   }
 
+  // 3. Both normalized through CANONICAL_ALIASES to the same canonical form
+  //    e.g. "Postgres" → "postgresql" and "postgres" → "postgresql" → match
+  //         "ReactJS" → "react" and "React.js" → "react" → match
+  //    (This is the case the old code missed — both sides already normalized
+  //    above, so if normA === normB this was caught in step 1. However,
+  //    an alias chain where one side is already canonical and the other
+  //    normalizes to it is caught here by comparing against the alias values.)
+  const aliasOfA = CANONICAL_ALIASES[normA];
+  const aliasOfB = CANONICAL_ALIASES[normB];
+
+  // A is an alias key and B is the canonical value for that alias
+  if (aliasOfA && aliasOfA === normB) return true;
+  // B is an alias key and A is the canonical value for that alias
+  if (aliasOfB && aliasOfB === normA) return true;
+  // Both are alias keys pointing to the same canonical value
+  if (aliasOfA && aliasOfB && aliasOfA === aliasOfB) return true;
+
   return false;
+}
+
+/**
+ * Implicit skill implication graph for EVIDENCE_GAP detection.
+ *
+ * Fix #13: Expands evidence-gap inference beyond the single hardcoded
+ * Next.js → React relationship. Each entry maps a "proved" skill (on the
+ * candidate's resume) to a "required" skill that the proved skill
+ * strongly implies — but does NOT confirm — proficiency in.
+ *
+ * Rules:
+ *   - Pairs are defensible and widely accepted in the industry.
+ *   - Implication is one-directional only (having Next.js implies React
+ *     knowledge; having React does NOT imply Next.js).
+ *   - Inferred skills are labelled EVIDENCE_GAP, never MATCHED.
+ *   - The candidate may genuinely lack the required skill; these are gaps
+ *     to address, not confirmations to award.
+ */
+const IMPLICIT_SKILL_GRAPH: Map<string, string[]> = new Map([
+  // Framework → core language or library
+  ["next.js",      ["react"]],
+  ["nuxt.js",      ["vue"]],
+  ["remix",        ["react"]],
+  ["gatsby",       ["react"]],
+  ["spring boot",  ["java", "spring"]],
+  ["django",       ["python"]],
+  ["flask",        ["python"]],
+  ["fastapi",      ["python"]],
+  ["rails",        ["ruby"]],
+  ["laravel",      ["php"]],
+  // Container orchestration → containerisation
+  ["kubernetes",   ["docker"]],
+  // Testing frameworks → the underlying language/runtime
+  ["jest",         ["javascript", "typescript"]],
+  ["pytest",       ["python"]],
+  // ORM → SQL literacy
+  ["prisma",       ["sql"]],
+  ["sqlalchemy",   ["sql", "python"]],
+  ["typeorm",      ["sql", "typescript"]],
+]);
+
+/**
+ * Checks if the candidate has any skills that imply proficiency in `target`.
+ * Returns the implying skill if found, or null.
+ */
+function findImpliedEvidence(
+  targetNorm: string,
+  candidateAllTech: string[]
+): string | null {
+  for (const [provingSkill, impliedSkills] of IMPLICIT_SKILL_GRAPH) {
+    if (impliedSkills.includes(targetNorm)) {
+      if (candidateAllTech.includes(provingSkill) || candidateAllTech.includes(normalizeSkill(provingSkill))) {
+        return provingSkill;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -182,6 +270,10 @@ export function findResumeEvidence(
 
 /**
  * Executes explainable matching between a CanonicalResume and a NormalizedJob.
+ *
+ * Optimization #19: requirements are deduplicated by normalizedSkill before
+ * processing to avoid redundant regex scans from duplicate job postings.
+ * Capped at 60 unique requirements to bound worst-case regex complexity.
  */
 export function analyzeJobMatch(params: {
   job: NormalizedJob;
@@ -191,7 +283,17 @@ export function analyzeJobMatch(params: {
 }): ExplainableMatchResult {
   const { job, resume, resumeVersionName = "Active Resume", userTargetRole } = params;
 
-  const allRequirements = [...job.requirements, ...job.preferredQualifications];
+  // Deduplication + cap (Optimization #19)
+  const seen = new Set<string>();
+  const allRequirements = [...job.requirements, ...job.preferredQualifications]
+    .filter((req) => {
+      const key = req.normalizedSkill || req.text.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 60); // cap at 60 unique requirements
+
   const dimensions: MatchDimension[] = [];
   const skillGaps: SkillGapItem[] = [];
 
@@ -200,6 +302,16 @@ export function analyzeJobMatch(params: {
   const evidenceGaps: string[] = [];
   const missing: string[] = [];
   const unknown: string[] = [];
+
+  // Pre-compute candidate tech list once (used in evidence-gap check per requirement)
+  const candidateAllTech = [
+    ...(resume.skills?.raw || []),
+    ...(resume.skills?.categorized?.frameworks || []),
+    ...(resume.skills?.categorized?.languages || []),
+    ...(resume.skills?.categorized?.databases || []),
+    ...(resume.skills?.categorized?.cloud || []),
+    ...(resume.skills?.categorized?.tools || []),
+  ].map((s) => normalizeSkill(s));
 
   for (const req of allRequirements) {
     const skillToLookFor = req.normalizedSkill || req.text;
@@ -222,21 +334,15 @@ export function analyzeJobMatch(params: {
         reason = "Skill is declared on your resume, but without project or work achievement bullets.";
       }
     } else {
-      // Check if candidate has closely related technology (Evidence Gap)
-      const candidateAllTech = [
-        ...(resume.skills?.raw || []),
-        ...(resume.skills?.categorized?.frameworks || []),
-        ...(resume.skills?.categorized?.languages || []),
-      ].map((s) => normalizeSkill(s));
+      // Check implicit skill graph for evidence-gap inference (Fix #13)
+      const targetNorm = normalizeSkill(skillToLookFor);
+      const implyingSkill = findImpliedEvidence(targetNorm, candidateAllTech);
 
-      const isNextCandidate = candidateAllTech.includes("next.js");
-      const isReactReq = normalizeSkill(skillToLookFor) === "react";
-
-      if (isNextCandidate && isReactReq) {
+      if (implyingSkill) {
         status = "EVIDENCE_GAP";
         confidence = 0.6;
         evidenceGaps.push(skillToLookFor);
-        reason = "You showcase Next.js projects, which heavily implies React knowledge, but React is not explicitly highlighted in your experience bullets.";
+        reason = `Your resume includes ${implyingSkill}, which strongly implies ${skillToLookFor} experience, but ${skillToLookFor} is not explicitly highlighted in your work or project bullets.`;
       } else if (req.type === "UNKNOWN") {
         status = "UNKNOWN";
         confidence = 0.3;

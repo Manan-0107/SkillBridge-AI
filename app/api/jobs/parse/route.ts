@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateUrlForSsrf } from "@/lib/security/ssrf";
 import { parseJobDescription } from "@/lib/career/jobParser";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +25,14 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
-    const limiter = checkRateLimit(`jobs-parse:${ip}`, RATE_LIMIT_POLICIES.PUBLIC_API);
-    if (limiter.isLimited) {
+    const limiter = await checkRateLimitAsync(`jobs-parse:${ip}`, RATE_LIMIT_POLICIES.PUBLIC_API);
+    if (!limiter.allowed || limiter.isLimited) {
+      if (limiter.status === 503) {
+        return NextResponse.json(
+          { error: "Service temporarily unavailable. Please try again shortly." },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         { error: "Too many parse requests. Please wait a moment." },
         { status: 429 }

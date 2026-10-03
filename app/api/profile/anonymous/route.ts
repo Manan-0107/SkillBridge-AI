@@ -15,13 +15,14 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { upsertUser } from "@/lib/db";
-import { checkRateLimit, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, getClientIp, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import { createApiErrorResponse } from "@/lib/errors/apiError";
+import { isProductionEnvironment } from "@/lib/security/environment";
 
 const COOKIE_NAME = "cf_anon_device";
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: isProductionEnvironment(),
   sameSite: "lax" as const,
   path: "/",
   maxAge: 60 * 60 * 24 * 365, // 1 year
@@ -110,8 +111,11 @@ export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req);
 
   // Rate limit anonymous profile updates (60/min per IP)
-  const rl = checkRateLimit(`anon_profile:${clientIp}`, RATE_LIMIT_PRESETS.generalApi);
-  if (rl.isLimited) {
+  const rl = await checkRateLimitAsync(`anon_profile:${clientIp}`, RATE_LIMIT_PRESETS.generalApi);
+  if (!rl.allowed || rl.isLimited) {
+    if (rl.status === 503) {
+      return createApiErrorResponse("SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again shortly.", requestId, { statusCode: 503 });
+    }
     return createApiErrorResponse("RATE_LIMITED", "Too many profile updates.", requestId, { statusCode: 429 });
   }
 
