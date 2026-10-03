@@ -283,6 +283,22 @@ export function parseJobDescription(params: {
     )
   );
 
+  // FIX #9: Wrap new URL() in try/catch — malformed or dangerous sourceUrls
+  // (e.g. "not-a-url", "javascript:void(0)", "data:text/html,...") would previously
+  // throw a TypeError crashing the entire parse. Dangerous protocols are also rejected.
+  let resolvedSource = "User Paste";
+  if (sourceUrl) {
+    try {
+      const parsed = new URL(sourceUrl);
+      // Only trust http: and https: source URLs; reject javascript:, data:, file:, etc.
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+        resolvedSource = parsed.hostname;
+      }
+    } catch {
+      // Malformed URL — fallback to "User Paste"
+    }
+  }
+
   return {
     id: generateId(),
     title: title || "Job Posting",
@@ -299,7 +315,7 @@ export function parseJobDescription(params: {
     requirements,
     preferredQualifications,
     skills: allExtractedSkills,
-    source: sourceUrl ? new URL(sourceUrl).hostname : "User Paste",
+    source: resolvedSource,
     provenance: "USER_INPUT",
     rawDescription: rawText,
   };
@@ -311,8 +327,8 @@ export function parseJobDescription(params: {
 export function normalizeLiveJob(job: LiveJob): NormalizedJob {
   const reqs: NormalizedRequirement[] = [];
 
-  // Extract requirements from tags and descriptionSnippet
-  if (Array.isArray(job.tags)) {
+  // Extract requirements from tags, or parse from description if tags absent
+  if (Array.isArray(job.tags) && job.tags.length > 0) {
     for (const tag of job.tags) {
       reqs.push({
         id: generateId(),
@@ -322,6 +338,25 @@ export function normalizeLiveJob(job: LiveJob): NormalizedJob {
         category: "skill",
       });
     }
+  } else if ((job as { description?: string; descriptionSnippet?: string }).description || job.descriptionSnippet) {
+    const text = (job as { description?: string; descriptionSnippet?: string }).description || job.descriptionSnippet || "";
+    const parsed = parseJobDescription({
+      rawText: text,
+      titleHint: job.title,
+      companyHint: job.company,
+      locationHint: job.location,
+      sourceUrl: job.url || job.applyUrl,
+    });
+    return {
+      ...parsed,
+      id: job.id || parsed.id,
+      title: job.title || parsed.title,
+      company: job.company || parsed.company,
+      location: job.location || parsed.location,
+      remote: job.remote !== undefined ? job.remote : parsed.remote,
+      url: job.url || parsed.url,
+      applyUrl: job.applyUrl || parsed.applyUrl,
+    };
   }
 
   return {

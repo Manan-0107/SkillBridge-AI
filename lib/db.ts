@@ -45,6 +45,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import crypto from "crypto";
 import { supabase } from "./supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -176,8 +177,13 @@ export async function saveResumeUpload(params: {
 /**
  * Fetch all resume uploads for a user, most recent first.
  */
+const localResumeStore = new Map<string, DbResumeUpload[]>();
+
 export async function getUserResumes(userId: string): Promise<DbResumeUpload[]> {
-  if (!supabase || !userId) return [];
+  if (!userId) return [];
+  if (!supabase) {
+    return localResumeStore.get(userId) || [];
+  }
 
   const { data, error } = await supabase
     .from("resume_uploads")
@@ -209,7 +215,22 @@ export async function saveResumeWithUserConsistency(params: {
   analysisJson: Record<string, unknown>;
 }): Promise<{ uploadId: string | null; error?: string }> {
   if (!supabase) {
-    return { uploadId: null, error: "Database client is not configured" };
+    const uploadId = `upl_${crypto.randomUUID()}`;
+    const newRecord: DbResumeUpload = {
+      id: uploadId,
+      user_id: params.userId,
+      filename: params.filename,
+      resume_text: params.resumeText,
+      target_role: params.targetRole,
+      ats_score: params.atsScore,
+      matched_skills: params.matchedSkills,
+      missing_skills: params.missingSkills,
+      analysis_json: params.analysisJson,
+      uploaded_at: new Date().toISOString(),
+    };
+    const current = localResumeStore.get(params.userId) || [];
+    localResumeStore.set(params.userId, [newRecord, ...current].slice(0, 20));
+    return { uploadId };
   }
 
   // 1. Verify user exists
@@ -275,8 +296,13 @@ export async function deleteResumeUpload(
   userId: string,
   uploadId: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!supabase || !userId || !uploadId) {
-    return { success: false, error: "Database not configured or invalid identifiers" };
+  if (!userId || !uploadId) {
+    return { success: false, error: "Invalid identifiers" };
+  }
+  if (!supabase) {
+    const current = localResumeStore.get(userId) || [];
+    localResumeStore.set(userId, current.filter((r) => r.id !== uploadId));
+    return { success: true };
   }
 
   const { error } = await supabase
@@ -295,7 +321,7 @@ export async function deleteResumeUpload(
 
 // ─── Phase 6: Saved Jobs Helpers ──────────────────────────────────────────────
 
-// In-memory fallback stores for local testing / offline development
+// In-memory fallback stores for local testing / offline development (no Supabase configured)
 const localSavedJobsStore = new Map<string, any[]>();
 const localApplicationsStore = new Map<string, any[]>();
 
@@ -323,7 +349,15 @@ export async function getUserSavedJobs(userId: string): Promise<any[]> {
 }
 
 /**
- * Persists a saved job or updates its match analysis for a user.
+ * Atomically persists or updates a saved job using a PostgreSQL RPC.
+ *
+ * Uses atomic_upsert_saved_job() which calls jsonb_set() in a single
+ * database transaction, eliminating:
+ *   a) TOCTOU race conditions (two concurrent saves can no longer overwrite each other)
+ *   b) state-column overwrites (only the saved_jobs key is modified; all other
+ *      state fields such as applications, voice, accessibility are preserved)
+ *
+ * Falls back to local memory when Supabase is not configured (dev/test).
  */
 export async function saveUserSavedJob(
   userId: string,
@@ -331,56 +365,54 @@ export async function saveUserSavedJob(
 ): Promise<boolean> {
   if (!userId || !savedJob?.id) return false;
 
-  const current = await getUserSavedJobs(userId);
-  const filtered = current.filter((j: any) => j.id !== savedJob.id);
-  const updated = [savedJob, ...filtered].slice(0, 50); // Bound to 50 saved jobs
-
   if (!supabase) {
-    localSavedJobsStore.set(userId, updated);
+    // Offline fallback: replicate deduplication + 50-cap in memory
+    const current = localSavedJobsStore.get(userId) || [];
+    const filtered = current.filter((j: any) => j.id !== savedJob.id);
+    localSavedJobsStore.set(userId, [savedJob, ...filtered].slice(0, 50));
     return true;
   }
 
-  const { error } = await supabase
-    .from("users")
-    .update({
-      state: { saved_jobs: updated },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+  const { error } = await supabase.rpc("atomic_upsert_saved_job", {
+    p_user_id: userId,
+    p_job: savedJob,
+  });
 
   if (error) {
-    console.error("[DB] saveUserSavedJob error:", error.message);
-    localSavedJobsStore.set(userId, updated);
+    console.error("[DB] saveUserSavedJob (RPC) error:", error.message);
+    // Fallback to local store to avoid data loss in degraded state
+    const current = localSavedJobsStore.get(userId) || [];
+    const filtered = current.filter((j: any) => j.id !== savedJob.id);
+    localSavedJobsStore.set(userId, [savedJob, ...filtered].slice(0, 50));
     return true;
   }
   return true;
 }
 
 /**
- * Deletes a saved job from a user's saved_jobs list.
+ * Atomically removes a saved job from a user's saved_jobs list using a PostgreSQL RPC.
+ *
+ * Uses atomic_delete_saved_job() which modifies only the saved_jobs key via jsonb_set.
+ * All other state fields (applications, voice, accessibility, etc.) are preserved.
  */
 export async function deleteUserSavedJob(userId: string, jobId: string): Promise<boolean> {
   if (!userId || !jobId) return false;
 
-  const current = await getUserSavedJobs(userId);
-  const updated = current.filter((j: any) => j.id !== jobId && j.job?.id !== jobId);
-
   if (!supabase) {
-    localSavedJobsStore.set(userId, updated);
+    const current = localSavedJobsStore.get(userId) || [];
+    localSavedJobsStore.set(userId, current.filter((j: any) => j.id !== jobId && j.job?.id !== jobId));
     return true;
   }
 
-  const { error } = await supabase
-    .from("users")
-    .update({
-      state: { saved_jobs: updated },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+  const { error } = await supabase.rpc("atomic_delete_saved_job", {
+    p_user_id: userId,
+    p_job_id: jobId,
+  });
 
   if (error) {
-    console.error("[DB] deleteUserSavedJob error:", error.message);
-    localSavedJobsStore.set(userId, updated);
+    console.error("[DB] deleteUserSavedJob (RPC) error:", error.message);
+    const current = localSavedJobsStore.get(userId) || [];
+    localSavedJobsStore.set(userId, current.filter((j: any) => j.id !== jobId && j.job?.id !== jobId));
     return true;
   }
   return true;
@@ -412,7 +444,14 @@ export async function getUserApplications(userId: string): Promise<any[]> {
 }
 
 /**
- * Persists or updates an ApplicationRecord for a user.
+ * Atomically persists or updates an ApplicationRecord using a PostgreSQL RPC.
+ *
+ * Uses atomic_upsert_application() which calls jsonb_set() in a single
+ * database transaction, eliminating:
+ *   a) TOCTOU race conditions
+ *   b) state-column overwrites (saved_jobs, voice, accessibility are preserved)
+ *
+ * This replaces the previous read→spread→write pattern which was not atomic.
  */
 export async function saveUserApplication(
   userId: string,
@@ -420,73 +459,52 @@ export async function saveUserApplication(
 ): Promise<boolean> {
   if (!userId || !application?.id) return false;
 
-  const current = await getUserApplications(userId);
-  const filtered = current.filter((a: any) => a.id !== application.id);
-  const updated = [application, ...filtered].slice(0, 100); // Bound to 100 applications
-
   if (!supabase) {
-    localApplicationsStore.set(userId, updated);
+    const current = localApplicationsStore.get(userId) || [];
+    const filtered = current.filter((a: any) => a.id !== application.id);
+    localApplicationsStore.set(userId, [application, ...filtered].slice(0, 100));
     return true;
   }
 
-  // Preserve existing state fields (voice, accessibility, saved_jobs)
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("state")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const currentState = (userRow?.state as Record<string, unknown>) || {};
-
-  const { error } = await supabase
-    .from("users")
-    .update({
-      state: { ...currentState, applications: updated },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+  const { error } = await supabase.rpc("atomic_upsert_application", {
+    p_user_id: userId,
+    p_application: application,
+  });
 
   if (error) {
-    console.error("[DB] saveUserApplication error:", error.message);
-    localApplicationsStore.set(userId, updated);
+    console.error("[DB] saveUserApplication (RPC) error:", error.message);
+    const current = localApplicationsStore.get(userId) || [];
+    const filtered = current.filter((a: any) => a.id !== application.id);
+    localApplicationsStore.set(userId, [application, ...filtered].slice(0, 100));
     return true;
   }
   return true;
 }
 
 /**
- * Deletes a tracked application belonging strictly to the user.
+ * Atomically removes a tracked application using a PostgreSQL RPC.
+ *
+ * Uses atomic_delete_application() which modifies only the applications key.
+ * All other state fields (saved_jobs, voice, accessibility, etc.) are preserved.
  */
 export async function deleteUserApplication(userId: string, applicationId: string): Promise<boolean> {
   if (!userId || !applicationId) return false;
 
-  const current = await getUserApplications(userId);
-  const updated = current.filter((a: any) => a.id !== applicationId);
-
   if (!supabase) {
-    localApplicationsStore.set(userId, updated);
+    const current = localApplicationsStore.get(userId) || [];
+    localApplicationsStore.set(userId, current.filter((a: any) => a.id !== applicationId));
     return true;
   }
 
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("state")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const currentState = (userRow?.state as Record<string, unknown>) || {};
-
-  const { error } = await supabase
-    .from("users")
-    .update({
-      state: { ...currentState, applications: updated },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+  const { error } = await supabase.rpc("atomic_delete_application", {
+    p_user_id: userId,
+    p_application_id: applicationId,
+  });
 
   if (error) {
-    console.error("[DB] deleteUserApplication error:", error.message);
-    localApplicationsStore.set(userId, updated);
+    console.error("[DB] deleteUserApplication (RPC) error:", error.message);
+    const current = localApplicationsStore.get(userId) || [];
+    localApplicationsStore.set(userId, current.filter((a: any) => a.id !== applicationId));
     return true;
   }
   return true;

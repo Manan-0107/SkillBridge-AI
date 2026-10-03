@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { checkRateLimit, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_PRESETS } from "@/lib/security/rateLimit";
 import { saveResumeWithUserConsistency, getUserResumes, deleteResumeUpload } from "@/lib/db";
 import { MAX_RESUME_TEXT_LENGTH } from "@/lib/security/upload";
 import type { EnhancedAnalysis } from "@/lib/types";
@@ -89,9 +89,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Rate limiting: 20 saves / 60 sec per user (generous for autosave/edits while preventing DoS).
-    // Note: Distributed rate limiting requires Upstash Redis configuration; falls back to in-memory window.
-    const rl = checkRateLimit(`resume_save:${userId}`, RATE_LIMIT_PRESETS.resumeSave);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(`resume_save:${userId}`, RATE_LIMIT_PRESETS.resumeSave);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Service temporarily unavailable. Please try again shortly.",
+            code: "SERVICE_UNAVAILABLE",
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         {
           success: false,

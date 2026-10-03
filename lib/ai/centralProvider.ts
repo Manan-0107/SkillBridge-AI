@@ -14,6 +14,7 @@
  */
 
 import { AppError } from "../errors/apiError.ts";
+import { logger, metrics, generateCorrelationId } from "../observability/index.ts";
 
 export interface AIChatMessage {
   role: "system" | "user" | "assistant";
@@ -27,6 +28,8 @@ export interface AICompletionOptions {
   maxTokens?: number;
   timeoutMs?: number;
   preferredProvider?: "gemini" | "groq" | "openai" | "openrouter";
+  correlationId?: string;
+  operation?: string;
 }
 
 export interface AICompletionResult {
@@ -34,6 +37,8 @@ export interface AICompletionResult {
   provider: "gemini" | "groq" | "openai" | "openrouter";
   model: string;
   durationMs: number;
+  fallbackIndex?: number;
+  totalCascadeDurationMs?: number;
 }
 
 export interface ProviderHealth {
@@ -380,6 +385,29 @@ async function callOpenRouter(
 
 // ─── Central Fallback Cascade Orchestrator ─────────────────────────────────────
 
+function classifyProviderError(err: any): string {
+  const code = err?.code || "";
+  const msg = String(err?.message || "").toLowerCase();
+  const status = Number(err?.statusCode || err?.status || 0);
+
+  if (status === 429 || code === "AI_RATE_LIMITED" || msg.includes("rate limit") || msg.includes("too many requests")) {
+    return "PROVIDER_RATE_LIMIT";
+  }
+  if (status === 504 || code === "PROVIDER_TIMEOUT" || msg.includes("timeout") || msg.includes("aborterror")) {
+    return "PROVIDER_TIMEOUT";
+  }
+  if (status === 401 || status === 403 || msg.includes("auth") || msg.includes("key") || msg.includes("unauthorized")) {
+    return "PROVIDER_CONFIGURATION_ERROR";
+  }
+  if (code === "AI_VALIDATION_ERROR" || msg.includes("empty candidate") || msg.includes("json")) {
+    return "PROVIDER_VALIDATION_ERROR";
+  }
+  if (status >= 500 || msg.includes("unavailable") || msg.includes("service")) {
+    return "PROVIDER_UNAVAILABLE";
+  }
+  return "INTERNAL_ERROR";
+}
+
 /**
  * Executes an AI completion request across the active verified provider cascade.
  *
@@ -393,6 +421,10 @@ async function callOpenRouter(
 export async function generateAIResponse(
   options: AICompletionOptions
 ): Promise<AICompletionResult> {
+  const correlationId = options.correlationId || generateCorrelationId();
+  const operation = options.operation || "ai_completion";
+  const cascadeStart = Date.now();
+
   // Support deterministic mock in test environment
   if (process.env.UBIX_MOCK_AI === "true" && process.env.NODE_ENV !== "production") {
     return {
@@ -400,8 +432,19 @@ export async function generateAIResponse(
       provider: "openai",
       model: "mock-model",
       durationMs: 5,
+      fallbackIndex: 0,
+      totalCascadeDurationMs: 5,
     };
   }
+
+  logger.info("ai.request.started", {
+    correlationId,
+    operation,
+    metadata: {
+      messageCount: options.messages.length,
+      preferredProvider: options.preferredProvider || "default",
+    },
+  });
 
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_KEY;
   const groqKey = process.env.GROQ_API_KEY;
@@ -417,6 +460,13 @@ export async function generateAIResponse(
   );
 
   if (!hasAnyKey) {
+    logger.error("ai.request.failed", {
+      correlationId,
+      operation,
+      durationMs: Date.now() - cascadeStart,
+      errorCategory: "PROVIDER_CONFIGURATION_ERROR",
+      message: "No AI provider keys configured in environment.",
+    });
     throw new AppError(
       "AI_PROVIDER_NOT_CONFIGURED",
       "AI assistant is temporarily unavailable because no AI provider is configured.",
@@ -463,40 +513,110 @@ export async function generateAIResponse(
   }
 
   const errors: string[] = [];
+  let fallbackIndex = 0;
 
   for (const provider of providers) {
     if (!provider.key || provider.key.trim().length < 5) {
       continue;
     }
 
+    logger.info("ai.provider.selected", {
+      correlationId,
+      operation,
+      metadata: {
+        provider: provider.name,
+        fallbackIndex,
+      },
+    });
+
     // Try up to 2 attempts for transient errors with backoff
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const attemptStart = Date.now();
       try {
         const result = await provider.call();
-        return result;
+        const durationMs = Date.now() - attemptStart;
+        const totalCascadeDurationMs = Date.now() - cascadeStart;
+
+        metrics.recordMetric(`ai.provider.${provider.name}`, durationMs);
+        metrics.recordMetric("ai.cascade.total", totalCascadeDurationMs);
+
+        logger.info("ai.request.completed", {
+          correlationId,
+          operation,
+          durationMs,
+          metadata: {
+            provider: provider.name,
+            model: result.model,
+            fallbackIndex,
+            attempt,
+            totalCascadeDurationMs,
+          },
+        });
+
+        return {
+          ...result,
+          fallbackIndex,
+          totalCascadeDurationMs,
+        };
       } catch (err: any) {
+        const durationMs = Date.now() - attemptStart;
+        const failureCategory = classifyProviderError(err);
         const statusCode = err?.statusCode ?? 500;
         const isTransient = statusCode === 429 || statusCode >= 502;
+
+        logger.warn("ai.provider.fallback", {
+          correlationId,
+          operation,
+          durationMs,
+          errorCategory: failureCategory,
+          metadata: {
+            provider: provider.name,
+            fallbackIndex,
+            attempt,
+            isTransient,
+          },
+        });
 
         if (attempt === 1 && isTransient) {
           await wait(500); // 500ms jittered backoff before second attempt
           continue;
         }
 
-        errors.push(`${provider.name}: ${err?.message || String(err)}`);
+        errors.push(`${provider.name} [${failureCategory}]`);
         break; // Move to next provider in cascade
       }
     }
+    fallbackIndex++;
   }
+
+  const totalCascadeDurationMs = Date.now() - cascadeStart;
 
   // If no provider succeeded or none were configured
   if (errors.length === 0) {
+    logger.error("ai.request.failed", {
+      correlationId,
+      operation,
+      durationMs: totalCascadeDurationMs,
+      errorCategory: "PROVIDER_CONFIGURATION_ERROR",
+      message: "No AI provider was callable.",
+    });
     throw new AppError(
       "AI_PROVIDER_NOT_CONFIGURED",
       "AI assistant is temporarily unavailable because no AI provider is configured.",
       { statusCode: 503 }
     );
   }
+
+  logger.error("ai.request.failed", {
+    correlationId,
+    operation,
+    durationMs: totalCascadeDurationMs,
+    errorCategory: "PROVIDER_UNAVAILABLE",
+    metadata: {
+      providerErrors: errors,
+      providersAttempted: fallbackIndex,
+    },
+  });
 
   throw new AppError(
     "AI_PROVIDER_UNAVAILABLE",

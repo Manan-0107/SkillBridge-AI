@@ -1037,12 +1037,13 @@ export function normalizeSpokenEmail(raw: string): string {
     .replace(/\s*\.\s*/g, ".")
     .replace(/\s*_\s*/g, "_")
     .replace(/\s*-\s*/g, "-")
+    .replace(/\s*\+\s*/g, "+")
     .replace(/\s+/g, "");
 
   // 8. If text contains "@", cleanly process username and domain
   if (text.includes("@")) {
     const parts = text.split("@");
-    const userPart = parts[0].replace(/[^a-zA-Z0-9._-]/g, "").toLowerCase();
+    const userPart = parts[0].replace(/[^a-zA-Z0-9._+-]/g, "").toLowerCase();
     let domainPart = parts.slice(1).join("@").replace(/[^a-zA-Z0-9._-]/g, "").toLowerCase();
 
     // If domain doesn't contain a dot, handle missing dot before common extensions (e.g. "gmailcom" -> "gmail.com")

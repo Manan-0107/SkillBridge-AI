@@ -121,9 +121,34 @@ export function generateCoverLetterDraft(params: {
   const name = candidateName || resume.basics?.name || "Candidate";
   const usedEvidence: string[] = [];
 
-  // Extract real verified achievements/skills from resume
-  const relevantWork = resume.work && resume.work.length > 0 ? resume.work[0] : null;
-  const relevantProject = resume.projects && resume.projects.length > 0 ? resume.projects[0] : null;
+  // FIX #14: Score work entries and projects against job skills for maximum relevance
+  const jobSkillTerms = (job.skills || []).map((s) => s.toLowerCase());
+
+  let relevantWork = resume.work && resume.work.length > 0 ? resume.work[0] : null;
+  if (resume.work && resume.work.length > 1 && jobSkillTerms.length > 0) {
+    let bestScore = -1;
+    for (const w of resume.work) {
+      const text = `${w.role} ${w.company} ${w.bullets || ""}`.toLowerCase();
+      const score = jobSkillTerms.reduce((acc, term) => acc + (text.includes(term) ? 1 : 0), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        relevantWork = w;
+      }
+    }
+  }
+
+  let relevantProject = resume.projects && resume.projects.length > 0 ? resume.projects[0] : null;
+  if (resume.projects && resume.projects.length > 1 && jobSkillTerms.length > 0) {
+    let bestScore = -1;
+    for (const p of resume.projects) {
+      const text = `${p.title} ${p.techStack || ""} ${p.description || ""}`.toLowerCase();
+      const score = jobSkillTerms.reduce((acc, term) => acc + (text.includes(term) ? 1 : 0), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        relevantProject = p;
+      }
+    }
+  }
 
   if (relevantWork) {
     usedEvidence.push(`${relevantWork.role} at ${relevantWork.company}`);

@@ -131,6 +131,18 @@ export async function PUT(req: NextRequest) {
   if (supabaseConfigured) {
     try {
       const supabase = createSupabaseServerClient();
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("state")
+        .eq("email", authenticatedEmail)
+        .maybeSingle();
+
+      const currentState = (existingUser?.state as Record<string, unknown>) || {};
+      const mergedState = {
+        ...currentState,
+        ...(validatedState || {}),
+      };
+
       const updatePromise = supabase.from("users").upsert(
         {
           email: authenticatedEmail,
@@ -138,7 +150,7 @@ export async function PUT(req: NextRequest) {
           picture: typeof user?.picture === "string" ? user.picture : null,
           auth_provider: user?.authProvider || "email",
           target_role: targetRole,
-          state: validatedState ?? {},
+          state: mergedState,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "email" }

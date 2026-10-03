@@ -8,6 +8,7 @@
  * Invariant: Never hallucinates facts. If a section or field cannot be confidently
  * extracted, it is left empty or as an empty list.
  */
+import crypto from "crypto";
 
 export interface StructuredBasics {
   name: string;
@@ -115,8 +116,9 @@ const SKILL_DICT: Record<keyof StructuredSkills["categorized"], string[]> = {
 
 // ─── Extraction Helpers ───────────────────────────────────────────────────────
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-const PHONE_REGEX = /(?:(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4})/;
+// FIX #12: Stricter boundary-checked patterns for email and phone extraction
+const EMAIL_REGEX = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
+const PHONE_REGEX = /(?:(?:\+?\d{1,3}[-.\s]?)?(?:\([2-9]\d{2}\)|[2-9]\d{2})[-.\s]?[2-9]\d{2}[-.\s]?\d{4}\b|\b(?:\+?\d{1,3}[-.\s]?)?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b)/;
 const LINKEDIN_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)/i;
 const GITHUB_REGEX = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)/i;
 const URL_REGEX = /https?:\/\/[^\s/$.?#].[^\s]*/i;
@@ -243,13 +245,25 @@ function extractBasics(headerLines: string[], allLines: string[]): StructuredBas
   const combinedHeader = headerLines.join(" \n ");
   const allText = allLines.join(" \n ");
 
-  // 1. Email
+  // 1. Email (validated)
   const emailMatch = allText.match(EMAIL_REGEX);
-  const email = emailMatch ? emailMatch[0].trim() : "";
+  let email = "";
+  if (emailMatch) {
+    const cand = emailMatch[0].trim();
+    if (!cand.endsWith(".png") && !cand.endsWith(".jpg") && cand.length <= 80) {
+      email = cand;
+    }
+  }
 
-  // 2. Phone
+  // 2. Phone (validated)
   const phoneMatch = allText.match(PHONE_REGEX);
-  const phone = phoneMatch ? phoneMatch[0].trim() : "";
+  let phone = "";
+  if (phoneMatch) {
+    const rawDigits = phoneMatch[0].replace(/\D/g, "");
+    if (rawDigits.length >= 10 && rawDigits.length <= 15) {
+      phone = phoneMatch[0].trim();
+    }
+  }
 
   // 3. LinkedIn
   const linkedInMatch = allText.match(LINKEDIN_REGEX);
@@ -357,7 +371,7 @@ function extractExperience(lines: string[]): StructuredExperience[] {
       }
 
       current = {
-        id: `exp-${Date.now()}-${experiences.length}`,
+        id: `exp-${crypto.randomUUID()}`,
         company,
         role,
         location: "",
@@ -423,7 +437,7 @@ function extractEducation(lines: string[]): StructuredEducation[] {
       }
 
       current = {
-        id: `edu-${Date.now()}-${educations.length}`,
+        id: `edu-${crypto.randomUUID()}`,
         institution,
         degree,
         location: "",
@@ -498,7 +512,7 @@ export function parseStructuredResume(rawText: string): CanonicalResume {
       if (curProj) projects.push(curProj);
       const parts = line.split(/[|•–—]+/).map((p) => p.trim());
       curProj = {
-        id: `proj-${Date.now()}-${projects.length}`,
+        id: `proj-${crypto.randomUUID()}`,
         title: parts[0] || line,
         techStack: parts[1] || "",
         liveUrl: "",
@@ -519,7 +533,7 @@ export function parseStructuredResume(rawText: string): CanonicalResume {
     const parts = line.split(/[|•–—]+/).map((p) => p.trim());
     if (parts.length > 0 && parts[0]) {
       certifications.push({
-        id: `cert-${Date.now()}-${certifications.length}`,
+        id: `cert-${crypto.randomUUID()}`,
         name: parts[0],
         issuer: parts[1] || "",
         date: parts[2] || "",

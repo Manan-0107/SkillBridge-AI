@@ -7,6 +7,8 @@
  * Owns: score, question number, difficulty, topic, completion.
  */
 
+import crypto from "crypto";
+
 export type AssessmentDifficulty = "fundamental" | "intermediate" | "advanced" | "mastery";
 
 export interface AssessmentState {
@@ -41,7 +43,7 @@ export interface AdaptiveQuestion {
 export class AdaptiveAssessmentEngine {
   public static createSession(topic: string, initialDifficulty: AssessmentDifficulty = "fundamental"): AssessmentState {
     return {
-      sessionId: `assess_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      sessionId: `assess_${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10)}`,
       topic,
       currentDifficulty: initialDifficulty,
       questionNumber: 1,

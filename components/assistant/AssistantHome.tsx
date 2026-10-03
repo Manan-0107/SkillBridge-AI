@@ -1151,15 +1151,56 @@ function generateChatTitle(prompt: string): string {
           setTimeout(() => {
             executeRedirect("practice");
           }, 1500);
+        } else if (data.toolCall.tool === "openRoadmap") {
+          showToast("Opening career roadmap");
+          setTimeout(() => {
+            executeRedirect("roadmap");
+          }, 1500);
+        } else if (data.toolCall.tool === "showSkillGaps" || data.toolCall.tool === "openSkillAnalysis") {
+          showToast("Opening skill gap analyzer");
+          setTimeout(() => {
+            executeRedirect("resume", "analyzer");
+          }, 1500);
+        } else if (data.toolCall.tool === "openResume") {
+          const tab = data.resumeTab || (data.toolCall.parameters?.tab as ResumeTab) || undefined;
+          showToast(`Opening resume suite${tab ? ` (${tab})` : ""}`);
+          setTimeout(() => {
+            executeRedirect("resume", tab);
+          }, 1500);
+        } else if (data.toolCall.tool === "buildResume") {
+          showToast("Opening resume builder");
+          setTimeout(() => {
+            executeRedirect("resume", "builder");
+          }, 1500);
         } else if (data.toolCall.tool === "navigateTo" && data.toolCall.parameters?.page) {
           const target = data.toolCall.parameters.page as FeatureId;
+          const tab = (data.toolCall.parameters.tab || data.resumeTab) as ResumeTab | undefined;
           setTimeout(() => {
-            executeRedirect(target);
+            executeRedirect(target, tab);
           }, 1500);
-        } else if (data.toolCall.tool === "searchJobs") {
+        } else if (data.toolCall.tool === "searchJobs" || data.toolCall.tool === "findJobs") {
+          showToast("Opening jobs discovery");
           setTimeout(() => {
             executeRedirect("local");
           }, 1500);
+        } else if (data.toolCall.tool === "openLearning" || data.toolCall.tool === "searchCourses") {
+          showToast("Opening course catalog");
+          setTimeout(() => {
+            executeRedirect("courses");
+          }, 1500);
+        } else if (data.toolCall.tool === "showProgress") {
+          showToast("Opening progress dashboard");
+          setTimeout(() => {
+            executeRedirect("practice");
+          }, 1500);
+        } else if (data.toolCall.tool === "goHome") {
+          setTimeout(() => {
+            executeRedirect("resume");
+          }, 1500);
+        } else if (data.toolCall.tool === "readPage") {
+          const pageAnnouncement = "CareerForge assistant is active on this page. You can navigate, ask career questions, or start practice drills.";
+          showToast("Reading page context");
+          speakText(pageAnnouncement, { lang: "en-US" });
         }
       }
 
@@ -1246,6 +1287,8 @@ function generateChatTitle(prompt: string): string {
           lowerPrompt.startsWith("show") ||
           lowerPrompt.startsWith("view") ||
           lowerPrompt.startsWith("start") ||
+          lowerPrompt.startsWith("find") ||
+          lowerPrompt.startsWith("search") ||
           lowerPrompt === "yes" ||
           lowerPrompt === "sure"
         ) {
@@ -1417,7 +1460,7 @@ function generateChatTitle(prompt: string): string {
           </button>
 
           {micError && (
-            <span className="text-[10px] text-danger truncate max-w-[140px]">
+            <span role="alert" aria-live="assertive" className="text-[10px] text-danger truncate max-w-[140px]">
               {micError}
             </span>
           )}
@@ -1446,7 +1489,7 @@ function generateChatTitle(prompt: string): string {
       
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-xl bg-surface border border-ink/15 px-4 py-2.5 text-xs font-semibold text-ink shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
+        <div role="alert" aria-live="polite" className="fixed top-20 right-6 z-50 rounded-xl bg-surface border border-ink/15 px-4 py-2.5 text-xs font-semibold text-ink shadow-xl animate-in fade-in slide-in-from-top-3 duration-200">
           {toastMessage}
         </div>
       )}

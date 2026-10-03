@@ -9,11 +9,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 import { getUserResumes } from "@/lib/db";
 import { parseStructuredResume, type CanonicalResume } from "@/lib/resume/structuredParser";
 import { generateCoverLetterDraft, generateQuestionDraft } from "@/lib/career/copilot";
 import type { NormalizedJob } from "@/lib/career/types";
+
+// FIX #5: Limit request body size to 256KB to prevent CPU-intensive regex attacks
+const MAX_COPILOT_BODY_BYTES = 256 * 1024;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +28,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkRateLimit(`copilot:${userId}`, RATE_LIMIT_POLICIES.RESUME_GENERATION);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(`copilot:${userId}`, RATE_LIMIT_POLICIES.RESUME_GENERATION);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json({ error: "Service temporarily unavailable. Please try again shortly." }, { status: 503 });
+      }
       return NextResponse.json({ error: "Too many copilot requests. Please wait a moment." }, { status: 429 });
+    }
+
+    // FIX #5: Enforce body size limit before JSON parsing
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > MAX_COPILOT_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Request body too large. Maximum allowed is 256KB." },
+        { status: 413 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));

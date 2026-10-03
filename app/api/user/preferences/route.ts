@@ -27,13 +27,26 @@ export async function PATCH(req: NextRequest) {
 
     try {
       const supabase = createSupabaseServerClient();
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("state")
+        .eq("email", authUser.email)
+        .maybeSingle();
+
+      const currentState = (existingUser?.state as Record<string, unknown>) || {};
+      const updatedState = {
+        ...currentState,
+        requiresTextFallback,
+        accessibility: {
+          ...((currentState.accessibility as Record<string, unknown>) || {}),
+          requiresTextFallback,
+        },
+      };
+
       const updatePromise = supabase.from("users").upsert(
         {
           email: authUser.email,
-          state: {
-            requiresTextFallback,
-            accessibility: { requiresTextFallback },
-          },
+          state: updatedState,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "email" }

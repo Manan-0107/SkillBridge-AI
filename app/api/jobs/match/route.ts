@@ -14,12 +14,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { checkRateLimit, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
+import { checkRateLimit, checkRateLimitAsync, RATE_LIMIT_POLICIES } from "@/lib/security/rateLimit";
 import { getUserResumes } from "@/lib/db";
 import { parseStructuredResume, type CanonicalResume } from "@/lib/resume/structuredParser";
 import { normalizeLiveJob } from "@/lib/career/jobParser";
 import { analyzeJobMatch } from "@/lib/career/matchEngine";
 import type { NormalizedJob } from "@/lib/career/types";
+
+// FIX #5: Limit request body size to 256KB to prevent CPU-intensive regex attacks
+const MAX_MATCH_BODY_BYTES = 256 * 1024;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,11 +32,26 @@ export async function POST(req: NextRequest) {
     const userId = await getAuthenticatedUserId(req);
     // Note: Matching is available to authenticated users or anonymous with provided resume object
     const rateLimitKey = userId ? `match_auth:${userId}` : `match_anon:${req.headers.get("x-forwarded-for") || "anon"}`;
-    const rl = checkRateLimit(rateLimitKey, RATE_LIMIT_POLICIES.PUBLIC_API);
-    if (rl.isLimited) {
+    const rl = await checkRateLimitAsync(rateLimitKey, RATE_LIMIT_POLICIES.PUBLIC_API);
+    if (!rl.allowed || rl.isLimited) {
+      if (rl.status === 503) {
+        return NextResponse.json(
+          { error: "Service temporarily unavailable. Please try again shortly." },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         { error: "Too many match requests. Please wait a moment." },
         { status: 429 }
+      );
+    }
+
+    // FIX #5: Enforce body size limit before JSON parsing
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > MAX_MATCH_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Request body too large. Maximum allowed is 256KB." },
+        { status: 413 }
       );
     }
 
