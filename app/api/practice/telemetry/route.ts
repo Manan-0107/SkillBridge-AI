@@ -93,9 +93,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Idempotency Check: Return existing record if already processed
-  if (idempotencyStore.has(eventId)) {
-    const existing = idempotencyStore.get(eventId)!;
+  // 4. Idempotency Check: Return existing record if already processed for this user
+  const idempotencyKey = `${authUser.id}:${eventId}`;
+  if (idempotencyStore.has(idempotencyKey)) {
+    const existing = idempotencyStore.get(idempotencyKey)!;
     return NextResponse.json({
       success: true,
       duplicate: true,
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
     const oldestKey = idempotencyStore.keys().next().value;
     if (oldestKey) idempotencyStore.delete(oldestKey);
   }
-  idempotencyStore.set(eventId, record);
+  idempotencyStore.set(idempotencyKey, record);
 
   return NextResponse.json({
     success: true,

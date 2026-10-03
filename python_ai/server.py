@@ -8,7 +8,7 @@ import sys
 import os
 import time
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,7 @@ if current_dir not in sys.path:
 from engine import ai_assistant
 from dialogue_manager import dialogue_manager, DialogueResponse
 from voice_service import voice_service
+from security import verify_internal_ipc_request
 
 app = FastAPI(
     title="CareerForge Python AI Brain",
@@ -95,7 +96,7 @@ def health_check():
     }
 
 
-@app.post("/api/voice/intent", response_model=VoiceIntentResponse)
+@app.post("/api/voice/intent", response_model=VoiceIntentResponse, dependencies=[Depends(verify_internal_ipc_request)])
 def voice_intent_endpoint(payload: VoiceIntentRequest):
     try:
         session_id = payload.sessionId or f"sess_{int(time.time()*1000)}"
@@ -147,7 +148,7 @@ def voice_intent_endpoint(payload: VoiceIntentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(verify_internal_ipc_request)])
 def chat_endpoint(payload: ChatRequest):
     try:
         raw_messages = [{"role": m.role, "text": m.text} for m in payload.messages]
