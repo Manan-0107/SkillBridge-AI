@@ -246,6 +246,14 @@ export async function getScopedRagContext(
   // Attempt Supabase pgvector retrieval if available
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let supabaseClient: any = null;
+  const getSupabase = async () => {
+    if (supabaseClient) return supabaseClient;
+    const { createClient } = await import("@supabase/supabase-js");
+    supabaseClient = createClient(supabaseUrl!, supabaseKey!);
+    return supabaseClient;
+  };
+
   if (
     process.env.OPENAI_API_KEY &&
     supabaseUrl &&
@@ -253,8 +261,7 @@ export async function getScopedRagContext(
     !supabaseUrl.includes("placeholder")
   ) {
     try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabase = await getSupabase();
       const rpcMap: Record<ScopedDomain, string> = {
         courses: "match_courses",
         roadmap: "match_roadmap",
@@ -299,8 +306,7 @@ export async function getScopedRagContext(
   // If user queries their own resume, we must strictly isolate by userId
   if (domain === "resume" && userId && supabaseUrl && supabaseKey) {
     try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabase = await getSupabase();
       const { data: userResumes } = await supabase
         .from("resume_uploads")
         .select("id, filename, target_role, ats_score, matched_skills, missing_skills, uploaded_at")

@@ -38,6 +38,9 @@ function getSessionSecret() {
     }
     return 'careerforge-dev-only-hmac-salt-strictly-not-for-production-min-32-chars';
   }
+  if (process.env.NODE_ENV === 'production' && secret.length < 32) {
+    throw new Error('FATAL SECURITY ERROR: Production SESSION_SECRET must be at least 32 characters long.');
+  }
   return secret;
 }
 

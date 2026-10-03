@@ -32,7 +32,7 @@ export const DEFAULT_VAD_CONFIG: VADConfig = {
   voiceHoldMs: 400,
 };
 
-import { isSpeechSynthesisSupported, stopSpeaking, speakText } from "../voice.ts";
+import { isSpeechSynthesisSupported, stopSpeaking, speakText } from "../voice";
 
 
 export type StateListener = (
@@ -755,6 +755,69 @@ export class VoiceSessionManager {
 
   public getMetrics(): VoiceHealthMetrics {
     return { ...this.metrics };
+  }
+
+  /**
+   * Stops microphone streaming, disconnects audio worklet and web audio nodes,
+   * terminates speech recognition, and clears timers.
+   */
+  public stopCapture(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.fallbackSpeechRecognition) {
+      try {
+        this.fallbackSpeechRecognition.stop();
+      } catch (_) {}
+      this.fallbackSpeechRecognition = null;
+    }
+    if (this.micStream) {
+      try {
+        this.micStream.getTracks().forEach((track) => track.stop());
+      } catch (_) {}
+      this.micStream = null;
+    }
+    if (this.workletNode) {
+      try {
+        this.workletNode.disconnect();
+      } catch (_) {}
+      this.workletNode = null;
+    }
+    if (this.micSourceNode) {
+      try {
+        this.micSourceNode.disconnect();
+      } catch (_) {}
+      this.micSourceNode = null;
+    }
+    if (this.audioCtx && this.audioCtx.state !== "closed") {
+      try {
+        void this.audioCtx.close();
+      } catch (_) {}
+      this.audioCtx = null;
+    }
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (_) {}
+      this.ws = null;
+    }
+    this._updateMicState("UNINITIALIZED");
+    this.metrics.wsState = "DISCONNECTED";
+  }
+
+  /**
+   * Complete teardown of VoiceSessionManager instance and all listeners.
+   */
+  public destroy(): void {
+    this.stopCapture();
+    this.stateListeners.clear();
+    this.fieldCommitters.clear();
+    VoiceSessionManager.instance = null;
   }
 
   private _updateMicState(state: VoiceHealthMetrics["micState"]): void {

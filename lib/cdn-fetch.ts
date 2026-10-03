@@ -89,11 +89,18 @@ export async function fetchDailyPractice(
         isFallback: false,
       };
     }
-
     if (res.status === 404) {
       // Bounded retry: try yesterday
       const yesterday = getYesterdayUtcString(targetDate);
-      const fallbackUrl = `${CDN_BASE_URL}/data/practice/${track}/${yesterday}.json`;
+      const safeYesterday = yesterday.replace(/[^0-9-]/g, "");
+      const fallbackUrl = `${CDN_BASE_URL}/data/practice/${safeTrack}/${safeYesterday}.json`;
+
+      if (CDN_BASE_URL) {
+        const checkFallback = validateUrlForSsrf(fallbackUrl, { allowHttpInDev: true });
+        if (!checkFallback.valid) {
+          return { status: "unavailable", error: `SSRF Blocked: ${checkFallback.reason}` };
+        }
+      }
 
       const fallbackRes = await fetch(fallbackUrl, {
         headers: { Accept: "application/json" },

@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { RoleId, ResumeAnalysis, EnhancedAnalysis } from "@/lib/types";
-import { Paperclip, FileText, BarChart3, Check, Lightbulb } from "lucide-react";
+import { CanonicalResume, parseStructuredResume } from "@/lib/resume/structuredParser";
+import { Paperclip, FileText, BarChart3, Check, Lightbulb, BookmarkCheck, Edit3 } from "lucide-react";
 
 const sampleResumeTexts: Record<RoleId, string> = {
   frontend: `ALEX RIVERA
@@ -130,11 +131,21 @@ function verdict(score: number) {
   return "NEEDS WORK";
 }
 
-export function Analyzer({ role }: { role: RoleId }) {
+export function Analyzer({
+  role,
+  onTransferToBuilder,
+}: {
+  role: RoleId;
+  onTransferToBuilder?: (structuredResume: CanonicalResume) => void;
+}) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<ResumeAnalysis | null>(null);
+  const [fullAnalysis, setFullAnalysis] = useState<EnhancedAnalysis | null>(null);
+  const [structuredResume, setStructuredResume] = useState<CanonicalResume | null>(null);
   const [busy, setBusy] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
   const [statusAnnouncement, setStatusAnnouncement] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,6 +155,7 @@ export function Analyzer({ role }: { role: RoleId }) {
     if (!file) return;
 
     setError(null);
+    setSavedSuccess(false);
 
     const isText =
       file.type.includes("text") ||
@@ -153,7 +165,9 @@ export function Analyzer({ role }: { role: RoleId }) {
     if (isText) {
       const content = await file.text();
       setText(content);
-      setStatusAnnouncement("Resume text loaded successfully.");
+      const structured = parseStructuredResume(content);
+      setStructuredResume(structured);
+      setStatusAnnouncement("Resume text loaded and parsed successfully.");
       return;
     }
 
@@ -169,13 +183,20 @@ export function Analyzer({ role }: { role: RoleId }) {
         setParsing(false);
         setStatusAnnouncement(null);
         if (data.code === "OCR_REQUIRED") {
-          setError("Text could not be extracted from this document (scanned image or flattened PDF). OCR or manual text entry is required. Please paste your resume text below.");
+          setError(
+            "Text could not be extracted from this document (scanned image or flattened PDF). OCR or manual text entry is required. Please paste your resume text below."
+          );
         } else {
-          setError(data.error?.message || data.error || "Failed to extract text from document. Please paste your resume text.");
+          setError(
+            data.error?.message || data.error || "Failed to extract text from document. Please paste your resume text."
+          );
         }
         return;
       }
-      setText(data.text || "");
+      const rawExtracted = data.text || "";
+      setText(rawExtracted);
+      const structured = data.structuredResume || parseStructuredResume(rawExtracted);
+      setStructuredResume(structured);
       setParsing(false);
       setStatusAnnouncement("Resume parsed successfully.");
     } catch {
@@ -189,6 +210,7 @@ export function Analyzer({ role }: { role: RoleId }) {
     if (!text.trim() || busy) return;
     setBusy(true);
     setError(null);
+    setSavedSuccess(false);
     try {
       const res = await fetch("/api/resume/analyze", {
         method: "POST",
@@ -199,19 +221,65 @@ export function Analyzer({ role }: { role: RoleId }) {
       if (!res.ok) throw new Error(data?.error || `Analysis failed (${res.status})`);
 
       const enhanced = data as EnhancedAnalysis;
+      setFullAnalysis(enhanced);
       setResult({
         score: enhanced.overallScore,
         matchedSkills: enhanced.matchedSkills,
         missingSkills: enhanced.missingSkills,
         suggestions: enhanced.engines.ai.available
           ? enhanced.suggestions
-          : ["AI scoring unavailable — showing keyword-overlap heuristic only. Set GEMINI_API_KEY or GITHUB_TOKEN for full analysis.", ...enhanced.suggestions],
+          : [
+              "AI scoring unavailable — showing keyword-overlap heuristic only. Set GEMINI_API_KEY or GITHUB_TOKEN for full analysis.",
+              ...enhanced.suggestions,
+            ],
       });
+
+      if (!structuredResume) {
+        setStructuredResume(parseStructuredResume(text));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleSaveToAccount = async () => {
+    if (!text.trim() || !fullAnalysis || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const structured = structuredResume || parseStructuredResume(text);
+      const res = await fetch("/api/resume/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: structured.basics.name ? `${structured.basics.name}_Resume` : "Resume",
+          resumeText: text,
+          targetRole: role,
+          analysisResult: fullAnalysis,
+          structuredResume: structured,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save resume.");
+      }
+
+      setSavedSuccess(true);
+      setStatusAnnouncement("Resume and ATS analysis saved successfully to your account.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save resume to account.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOpenInBuilder = () => {
+    if (!onTransferToBuilder) return;
+    const structured = structuredResume || parseStructuredResume(text);
+    onTransferToBuilder(structured);
   };
 
   // Voice command "analyze" (see context/VoiceContext.tsx) triggers a run once
@@ -239,7 +307,10 @@ export function Analyzer({ role }: { role: RoleId }) {
 
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setStructuredResume(null);
+          }}
           rows={16}
           placeholder="Paste your full resume text here — summary, work experience, technical skills, and education."
           className="w-full resize-y rounded-xl border border-ink/15 bg-bg p-4 text-xs sm:text-sm text-ink placeholder:text-ink/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent leading-relaxed"
@@ -260,14 +331,18 @@ export function Analyzer({ role }: { role: RoleId }) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={parsing}
-            className="rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-bg px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-ink/25 transition-all cursor-pointer disabled:opacity-50"
           >
             <Paperclip size={13} />
             <span>{parsing ? "Parsing..." : "Upload File"}</span>
           </button>
           <button
             type="button"
-            onClick={() => setText(sampleResumeTexts[role] || "")}
+            onClick={() => {
+              const sample = sampleResumeTexts[role] || "";
+              setText(sample);
+              setStructuredResume(parseStructuredResume(sample));
+            }}
             disabled={parsing}
             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-ink hover:bg-surface hover:border-white/20 transition-all cursor-pointer disabled:opacity-50"
           >
@@ -321,9 +396,38 @@ export function Analyzer({ role }: { role: RoleId }) {
           <div className="space-y-6">
             {/* Score Banner */}
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xs">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-ink/50">
-                Market Match Score
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-ink/50">
+                  Market Match Score
+                </p>
+                {/* Integration Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveToAccount}
+                    disabled={saving || savedSuccess}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                      savedSuccess
+                        ? "bg-success/15 border border-success/30 text-success"
+                        : "border border-white/15 bg-white/[0.05] text-ink hover:bg-white/10"
+                    }`}
+                  >
+                    <BookmarkCheck size={12} />
+                    <span>{saving ? "Saving…" : savedSuccess ? "Saved to DB" : "Save Resume"}</span>
+                  </button>
+                  {onTransferToBuilder && (
+                    <button
+                      type="button"
+                      onClick={handleOpenInBuilder}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-bg hover:opacity-90 transition-all cursor-pointer"
+                    >
+                      <Edit3 size={12} />
+                      <span>Edit in Builder →</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="font-sans text-5xl font-extrabold text-ink tabular-nums">
                   {result.score}

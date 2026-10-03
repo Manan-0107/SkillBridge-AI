@@ -493,7 +493,7 @@ async function callLLMProvider(
       },
     };
   } catch (err: any) {
-    console.error(`[Assistant API] Upstream ${providerInfo.provider} failure:`, err);
+    console.error(`[Assistant API] Upstream ${providerInfo.provider} failure:`, err?.message || "Provider error");
     return {
       error: mapProviderError(err),
     };

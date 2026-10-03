@@ -82,6 +82,29 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
   const ip = getClientIp(req);
 
+  // 0. CSRF Protection: Validate Origin on state-mutating methods
+  const method = req.method.toUpperCase();
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const origin = req.headers.get("origin");
+    if (origin) {
+      const host = req.headers.get("host") || "";
+      const isAllowed =
+        origin.endsWith(`://${host}`) ||
+        origin === "http://localhost:3000" ||
+        origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:8081";
+      if (!isAllowed && process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          {
+            code: "FORBIDDEN",
+            message: "Cross-origin state mutation rejected.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
   // 1. Identity / Auth endpoints — always open to negotiate credentials
   if (pathname.startsWith("/api/auth/") || PUBLIC_API_ROUTES.has(pathname)) {
     return NextResponse.next();

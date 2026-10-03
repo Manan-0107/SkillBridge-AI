@@ -8,6 +8,8 @@ import { Personalizer } from "./Personalizer";
 import { Builder } from "./Builder";
 import { ScanText, Wand2, FileEdit } from "lucide-react";
 
+import { CanonicalResume } from "@/lib/resume/structuredParser";
+
 const tabs = [
   { id: "analyzer", label: "Analyzer", icon: <ScanText size={13} strokeWidth={2} />, desc: "ATS score & gaps" },
   { id: "personalizer", label: "Personalizer", icon: <Wand2 size={13} strokeWidth={2} />, desc: "Tailor to role" },
@@ -25,6 +27,7 @@ export function ResumeSuite({
 }) {
   const [active, setActive] = useState<TabId>(initialTab);
   const [injectedSummary, setInjectedSummary] = useState<string | null>(null);
+  const [injectedResume, setInjectedResume] = useState<CanonicalResume | null>(null);
 
   useEffect(() => {
     setActive(initialTab);
@@ -32,6 +35,11 @@ export function ResumeSuite({
 
   const handleTransferToBuilder = (tailoredSummary: string) => {
     setInjectedSummary(tailoredSummary);
+    setActive("builder");
+  };
+
+  const handleTransferResumeToBuilder = (structured: CanonicalResume) => {
+    setInjectedResume(structured);
     setActive("builder");
   };
 
@@ -78,11 +86,21 @@ export function ResumeSuite({
         ))}
       </div>
 
-      {active === "analyzer" && <Analyzer role={role} />}
+      {active === "analyzer" && (
+        <Analyzer
+          role={role}
+          onTransferToBuilder={handleTransferResumeToBuilder}
+        />
+      )}
       {active === "personalizer" && (
         <Personalizer role={role} onTransferToBuilder={handleTransferToBuilder} />
       )}
-      {active === "builder" && <Builder initialSummary={injectedSummary || undefined} />}
+      {active === "builder" && (
+        <Builder
+          initialSummary={injectedSummary || undefined}
+          initialResume={injectedResume || undefined}
+        />
+      )}
     </div>
   );
 }

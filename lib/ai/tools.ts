@@ -23,11 +23,21 @@ interface PendingConfirmation {
 
 const pendingConfirmations = new Map<string, PendingConfirmation>();
 
+function sweepExpiredConfirmations(): void {
+  const now = Date.now();
+  for (const [token, entry] of pendingConfirmations.entries()) {
+    if (now > entry.expiresAt) {
+      pendingConfirmations.delete(token);
+    }
+  }
+}
+
 export function createConfirmationToken(
   toolName: string,
   parameters: Record<string, any>,
   userId?: string
 ): string {
+  sweepExpiredConfirmations();
   const token = `conf_${crypto.randomBytes(8).toString("hex")}`;
   pendingConfirmations.set(token, {
     token,

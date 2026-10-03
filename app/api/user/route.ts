@@ -13,19 +13,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseConfigured } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import { SESSION_CONFIG } from "@/lib/security/session";
 import type { RoleId, User } from "@/lib/types";
 import type { PersistedUserState } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const COOKIE = "cf_uid";
-const COOKIE_OPTS = {
-  httpOnly: true,
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 60 * 60 * 24 * 365,
-};
 
 function validatePersistedState(state: any): PersistedUserState | null {
   if (!state || typeof state !== "object" || Array.isArray(state)) {
@@ -161,7 +154,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true, email: authenticatedEmail });
-  res.cookies.set(COOKIE, authenticatedEmail, COOKIE_OPTS);
+  res.cookies.set("cf_uid", authenticatedEmail, SESSION_CONFIG.cookieOptions);
   return res;
 }
 
@@ -184,7 +177,13 @@ export async function DELETE(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true, deleted: true });
-  res.cookies.set(COOKIE, "", { ...COOKIE_OPTS, maxAge: 0 });
-  res.cookies.set("cf_session", "", { ...COOKIE_OPTS, maxAge: 0 });
+  res.cookies.set(SESSION_CONFIG.cookieName, "", {
+    ...SESSION_CONFIG.cookieOptions,
+    maxAge: 0,
+  });
+  res.cookies.set("cf_uid", "", {
+    ...SESSION_CONFIG.cookieOptions,
+    maxAge: 0,
+  });
   return res;
 }

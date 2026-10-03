@@ -453,7 +453,7 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (err: any) {
-    console.error("[Auth API] Error:", err);
+    console.error(`[Auth API] Error (${requestId}):`, err?.message || "Authentication error");
     return createApiErrorResponse("INTERNAL_ERROR", "An error occurred during authentication.", requestId, {
       statusCode: 500,
     });

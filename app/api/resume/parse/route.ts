@@ -31,6 +31,7 @@ import {
   MAX_RESUME_TEXT_LENGTH,
   MAX_PDF_PAGES,
 } from "@/lib/security/upload";
+import { parseStructuredResume } from "@/lib/resume/structuredParser";
 
 export const runtime = "nodejs";
 
@@ -317,6 +318,7 @@ export async function POST(req: NextRequest) {
 
           if (ocrExtractedText) {
             const normalizedText = ocrExtractedText.slice(0, MAX_RESUME_TEXT_LENGTH);
+            const structuredResume = parseStructuredResume(normalizedText);
             return NextResponse.json({
               success: true,
               status: "SUCCESS",
@@ -325,6 +327,7 @@ export async function POST(req: NextRequest) {
               pages,
               ocrApplied: true,
               truncated: ocrExtractedText.length > MAX_RESUME_TEXT_LENGTH,
+              structuredResume,
             });
           }
 
@@ -345,6 +348,7 @@ export async function POST(req: NextRequest) {
 
         // Enforce canonical text bounding
         const normalizedText = rawText.slice(0, MAX_RESUME_TEXT_LENGTH);
+        const structuredResume = parseStructuredResume(normalizedText);
 
         return NextResponse.json({
           success: true,
@@ -353,6 +357,7 @@ export async function POST(req: NextRequest) {
           filename: sanitizedName,
           pages,
           truncated: rawText.length > MAX_RESUME_TEXT_LENGTH,
+          structuredResume,
         });
       } catch (pdfErr: any) {
         if (pdfErr?.name === "ParserTimeoutError") {
@@ -363,7 +368,7 @@ export async function POST(req: NextRequest) {
             { statusCode: 422 }
           );
         }
-        console.error(`[Resume Parse] PDF parsing failed (${requestId}):`, pdfErr);
+        console.error(`[Resume Parse] PDF parsing failed (${requestId}):`, pdfErr?.message || "PDF parsing failed");
         return NextResponse.json(
           {
             success: false,
@@ -425,12 +430,14 @@ export async function POST(req: NextRequest) {
         }
 
         const normalizedText = extractedRaw.slice(0, MAX_RESUME_TEXT_LENGTH);
+        const structuredResume = parseStructuredResume(normalizedText);
 
         return NextResponse.json({
           success: true,
           text: normalizedText,
           filename: sanitizedName,
           truncated: extractedRaw.length > MAX_RESUME_TEXT_LENGTH,
+          structuredResume,
         });
       } catch (docxErr: any) {
         if (docxErr?.name === "ParserTimeoutError") {
@@ -441,7 +448,7 @@ export async function POST(req: NextRequest) {
             { statusCode: 422 }
           );
         }
-        console.error(`[Resume Parse] Mammoth error (${requestId}):`, docxErr);
+        console.error(`[Resume Parse] Mammoth error (${requestId}):`, docxErr?.message || "DOCX parsing failed");
         return createApiErrorResponse(
           "UNPROCESSABLE_ENTITY",
           "Could not extract text from document. Try pasting your resume text directly.",
@@ -455,11 +462,13 @@ export async function POST(req: NextRequest) {
     if (["txt", "md", "rtf"].includes(ext) || file.type.includes("text")) {
       const rawText = buffer.toString("utf-8").trim();
       const normalizedText = rawText.slice(0, MAX_RESUME_TEXT_LENGTH);
+      const structuredResume = parseStructuredResume(normalizedText);
       return NextResponse.json({
         success: true,
         text: normalizedText,
         filename: sanitizedName,
         truncated: rawText.length > MAX_RESUME_TEXT_LENGTH,
+        structuredResume,
       });
     }
 
@@ -470,7 +479,7 @@ export async function POST(req: NextRequest) {
       { statusCode: 415 }
     );
   } catch (err: any) {
-    console.error(`[Resume Parse] Fatal error (${requestId}):`, err);
+    console.error(`[Resume Parse] Fatal error (${requestId}):`, err?.message || "Parser error");
     return createApiErrorResponse(
       "INTERNAL_ERROR",
       "Failed to parse resume.",
