@@ -49,7 +49,7 @@ export function UbixHeroScene() {
       powerPreference: "high-performance",
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
 
@@ -68,7 +68,6 @@ export function UbixHeroScene() {
     scene.add(knotMesh);
 
     // Inner Wireframe Latitude Ring (Technical Precision Layer)
-    // Color consumed from CSS --accent source, not hardcoded
     const ringGeometry = new THREE.IcosahedronGeometry(2.1, isMobile ? 1 : 2);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: accentColor,
@@ -83,17 +82,14 @@ export function UbixHeroScene() {
     const ambientLight = new THREE.AmbientLight(0x0E1216, 2.5);
     scene.add(ambientLight);
 
-    // Main Soft Silver Studio Key Light
     const keyLight = new THREE.DirectionalLight(0xD8E0E6, 3.2);
     keyLight.position.set(3, 4, 5);
     scene.add(keyLight);
 
-    // Subtle Icy Cyan Reflected Rim Light — color from CSS --accent source
     const cyanRimLight = new THREE.DirectionalLight(accentColor, 1.8);
     cyanRimLight.position.set(-4, -2, -2);
     scene.add(cyanRimLight);
 
-    // Delicate Center Point Light
     const centerLight = new THREE.PointLight(0xBFC5CA, 1.2, 8);
     centerLight.position.set(0, 0, 2);
     scene.add(centerLight);
@@ -102,6 +98,7 @@ export function UbixHeroScene() {
     const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
 
     const handlePointerMove = (e: MouseEvent) => {
+      if (!isIntersectingRef) return;
       const rect = container.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width - 0.5;
       const y = (e.clientY - rect.top) / rect.height - 0.5;
@@ -111,11 +108,18 @@ export function UbixHeroScene() {
 
     window.addEventListener("mousemove", handlePointerMove, { passive: true });
 
-    // ─── Animation Loop ─────────────────────────────────────────────────────
-    let animationFrameId: number;
-    let clock = new THREE.Clock();
+    // ─── Visibility & Animation Loop Gating ──────────────────────────────────
+    let isIntersectingRef = true;
+    let isVisible = true;
+    let animationFrameId: number | null = null;
+    const clock = new THREE.Clock();
 
     const render = () => {
+      if (!isVisible || !isIntersectingRef) {
+        animationFrameId = null;
+        return;
+      }
+
       const elapsedTime = clock.getElapsedTime();
 
       // Smooth pointer interpolation
@@ -123,14 +127,12 @@ export function UbixHeroScene() {
       mouse.y += (mouse.targetY - mouse.y) * 0.05;
 
       if (!prefersReducedMotion) {
-        // Organic metallic rotation
         knotMesh.rotation.x = elapsedTime * 0.18 + mouse.y * 0.4;
         knotMesh.rotation.y = elapsedTime * 0.24 + mouse.x * 0.5;
 
         ringMesh.rotation.x = -elapsedTime * 0.1 + mouse.y * 0.2;
         ringMesh.rotation.y = elapsedTime * 0.14 - mouse.x * 0.3;
 
-        // Dynamic light tilt
         keyLight.position.x = 3 + mouse.x * 2;
         keyLight.position.y = 4 + mouse.y * 2;
       }
@@ -142,27 +144,69 @@ export function UbixHeroScene() {
       }
     };
 
+    const startLoopIfNeeded = () => {
+      if (isVisible && isIntersectingRef && !animationFrameId && !prefersReducedMotion) {
+        animationFrameId = requestAnimationFrame(render);
+      }
+    };
+
+    const stopLoop = () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    };
+
     // Initial render
     render();
 
-    // ─── Window Resize Handler ──────────────────────────────────────────────
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-      renderer.render(scene, camera);
-    };
+    // ─── Viewport Intersection Observer ──────────────────────────────────────
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isIntersectingRef = entry.isIntersecting;
+        if (isIntersectingRef) {
+          startLoopIfNeeded();
+          renderer.render(scene, camera);
+        } else {
+          stopLoop();
+        }
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(container);
 
-    window.addEventListener("resize", handleResize);
+    // ─── Tab Visibility Listener ─────────────────────────────────────────────
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        startLoopIfNeeded();
+      } else {
+        stopLoop();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // ─── ResizeObserver on Container ─────────────────────────────────────────
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) {
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+          renderer.render(scene, camera);
+        }
+      }
+    });
+    resizeObserver.observe(container);
 
     // ─── Cleanup on Unmount ─────────────────────────────────────────────────
     return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      stopLoop();
+      observer.disconnect();
+      resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("mousemove", handlePointerMove);
-      window.removeEventListener("resize", handleResize);
 
       knotGeometry.dispose();
       knotMaterial.dispose();

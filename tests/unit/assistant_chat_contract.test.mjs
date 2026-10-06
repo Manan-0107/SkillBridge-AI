@@ -92,21 +92,24 @@ test("API Contract: /api/assistant/status returns provider metadata without leak
 
   const json = await res.json();
   assert.equal(json.ok, true);
-  assert.equal(json.provider, "gemini");
+  assert.equal(json.provider, "openai");
   assert.equal(typeof json.configured, "boolean");
-  assert.equal(json.model, "gemini-3.5-flash-lite");
+  assert.equal(json.model, "gpt-4o-mini");
 
   const raw = JSON.stringify(json);
   assert(!raw.includes("AQ."), "No secret key prefix");
+  assert(!raw.includes("sk-"), "No secret key prefix");
   assert(!raw.includes("Bearer"), "No bearer token");
 });
 
 test("API Contract: UBIX_MOCK_AI is strictly ignored when NODE_ENV is production", async () => {
   const origMock = process.env.UBIX_MOCK_AI;
   const origNodeEnv = process.env.NODE_ENV;
-  const origKey = process.env.GEMINI_API_KEY;
+  const origOpenAiKey = process.env.OPENAI_API_KEY;
+  const origGeminiKey = process.env.GEMINI_API_KEY;
   const origSecret = process.env.SESSION_SECRET;
 
+  delete process.env.OPENAI_API_KEY;
   delete process.env.GEMINI_API_KEY;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.GOOGLE_AI_KEY;
@@ -143,7 +146,10 @@ test("API Contract: UBIX_MOCK_AI is strictly ignored when NODE_ENV is production
     else delete process.env.UBIX_MOCK_AI;
     if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
     else delete process.env.NODE_ENV;
-    if (origKey !== undefined) process.env.GEMINI_API_KEY = origKey;
+    if (origOpenAiKey !== undefined) process.env.OPENAI_API_KEY = origOpenAiKey;
+    else delete process.env.OPENAI_API_KEY;
+    if (origGeminiKey !== undefined) process.env.GEMINI_API_KEY = origGeminiKey;
+    else delete process.env.GEMINI_API_KEY;
     if (origSecret !== undefined) process.env.SESSION_SECRET = origSecret;
     else delete process.env.SESSION_SECRET;
   }

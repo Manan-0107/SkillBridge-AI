@@ -46,7 +46,7 @@ const COUNTRY_CODES = [
 ];
 
 export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } = {}) {
-  const { signIn, signInWithGoogle, signInWithGithub, signInWithPhone, voiceLanguage } = useApp();
+  const { signIn, signInAsGuest, setAuthenticatedUser, signInWithGoogle, signInWithGithub, signInWithPhone, voiceLanguage } = useApp();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -281,8 +281,15 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
         "You're signed in. Welcome back to ubix. You can say open my roadmap or ask me anything.",
         { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
       );
-      // Persist authenticated user to App Store
-      await signIn(data.user.email, data.user.name);
+      // Persist authoritative authenticated user to App Store
+      setAuthenticatedUser({
+        id: data.user.id,
+        name: data.user.name || (mode === "signup" ? name.trim() : email.split("@")[0]),
+        email: data.user.email,
+        authProvider: "email",
+        targetRole: null,
+        dbId: data.user.id,
+      });
     } catch (err: any) {
       const msg =
         typeof err?.message === "string" && err.message !== "[object Object]"
@@ -301,23 +308,14 @@ export function AuthGate({ onBackToLanding }: { onBackToLanding?: () => void } =
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "guest" }),
-      });
-      const data = await res.json();
-      if (data.success && data.user) {
-        playAccessibleChime("success");
-        speakText(
-          "You're signed in. Welcome back to ubix. You can say open my roadmap or ask me anything.",
-          { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
-        );
-        await signIn(data.user.email, data.user.name);
-      }
-    } catch {
-      const guestId = Math.random().toString(36).slice(2, 8);
-      await signIn(`guest_${guestId}@guest.careerforge.internal`, `Guest Explorer (${guestId.toUpperCase()})`);
+      await signInAsGuest();
+      playAccessibleChime("success");
+      speakText(
+        "You're signed in. Welcome back to ubix. You can say open my roadmap or ask me anything.",
+        { lang: voiceLanguage !== "auto" ? voiceLanguage : "en-US" }
+      );
+    } catch (err: any) {
+      setError(err?.message || "Guest sign-in failed. Please try again.");
     } finally {
       setLoading(false);
     }

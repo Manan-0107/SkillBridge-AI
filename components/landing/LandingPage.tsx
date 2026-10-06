@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import type { CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import { Safe3DBoundary } from "@/components/ubix/Safe3DBoundary";
 
 // ── Dynamic 3D Career Graph Scene (SSR: false) ───────────────────────────────
 const UbixCareerGraph = dynamic(
@@ -50,6 +51,36 @@ const UbixHeroSceneDynamic = dynamic(
     loading: () => null,
   }
 );
+
+function LazyIntelligenceHero() {
+  const [nearViewport, setNearViewport] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="absolute inset-0 z-0 opacity-50 pointer-events-none" aria-hidden="true">
+      {nearViewport && <UbixHeroSceneDynamic />}
+    </div>
+  );
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LandingPageProps {
@@ -280,11 +311,13 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
           </div>
         </div>
 
-        {/* 2. Full-bleed 3D Career Graph Interactive System */}
+        {/* 2. Full-bleed 3D Career Graph Interactive System with Error Boundary */}
         <div className="relative w-full">
-          <UbixCareerGraph
-            onCtaClick={handleNodeAction}
-          />
+          <Safe3DBoundary onCtaClick={handleNodeAction}>
+            <UbixCareerGraph
+              onCtaClick={handleNodeAction}
+            />
+          </Safe3DBoundary>
         </div>
 
         {/* 3. CTA buttons & keyboard-hint */}
@@ -421,9 +454,7 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         aria-labelledby="intelligence-heading"
         className="relative py-24 border-t border-white/[0.06] overflow-hidden"
       >
-        <div className="absolute inset-0 z-0 opacity-50 pointer-events-none" aria-hidden="true">
-          <UbixHeroSceneDynamic />
-        </div>
+        <LazyIntelligenceHero />
 
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">

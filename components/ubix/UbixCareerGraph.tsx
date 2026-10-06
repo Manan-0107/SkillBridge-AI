@@ -116,6 +116,12 @@ interface UbixCareerGraphProps {
   onCtaClick?: (nodeId: CareerNodeId | "core") => void;
 }
 
+// Reusable temporary vectors for zero-allocation animation frames
+const _tempScaleVec = new THREE.Vector3();
+const _worldPos = new THREE.Vector3();
+const _projected = new THREE.Vector3();
+const _targetCam = new THREE.Vector3();
+
 export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeButtonsRef = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -293,7 +299,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       powerPreference: "high-performance",
     });
     renderer.setClearColor(0x080a0d, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
 
@@ -301,13 +307,11 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     // camera.aspect at 2560px exceeds 1.35x value at 1440px (2560/1440 = 1.7778 > 1.35)
     // Clamping effective width to Math.min(w, 1800) prevents ultrawide stretch
     const updateAspectAndRenderer = (w: number, h: number) => {
-      const unclampedAspect = w / h;
       const effectiveWidth = Math.min(w, 1800);
       camera.aspect = effectiveWidth / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      console.log(`[camera.aspect] width=${w}px, height=${h}px, unclampedAspect=${unclampedAspect.toFixed(4)}, clampedAspect=${camera.aspect.toFixed(4)} (effectiveWidth=${effectiveWidth}px)`);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     };
 
     updateAspectAndRenderer(width, height);
@@ -576,6 +580,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     // Mouse tracking for parallax
     const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
     const handlePointerMove = (e: MouseEvent) => {
+      if (!isIntersectingRef) return;
       const rect = container.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
       const y = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
@@ -585,13 +590,20 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
     };
     window.addEventListener("mousemove", handlePointerMove, { passive: true });
 
-    // ── Main Render Loop ──
-    let animationFrameId: number;
-    let clock = new THREE.Clock();
+    // ── Main Render Loop & Visibility Gating ──
+    let isIntersectingRef = true;
+    let isTabVisible = true;
+    let animationFrameId: number | null = null;
+    const clock = new THREE.Clock();
     let autoTourTimer = 0;
     let autoTourIndex = 0;
 
     const render = () => {
+      if (!isTabVisible || !isIntersectingRef) {
+        animationFrameId = null;
+        return;
+      }
+
       const delta = clock.getDelta();
       const elapsed = clock.getElapsedTime();
       const { selectedNode: activeSelected, hoveredNode: activeHovered, isCoreExpanded: activeExpanded, introStep: currentIntro, autoTourActive: touring } = stateRef.current;
@@ -603,9 +615,10 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       cageMesh.rotation.y += targetRotationSpeed * delta;
       coreMesh.rotation.y += targetRotationSpeed * delta;
 
-      // Core scaling (discovery moment burst)
+      // Core scaling (discovery moment burst) - reusable vector
       const targetCoreScale = activeExpanded ? 1.6 : 1.0;
-      coreGroup.scale.lerp(new THREE.Vector3(targetCoreScale, targetCoreScale, targetCoreScale), 0.08);
+      _tempScaleVec.set(targetCoreScale, targetCoreScale, targetCoreScale);
+      coreGroup.scale.lerp(_tempScaleVec, 0.08);
 
       // Particle subtle rotation (0 in reduced motion)
       if (!prefersReducedMotion) {
@@ -626,7 +639,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
         return false;
       };
 
-      // ── Node Updates ──
+      // ── Node Updates - reusable vector ──
       CAREER_NODES.forEach((node) => {
         const group = nodeMeshes[node.id];
         if (!group) return;
@@ -635,7 +648,8 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
         const isFocused = activeSelected === node.id || activeHovered === node.id;
         const targetScale = visible ? (isFocused ? 1.35 : 1.0) : 0.001;
 
-        group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+        _tempScaleVec.set(targetScale, targetScale, targetScale);
+        group.scale.lerp(_tempScaleVec, 0.1);
 
         if (!prefersReducedMotion) {
           group.rotation.y = elapsed * 0.35;
@@ -665,24 +679,24 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       const parallaxOffsetX = mouse.x * maxDisplacementWorld;
       const parallaxOffsetY = -mouse.y * maxDisplacementWorld;
 
-      // ── Camera Position Lerping ──
-      const targetCam = defaultCamPos.clone();
+      // ── Camera Position Lerping (reusable _targetCam) ──
+      _targetCam.copy(defaultCamPos);
       if (activeExpanded) {
-        targetCam.set(0, 0, 10.5);
+        _targetCam.set(0, 0, 10.5);
       } else if (activeSelected) {
         const nodePos = nodePositions[activeSelected];
-        targetCam.set(nodePos.x * 0.6, nodePos.y * 0.6, 6.2);
+        _targetCam.set(nodePos.x * 0.6, nodePos.y * 0.6, 6.2);
       } else if (activeHovered) {
         const nodePos = nodePositions[activeHovered];
-        targetCam.set(nodePos.x * 0.25, nodePos.y * 0.25, 7.6);
+        _targetCam.set(nodePos.x * 0.25, nodePos.y * 0.25, 7.6);
       } else {
-        targetCam.set(0, 0, 7.8);
+        _targetCam.set(0, 0, 7.8);
       }
 
-      targetCam.x += parallaxOffsetX;
-      targetCam.y += parallaxOffsetY;
+      _targetCam.x += parallaxOffsetX;
+      _targetCam.y += parallaxOffsetY;
 
-      camera.position.lerp(targetCam, 0.05);
+      camera.position.lerp(_targetCam, 0.05);
       camera.lookAt(0, 0, 0);
 
       // ── Journey Sequence Timer (Resume / AI) ──
@@ -710,8 +724,6 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       }
 
       // ── Step 5: Connection Pulses Animation ──
-      // On node hover/selection: animate pulse traveling along connection line to the core, duration 900ms
-      // Reduced motion: pulse plays once on click only (no continuous animation)
       const activeTargetNodeId = activeHovered || activeSelected;
       const pulseSpeed900ms = 1.0 / 0.9;
 
@@ -772,7 +784,6 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
             conn.pulseMesh.position.copy(pulsePoint);
             targetPulseOpacity = 1.0;
           } else {
-            // Reduced motion: pulse plays once on click only (no continuous animation)
             if (activeSelected === activeTargetNodeId && stateRef.current.reducedPulseProgress < 1.0) {
               stateRef.current.reducedPulseProgress += delta * pulseSpeed900ms;
               conn.pulseProgress = Math.min(1.0, stateRef.current.reducedPulseProgress);
@@ -798,7 +809,7 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
         pulseMaterial.opacity = THREE.MathUtils.lerp(pulseMaterial.opacity, targetPulseOpacity, 0.15);
       });
 
-      // ── Project 3D Node Positions to 2D HTML Screen Coordinates ──
+      // ── Project 3D Node Positions to 2D HTML Screen Coordinates (reusable _worldPos, _projected) ──
       CAREER_NODES.forEach((node) => {
         const btn = nodeButtonsRef.current[node.id];
         if (!btn) return;
@@ -813,12 +824,10 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
           return;
         }
 
-        const worldPos = new THREE.Vector3();
-        group.getWorldPosition(worldPos);
-
-        const projected = worldPos.clone().project(camera);
-        const screenX = (projected.x * 0.5 + 0.5) * width;
-        const screenY = (-projected.y * 0.5 + 0.5) * height;
+        group.getWorldPosition(_worldPos);
+        _projected.copy(_worldPos).project(camera);
+        const screenX = (_projected.x * 0.5 + 0.5) * width;
+        const screenY = (-_projected.y * 0.5 + 0.5) * height;
 
         btn.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translate(-50%, -50%)`;
         btn.style.opacity = activeSelected && activeSelected !== node.id ? "0.45" : "1";
@@ -832,23 +841,68 @@ export function UbixCareerGraph({ onNodeSelect, onCtaClick }: UbixCareerGraphPro
       }
     };
 
-    render();
-
-    // Step 4 Resize Handler with Aspect Clamping
-    const handleResize = () => {
-      if (!container) return;
-      width = container.clientWidth || 800;
-      height = container.clientHeight || 600;
-      updateAspectAndRenderer(width, height);
+    const startLoopIfNeeded = () => {
+      if (isTabVisible && isIntersectingRef && !animationFrameId && !prefersReducedMotion) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
-    window.addEventListener("resize", handleResize);
+    const stopLoop = () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    };
+
+    render();
+
+    // Viewport Intersection Observer
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isIntersectingRef = entry.isIntersecting;
+        if (isIntersectingRef) {
+          startLoopIfNeeded();
+          renderer.render(scene, camera);
+        } else {
+          stopLoop();
+        }
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(container);
+
+    // Tab Visibility Listener
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        startLoopIfNeeded();
+      } else {
+        stopLoop();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // ResizeObserver on Container
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) {
+          width = w;
+          height = h;
+          updateAspectAndRenderer(w, h);
+          renderer.render(scene, camera);
+        }
+      }
+    });
+    resizeObserver.observe(container);
 
     // Cleanup
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      stopLoop();
+      observer.disconnect();
+      resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       motionQuery.removeEventListener("change", handleMotionChange);
-      window.removeEventListener("resize", handleResize);
       window.removeEventListener("mousemove", handlePointerMove);
       if (renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);

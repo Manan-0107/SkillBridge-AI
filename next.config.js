@@ -21,6 +21,12 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.devtool = "cheap-module-source-map";
+    }
+    return config;
+  },
   async headers() {
     return [
       {

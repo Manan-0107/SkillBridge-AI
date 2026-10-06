@@ -5,7 +5,29 @@ import { useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { roleOptions } from "@/lib/data";
 import { RoleId } from "@/lib/types";
-import { UbixCareerGraph, CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import dynamic from "next/dynamic";
+import type { CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import { Safe3DBoundary } from "@/components/ubix/Safe3DBoundary";
+
+const UbixCareerGraph = dynamic(
+  () => import("@/components/ubix/UbixCareerGraph").then((m) => m.UbixCareerGraph),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="w-full h-full min-h-[580px] rounded-3xl border border-hairline bg-bg flex items-center justify-center"
+        aria-hidden="true"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full border border-hairline bg-surface animate-pulse flex items-center justify-center">
+            <span className="font-display font-bold text-white text-xs">ubix</span>
+          </div>
+          <span className="text-xs font-mono text-graphite">Loading Career Universe...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
 import { CourseCards } from "@/components/courses/CourseCards";
 import { PracticeHub } from "@/components/practice/PracticeHub";
@@ -149,10 +171,12 @@ export default function JourneyPage() {
               </p>
             </div>
             <div className="flex-1 w-full h-full min-h-[580px]">
-              <UbixCareerGraph
-                onNodeSelect={(nodeId) => handleGraphNodeSelect(nodeId)}
-                onCtaClick={(nodeId) => handleGraphNodeSelect(nodeId)}
-              />
+              <Safe3DBoundary onCtaClick={handleGraphNodeSelect}>
+                <UbixCareerGraph
+                  onNodeSelect={(nodeId) => handleGraphNodeSelect(nodeId)}
+                  onCtaClick={(nodeId) => handleGraphNodeSelect(nodeId)}
+                />
+              </Safe3DBoundary>
             </div>
           </div>
         )}

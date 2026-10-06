@@ -18,7 +18,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
-export const CANONICAL_PROVIDER = "gemini" as const;
+export const CANONICAL_PROVIDER = "openai" as const;
 
 export const PROVIDER_MODELS = {
   groq: process.env.GROQ_MODEL_ID || "llama-3.3-70b-versatile",
@@ -28,7 +28,7 @@ export const PROVIDER_MODELS = {
   anthropic: process.env.ANTHROPIC_MODEL_ID || "claude-sonnet-4-5",
 };
 
-export const CANONICAL_MODEL = PROVIDER_MODELS.gemini;
+export const CANONICAL_MODEL = PROVIDER_MODELS.openai;
 
 export const PROVIDER_LABELS: Record<string, string> = {
   groq: `Groq (${PROVIDER_MODELS.groq})`,
@@ -40,7 +40,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   mock: "Mock Test Provider",
 };
 
-export const PROVIDER_ORDER = ["groq", "gemini", "openai", "openrouter", "anthropic"] as const;
+export const PROVIDER_ORDER = ["openai", "gemini", "groq", "openrouter", "anthropic"] as const;
 export type ProviderName = (typeof PROVIDER_ORDER)[number];
 
 export interface ResolvedProviderInfo {
@@ -103,7 +103,7 @@ export function getCanonicalProvider(): ResolvedProviderInfo {
   return {
     provider: targetProvider,
     apiKey: isConfigured ? key!.trim() : null,
-    modelId: PROVIDER_MODELS[targetProvider] || "gemini-3.5-flash-lite",
+    modelId: PROVIDER_MODELS[targetProvider] || PROVIDER_MODELS.openai,
     isConfigured,
     isMock: false,
   };

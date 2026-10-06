@@ -5,8 +5,30 @@ import { useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { roleOptions } from "@/lib/data";
 import { RoleId } from "@/lib/types";
+import dynamic from "next/dynamic";
+import type { CareerNodeId } from "@/components/ubix/UbixCareerGraph";
+import { Safe3DBoundary } from "@/components/ubix/Safe3DBoundary";
+
+const UbixCareerGraph = dynamic(
+  () => import("@/components/ubix/UbixCareerGraph").then((m) => m.UbixCareerGraph),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="w-full h-full min-h-[580px] rounded-3xl border border-hairline bg-bg flex items-center justify-center"
+        aria-hidden="true"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full border border-hairline bg-surface animate-pulse flex items-center justify-center">
+            <span className="font-display font-bold text-white text-xs">ubix</span>
+          </div>
+          <span className="text-xs font-mono text-graphite">Loading Career Universe...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
-import { UbixCareerGraph, CareerNodeId } from "@/components/ubix/UbixCareerGraph";
 import { CourseCards } from "@/components/courses/CourseCards";
 import { CareerTelemetry } from "@/components/progress/CareerTelemetry";
 import {
@@ -143,10 +165,12 @@ export default function RoadmapPage() {
                 Select a node to inspect skills, milestones, and training drills.
               </p>
             </div>
-            <UbixCareerGraph
-              onNodeSelect={handleGraphNodeSelect}
-              onCtaClick={handleGraphNodeSelect}
-            />
+            <Safe3DBoundary onCtaClick={handleGraphNodeSelect}>
+              <UbixCareerGraph
+                onNodeSelect={handleGraphNodeSelect}
+                onCtaClick={handleGraphNodeSelect}
+              />
+            </Safe3DBoundary>
           </div>
         )}
 

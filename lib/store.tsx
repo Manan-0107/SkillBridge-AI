@@ -55,6 +55,8 @@ interface AppState {
   user: User | null;
   ready: boolean;
   signIn: (email: string, name?: string) => Promise<void>;
+  signInAsGuest: () => Promise<void>;
+  setAuthenticatedUser: (user: User) => void;
   signInWithGoogle: (
     name: string,
     email: string,
@@ -381,37 +383,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveResumeTextState(text);
   };
 
-  /** Email sign-in / sign-up — upserts user to DB then persists locally. */
+  /** Authoritative Session Hydration helper: sets user in state & local storage */
+  const setAuthenticatedUser = (authUser: User) => {
+    persist(authUser);
+  };
+
+  /** Canonical Server-Authoritative Guest sign-in */
+  const signInAsGuest = async () => {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ mode: "guest" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const guestUser: User = {
+          id: data.user.id,
+          name: data.user.name || "Guest Explorer",
+          email: data.user.email,
+          authProvider: "guest",
+          targetRole: user?.targetRole ?? null,
+          dbId: data.user.id,
+        };
+        persist(guestUser);
+        return;
+      }
+      throw new Error(data.message || data.error || "Authentication service is temporarily unavailable. Please try again.");
+    } catch (e) {
+      console.warn("[auth] Guest login failed:", e);
+      throw e instanceof Error ? e : new Error("Authentication service is temporarily unavailable. Please try again.");
+    }
+  };
+
   /** Server-Authoritative Email Sign-in / Sign-up */
   const signIn = async (email: string, name?: string) => {
     const cleanEmail = email.trim().toLowerCase();
     const displayName = extractDisplayName(cleanEmail, name);
 
-    // Guest Mode check: generate isolated guest server session
+    // Guest Mode check: delegate to canonical guest login
     if (cleanEmail.startsWith("guest_") || cleanEmail.includes("@guest.")) {
-      try {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ mode: "guest" }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success && data.user) {
-          const guestUser: User = {
-            id: data.user.id,
-            name: data.user.name || displayName,
-            email: data.user.email,
-            authProvider: "guest",
-            targetRole: user?.targetRole ?? null,
-            dbId: data.user.id,
-          };
-          persist(guestUser);
-          return;
-        }
-      } catch (e) {
-        console.warn("[auth] Guest login sync failed:", e);
-      }
+      await signInAsGuest();
+      return;
     }
 
     try {
@@ -440,18 +454,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(authUser);
         return;
       }
+      throw new Error(data.message || data.error || "Authentication service is temporarily unavailable. Please try again.");
     } catch (e) {
       console.warn("[auth] Server signin sync failed:", e);
+      throw e instanceof Error ? e : new Error("Authentication service is temporarily unavailable. Please try again.");
     }
-
-    const localUser: User = {
-      name: displayName,
-      email: cleanEmail,
-      authProvider: "email",
-      targetRole: user?.targetRole ?? null,
-      dbId: null,
-    };
-    persist(localUser);
   };
 
   /** Server-Authoritative Google sign-in */
@@ -531,19 +538,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(authUser);
         return;
       }
+      throw new Error(data.message || data.error || "GitHub authentication failed on server.");
     } catch (e) {
       console.warn("[auth] GitHub server signin failed:", e);
+      throw e instanceof Error ? e : new Error("GitHub authentication failed on server.");
     }
-
-    const localUser: User = {
-      name: name || cleanEmail.split("@")[0],
-      email: cleanEmail,
-      picture,
-      authProvider: "github",
-      targetRole: user?.targetRole ?? null,
-      dbId: null,
-    };
-    persist(localUser);
   };
 
   /** Server-Authoritative Phone sign-in */
@@ -578,19 +577,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(authUser);
         return;
       }
+      throw new Error(data.message || data.error || "Phone authentication failed on server.");
     } catch (e) {
       console.warn("[auth] Phone server signin failed:", e);
+      throw e instanceof Error ? e : new Error("Phone authentication failed on server.");
     }
-
-    const localUser: User = {
-      name: displayName,
-      email: formattedEmail,
-      phone: cleanPhone,
-      authProvider: "phone",
-      targetRole: user?.targetRole ?? null,
-      dbId: null,
-    };
-    persist(localUser);
   };
 
   const signOut = async () => {
@@ -635,6 +626,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user,
         ready,
         signIn,
+        signInAsGuest,
+        setAuthenticatedUser,
         signInWithGoogle,
         signInWithGithub,
         signInWithPhone,

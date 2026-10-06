@@ -3,7 +3,7 @@
  * Central Server-Side AI Orchestration Layer for CareerForge.
  *
  * Implements:
- * - Unified provider cascade: Google Gemini -> Groq Cloud -> OpenAI -> OpenRouter -> Controlled Error
+ * - Unified provider cascade: OpenAI -> Google Gemini -> Groq Cloud -> OpenRouter -> Controlled Error
  * - Zero obsolete models: Removed retired GitHub Models (retired July 30, 2026)
  * - Active verified production models: Gemini 1.5/2.0 Flash, Groq Llama 3.3 70B / 3.1 8B, OpenAI GPT-4o-mini
  * - AbortController timeouts on every external call
@@ -482,6 +482,11 @@ export async function generateAIResponse(
 
   const providers: ProviderTask[] = [
     {
+      name: "openai",
+      key: openaiKey,
+      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
+    },
+    {
       name: "gemini",
       key: geminiKey,
       call: () => callGemini(geminiKey!, options.messages, options.systemPrompt, options),
@@ -490,11 +495,6 @@ export async function generateAIResponse(
       name: "groq",
       key: groqKey,
       call: () => callGroq(groqKey!, options.messages, options.systemPrompt, options),
-    },
-    {
-      name: "openai",
-      key: openaiKey,
-      call: () => callOpenAI(openaiKey!, options.messages, options.systemPrompt, options),
     },
     {
       name: "openrouter",

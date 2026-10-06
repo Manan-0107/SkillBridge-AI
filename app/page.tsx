@@ -13,7 +13,7 @@ type View =
   | { kind: "feature"; feature: FeatureId; resumeTab?: ResumeTab };
 
 export default function Home() {
-  const { user, signIn } = useApp();
+  const { user, signInAsGuest } = useApp();
   const [view, setView] = useState<View>({ kind: "assistant" });
   const [authViewOpen, setAuthViewOpen] = useState(false);
 
@@ -37,22 +37,9 @@ export default function Home() {
 
   const handleGuestLogin = async () => {
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ mode: "guest" }),
-      });
-      const data = await res.json();
-      if (data.success && data.user) {
-        await signIn(data.user.email, data.user.name);
-      } else {
-        const guestId = Math.random().toString(36).slice(2, 8);
-        await signIn(`guest_${guestId}@guest.careerforge.internal`, `Guest Explorer (${guestId.toUpperCase()})`);
-      }
-    } catch {
-      const guestId = Math.random().toString(36).slice(2, 8);
-      await signIn(`guest_${guestId}@guest.careerforge.internal`, `Guest Explorer (${guestId.toUpperCase()})`);
+      await signInAsGuest();
+    } catch (e) {
+      console.error("[app] Guest login failed:", e);
     }
   };
 
