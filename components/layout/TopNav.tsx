@@ -230,13 +230,13 @@ export function TopNav() {
                     </Link>
 
                     <Link
-                      href="#settings"
+                      href="/settings"
                       role="menuitem"
                       onClick={() => setProfileOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-ink/70 hover:text-ink hover:bg-surface/60 transition-colors rounded-lg mx-1"
                     >
                       <Settings size={13} strokeWidth={2} aria-hidden="true" />
-                      Settings
+                      Settings & Privacy
                     </Link>
 
                     <div className="border-t border-ink/8 mt-1 pt-1">

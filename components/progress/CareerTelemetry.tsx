@@ -21,6 +21,10 @@ import {
   BarChart3,
   Layers,
 } from "lucide-react";
+import { CareerRecoveryBanner } from "./CareerRecoveryBanner";
+import { DailyPlanWidget } from "./DailyPlanWidget";
+import { CareerTwinWidget } from "./CareerTwinWidget";
+import { WeeklyReviewWidget } from "./WeeklyReviewWidget";
 
 export function CareerTelemetry() {
   const { user, userSkills, missingSkills } = useApp();
@@ -95,6 +99,12 @@ export function CareerTelemetry() {
           </div>
         </div>
       </div>
+
+      {/* ── Empathetic Career Recovery Banner ───────────────────────────────── */}
+      <CareerRecoveryBanner roleTitle={currentRole.label} />
+
+      {/* ── Daily Action Plan (What Should I Do Today?) ─────────────────────── */}
+      <DailyPlanWidget roleTitle={currentRole.label} />
 
       {/* ── Stat Cards Grid ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -259,6 +269,12 @@ export function CareerTelemetry() {
           </div>
         </div>
       </div>
+
+      {/* ── Deterministic Career Twin Scenario Simulator ────────────────────── */}
+      <CareerTwinWidget currentRoleTitle={currentRole.label} />
+
+      {/* ── Weekly Factual Review Audit ─────────────────────────────────────── */}
+      <WeeklyReviewWidget />
     </div>
   );
 }

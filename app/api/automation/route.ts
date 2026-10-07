@@ -20,6 +20,7 @@ import {
   triggerAutomation,
   confirmAutomation,
   getUserExecutions,
+  getUserExecutionsAsync,
   setAutomationStatus,
 } from "@/lib/automation/engine";
 import { getUserAutomationAuditLogs } from "@/lib/automation/auditLog";
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const automations = listAutomations();
-  const executions = getUserExecutions(session.userId);
+  const executions = await getUserExecutionsAsync(session.userId);
   const auditLogs = getUserAutomationAuditLogs(session.userId, { limit: 25 });
 
   return NextResponse.json(

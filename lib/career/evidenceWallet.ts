@@ -19,6 +19,11 @@
  */
 
 import { normalizeSkillName } from "./skillGraph";
+import {
+  upsertSkillEvidenceDb,
+  fetchSkillEvidenceDb,
+  deleteSkillEvidenceDb,
+} from "../db";
 
 export type EvidenceSourceType =
   | "USER_CONFIRMATION"
@@ -99,6 +104,7 @@ export function recordSkillEvidence(
       existing.verifiedAt = now;
     }
     userMap.set(existing.id, existing);
+    upsertSkillEvidenceDb(existing).catch(() => {});
     return existing;
   }
 
@@ -111,7 +117,19 @@ export function recordSkillEvidence(
   };
 
   userMap.set(newItem.id, newItem);
+  upsertSkillEvidenceDb(newItem).catch(() => {});
   return newItem;
+}
+
+/**
+ * Authoritatively records a piece of skill evidence with database persistence.
+ */
+export async function recordSkillEvidenceAsync(
+  params: Omit<SkillEvidenceItem, "id" | "createdAt" | "skillId"> & { skillName: string }
+): Promise<SkillEvidenceItem> {
+  const item = recordSkillEvidence(params);
+  await upsertSkillEvidenceDb(item);
+  return item;
 }
 
 /**
@@ -128,6 +146,16 @@ export function confirmEvidence(userId: string, evidenceId: string): SkillEviden
   item.confidence = Math.max(item.confidence, 0.9);
   item.verifiedAt = new Date().toISOString();
   userMap?.set(item.id, item);
+  upsertSkillEvidenceDb(item).catch(() => {});
+  return item;
+}
+
+/**
+ * Authoritatively confirms an evidence item with database persistence.
+ */
+export async function confirmEvidenceAsync(userId: string, evidenceId: string): Promise<SkillEvidenceItem> {
+  const item = confirmEvidence(userId, evidenceId);
+  await upsertSkillEvidenceDb(item);
   return item;
 }
 
@@ -144,7 +172,35 @@ export function rejectEvidence(userId: string, evidenceId: string, reason?: stri
   item.status = "USER_REJECTED";
   item.rejectionReason = reason || "Rejected by user.";
   userMap?.set(item.id, item);
+  upsertSkillEvidenceDb(item).catch(() => {});
   return item;
+}
+
+/**
+ * Authoritatively rejects an evidence item with database persistence.
+ */
+export async function rejectEvidenceAsync(userId: string, evidenceId: string, reason?: string): Promise<SkillEvidenceItem> {
+  const item = rejectEvidence(userId, evidenceId, reason);
+  await upsertSkillEvidenceDb(item);
+  return item;
+}
+
+/**
+ * Deletes an evidence item.
+ */
+export function deleteSkillEvidence(userId: string, evidenceId: string): boolean {
+  const userMap = userEvidenceStores.get(userId);
+  const existed = Boolean(userMap && userMap.delete(evidenceId));
+  deleteSkillEvidenceDb(userId, evidenceId).catch(() => {});
+  return existed;
+}
+
+/**
+ * Authoritatively deletes an evidence item with database persistence.
+ */
+export async function deleteSkillEvidenceAsync(userId: string, evidenceId: string): Promise<boolean> {
+  deleteSkillEvidence(userId, evidenceId);
+  return await deleteSkillEvidenceDb(userId, evidenceId);
 }
 
 /**
@@ -167,6 +223,38 @@ export function getUserEvidenceWallet(
     items = items.filter((i) => i.status === filter.status);
   }
   return items;
+}
+
+/**
+ * Authoritatively loads all evidence items from the database.
+ */
+export async function getUserEvidenceWalletAsync(
+  userId: string,
+  filter?: { skillId?: string; status?: EvidenceStatus }
+): Promise<SkillEvidenceItem[]> {
+  if (!userId) return [];
+  try {
+    const dbRows = await fetchSkillEvidenceDb(userId);
+    if (dbRows && Array.isArray(dbRows)) {
+      let userMap = userEvidenceStores.get(userId);
+      if (!userMap) {
+        userMap = new Map();
+        userEvidenceStores.set(userId, userMap);
+      }
+      for (const row of dbRows) {
+        userMap.set(row.id, {
+          ...row,
+          source: row.source as EvidenceSourceType,
+          status: row.status as EvidenceStatus,
+          provenance: row.provenance as any,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[EvidenceWallet] DB load warning:", (err as any)?.message);
+  }
+
+  return getUserEvidenceWallet(userId, filter);
 }
 
 /**
@@ -207,6 +295,14 @@ export function getVerifiedSkillsForUser(userId: string): {
       primarySource: data.sources[0] || "USER_CONFIRMATION",
     };
   });
+}
+
+/**
+ * Authoritatively retrieves verified skills using database backing.
+ */
+export async function getVerifiedSkillsForUserAsync(userId: string) {
+  await getUserEvidenceWalletAsync(userId);
+  return getVerifiedSkillsForUser(userId);
 }
 
 /**

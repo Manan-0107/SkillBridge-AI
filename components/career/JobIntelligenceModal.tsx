@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { InterviewStudio } from "@/components/career/InterviewStudio";
+import { UbixApplyModal } from "@/components/career/UbixApplyModal";
 
 interface JobIntelligenceModalProps {
   job: NormalizedJob;
@@ -34,6 +35,7 @@ export function JobIntelligenceModal({
   const [activeTab, setActiveTab] = useState<"match" | "gaps" | "readiness" | "details">("match");
   const [savedState, setSavedState] = useState(isSaved);
   const [showInterviewStudio, setShowInterviewStudio] = useState(false);
+  const [showUbixApply, setShowUbixApply] = useState(false);
 
   const handleToggleSave = () => {
     setSavedState(!savedState);
@@ -390,18 +392,37 @@ export function JobIntelligenceModal({
             >
               Close
             </button>
+            <button
+              type="button"
+              onClick={() => setShowUbixApply(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-bg hover:bg-accent/90 transition-colors cursor-pointer"
+            >
+              <ShieldCheck size={13} aria-hidden="true" />
+              <span>Review & Apply with UBIX</span>
+            </button>
             <a
               href={job.applyUrl || job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-bg hover:bg-accent/90 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-surface px-4 py-2 text-xs font-semibold text-white hover:border-accent hover:text-accent transition-colors cursor-pointer"
             >
-              <span>View Employer Job Posting</span>
-              <ExternalLink size={13} />
+              <span>Employer Posting</span>
+              <ExternalLink size={13} aria-hidden="true" />
             </a>
           </div>
         </div>
       </div>
+
+      {showUbixApply && (
+        <UbixApplyModal
+          job={job}
+          onClose={() => setShowUbixApply(false)}
+          onApplicationSubmitted={() => {
+            setShowUbixApply(false);
+            setSavedState(true);
+          }}
+        />
+      )}
 
       {showInterviewStudio && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">

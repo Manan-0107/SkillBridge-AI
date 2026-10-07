@@ -22,6 +22,10 @@ import {
   ExecutionState,
 } from "./types";
 import { recordAutomationAudit } from "./auditLog";
+import {
+  upsertAutomationExecutionDb,
+  fetchAutomationExecutionDb,
+} from "../db";
 
 // Registered automations
 const registeredAutomations = new Map<string, AutomationDefinition>();
@@ -332,6 +336,48 @@ export function getUserExecutions(userId: string): AutomationExecution[] {
   return Array.from(userMap.values()).reverse();
 }
 
+/**
+ * Authoritatively retrieves all executions from the database.
+ */
+export async function getUserExecutionsAsync(userId: string): Promise<AutomationExecution[]> {
+  if (!userId) return [];
+  try {
+    const dbRows = await fetchAutomationExecutionDb(userId);
+    if (dbRows && Array.isArray(dbRows)) {
+      let userMap = userExecutions.get(userId);
+      if (!userMap) {
+        userMap = new Map();
+        userExecutions.set(userId, userMap);
+      }
+      for (const row of dbRows) {
+        userMap.set(row.id, {
+          id: row.id,
+          automationId: row.automationId,
+          userId: row.userId,
+          actionClass: row.actionClass as any,
+          state: row.state as ExecutionState,
+          trigger: row.trigger as unknown as AutomationTrigger,
+          idempotencyKey: `${row.userId}:${row.automationId}:${row.startedAt}`,
+          requiresConfirmation: row.actionClass === "CONFIRMATION_REQUIRED",
+          confirmationToken: row.confirmationToken,
+          confirmationExpiry: row.confirmationExpiry,
+          plannedActions: row.plannedActions,
+          executedActions: row.executedActions,
+          result: row.result,
+          error: row.error,
+          startedAt: row.startedAt,
+          completedAt: row.completedAt,
+          provenance: (row.provenance as any) || "SYSTEM_AUTOMATION",
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[AutomationEngine] DB load warning:", (err as any)?.message);
+  }
+
+  return getUserExecutions(userId);
+}
+
 function saveExecution(userId: string, exec: AutomationExecution): void {
   let userMap = userExecutions.get(userId);
   if (!userMap) {
@@ -339,6 +385,23 @@ function saveExecution(userId: string, exec: AutomationExecution): void {
     userExecutions.set(userId, userMap);
   }
   userMap.set(exec.id, { ...exec });
+  upsertAutomationExecutionDb({
+    id: exec.id,
+    userId,
+    automationId: exec.automationId,
+    actionClass: exec.actionClass,
+    state: exec.state,
+    trigger: exec.trigger as unknown as Record<string, unknown>,
+    plannedActions: exec.plannedActions,
+    executedActions: exec.executedActions,
+    confirmationToken: exec.confirmationToken,
+    confirmationExpiry: exec.confirmationExpiry,
+    startedAt: exec.startedAt,
+    completedAt: exec.completedAt,
+    error: exec.error,
+    result: exec.result,
+    provenance: exec.provenance,
+  }).catch(() => {});
 }
 
 /**

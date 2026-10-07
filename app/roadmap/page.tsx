@@ -31,15 +31,18 @@ const UbixCareerGraph = dynamic(
 import { CareerRoadmap } from "@/components/roadmap/CareerRoadmap";
 import { CourseCards } from "@/components/courses/CourseCards";
 import { CareerTelemetry } from "@/components/progress/CareerTelemetry";
+import { EvidenceWallet } from "@/components/career/EvidenceWallet";
+import { CareerGapExplainer } from "@/components/career/CareerGapExplainer";
 import {
   Map,
   Compass,
   BookOpen,
   TrendingUp,
+  ShieldCheck,
   ChevronDown,
 } from "lucide-react";
 
-export type RoadmapSubTab = "roadmap" | "journey" | "learning" | "progress";
+export type RoadmapSubTab = "roadmap" | "journey" | "evidence" | "gaps" | "learning" | "progress";
 
 export default function RoadmapPage() {
   const searchParams = useSearchParams();
@@ -54,7 +57,7 @@ export default function RoadmapPage() {
 
   useEffect(() => {
     const tab = searchParams.get("tab") as RoadmapSubTab;
-    if (tab && ["roadmap", "journey", "learning", "progress"].includes(tab)) {
+    if (tab && ["roadmap", "journey", "evidence", "gaps", "learning", "progress"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -62,6 +65,8 @@ export default function RoadmapPage() {
   const navItems = [
     { id: "journey", label: "Spatial Constellation", icon: <Compass size={13} strokeWidth={2} /> },
     { id: "roadmap", label: "Phased Milestones", icon: <Map size={13} strokeWidth={2} /> },
+    { id: "evidence", label: "Evidence Wallet", icon: <ShieldCheck size={13} strokeWidth={2} /> },
+    { id: "gaps", label: "Gap Explainer", icon: <TrendingUp size={13} strokeWidth={2} /> },
     { id: "learning", label: "Curated Learning", icon: <BookOpen size={13} strokeWidth={2} /> },
     { id: "progress", label: "Progress Telemetry", icon: <TrendingUp size={13} strokeWidth={2} /> },
   ];
@@ -171,6 +176,18 @@ export default function RoadmapPage() {
                 onCtaClick={handleGraphNodeSelect}
               />
             </Safe3DBoundary>
+          </div>
+        )}
+
+        {activeTab === "evidence" && (
+          <div className="app-shell py-8">
+            <EvidenceWallet />
+          </div>
+        )}
+
+        {activeTab === "gaps" && (
+          <div className="app-shell py-8">
+            <CareerGapExplainer roleTitle={roleOptions.find((r) => r.id === role)?.label} />
           </div>
         )}
 

@@ -20,6 +20,10 @@ import {
   generateInterviewQuestions,
   evaluatePracticeAnswer,
 } from "@/lib/career/interviewEngine";
+import {
+  generateTeachBackPrompt,
+  evaluateTeachBack,
+} from "@/lib/interview/teachBack";
 import type {
   NormalizedJob,
   InterviewRecord,
@@ -171,6 +175,33 @@ export async function POST(req: NextRequest) {
         ok: true,
         interview: newInterview,
         application: updatedApp,
+      });
+    }
+
+    // Action 4: Generate a Teach-Back prompt for Feynman technique practice
+    if (action === "get_teach_back_prompt") {
+      const skill = body.skill || "Full-Stack System Architecture";
+      const audience = body.targetAudience || "JUNIOR_DEVELOPER";
+      const prompt = generateTeachBackPrompt(skill, audience);
+      return NextResponse.json({
+        success: true,
+        ok: true,
+        prompt,
+      });
+    }
+
+    // Action 5: Evaluate candidate Teach-Back explanation
+    if (action === "evaluate_teach_back") {
+      const { prompt, answer: candidateAnswer } = body;
+      if (!prompt || !candidateAnswer || typeof candidateAnswer !== "string") {
+        return NextResponse.json({ error: "Teach-back prompt and answer are required." }, { status: 400 });
+      }
+
+      const evaluation = evaluateTeachBack(prompt, candidateAnswer);
+      return NextResponse.json({
+        success: true,
+        ok: true,
+        evaluation,
       });
     }
 

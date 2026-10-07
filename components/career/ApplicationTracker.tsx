@@ -24,6 +24,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { InterviewStudio } from "@/components/career/InterviewStudio";
+import { UbixApplyModal } from "@/components/career/UbixApplyModal";
 
 const STATUS_COLUMNS: { id: ApplicationStatus; label: string; color: string }[] = [
   { id: "SAVED", label: "Saved", color: "border-ink/20 text-ink/70" },
@@ -43,6 +44,7 @@ export function ApplicationTracker() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showInterviewStudio, setShowInterviewStudio] = useState(false);
+  const [showUbixApply, setShowUbixApply] = useState(false);
 
   // Copilot Draft Form States
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
@@ -605,6 +607,14 @@ export function ApplicationTracker() {
                   <Sparkles size={12} className="inline mr-1" />
                   <span>{showInterviewStudio ? "Hide Interview Studio" : "Practice Interview"}</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUbixApply(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-1.5 text-xs font-bold text-bg hover:bg-accent/90 transition-colors cursor-pointer"
+                >
+                  <ShieldCheck size={12} aria-hidden="true" />
+                  <span>Review & Apply with UBIX</span>
+                </button>
                 {selectedApp.applicationUrl && (
                   <a
                     href={selectedApp.applicationUrl}
@@ -627,6 +637,36 @@ export function ApplicationTracker() {
                 )}
               </div>
             </div>
+
+            {/* Embedded Review & Apply with UBIX Modal */}
+            {showUbixApply && (
+              <UbixApplyModal
+                job={{
+                  id: selectedApp.jobId,
+                  title: selectedApp.jobTitle,
+                  company: selectedApp.company,
+                  location: selectedApp.location || "Remote",
+                  remote: true,
+                  workArrangement: "worldwide_remote",
+                  workArrangementLabel: selectedApp.remoteType || "Remote",
+                  jobType: "Full-time",
+                  url: selectedApp.sourceUrl || "",
+                  applyUrl: selectedApp.applicationUrl || "",
+                  description: selectedApp.jobTitle,
+                  responsibilities: [],
+                  requirements: [],
+                  preferredQualifications: [],
+                  skills: [],
+                  source: selectedApp.source,
+                  provenance: "SOURCE_VERIFIED",
+                }}
+                onClose={() => setShowUbixApply(false)}
+                onApplicationSubmitted={() => {
+                  setShowUbixApply(false);
+                  handleStatusChange(selectedApp.id, "APPLIED");
+                }}
+              />
+            )}
 
             {/* Embedded Phase 8 Interview Studio */}
             {showInterviewStudio && (

@@ -47,6 +47,7 @@
 
 import crypto from "crypto";
 import { supabase } from "./supabase";
+import { isProductionEnvironment } from "./security/environment";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -510,5 +511,347 @@ export async function deleteUserApplication(userId: string, applicationId: strin
   return true;
 }
 
+// ─── UUID Helper ─────────────────────────────────────────────────────────────
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isDbUuid(id: string): boolean {
+  return typeof id === "string" && UUID_REGEX.test(id);
+}
 
+// ─── Career Memory Authoritative DB Helpers ──────────────────────────────────
 
+export interface CareerMemoryDbRecord {
+  id: string;
+  userId: string;
+  category: string;
+  key: string;
+  value: string;
+  provenance: string;
+  confidence: number;
+  sourceDescription: string;
+  createdAt: string;
+  updatedAt: string;
+  confirmedAt?: string;
+  rejectedReason?: string;
+}
+
+export async function upsertCareerMemoryDb(item: CareerMemoryDbRecord): Promise<boolean> {
+  if (!item.userId || !item.id) return false;
+
+  if (!supabase || !isDbUuid(item.userId)) {
+    if (isProductionEnvironment() && isDbUuid(item.userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return false; // Handled by caller in-memory fallback
+  }
+
+  const { error } = await supabase.from("career_memory").upsert({
+    id: item.id,
+    user_id: item.userId,
+    category: item.category,
+    key: item.key,
+    value: item.value,
+    provenance: item.provenance,
+    confidence: item.confidence,
+    source_description: item.sourceDescription,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+    confirmed_at: item.confirmedAt ?? null,
+    rejected_reason: item.rejectedReason ?? null,
+  });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to persist career memory: ${error.message}`);
+    }
+    console.warn("[DB] upsertCareerMemoryDb warning:", error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchCareerMemoryDb(userId: string): Promise<CareerMemoryDbRecord[] | null> {
+  if (!userId) return null;
+  if (!supabase || !isDbUuid(userId)) {
+    if (isProductionEnvironment() && isDbUuid(userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("career_memory")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to fetch career memory: ${error.message}`);
+    }
+    console.warn("[DB] fetchCareerMemoryDb warning:", error.message);
+    return null;
+  }
+
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    category: r.category,
+    key: r.key,
+    value: r.value,
+    provenance: r.provenance,
+    confidence: Number(r.confidence),
+    sourceDescription: r.source_description,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    confirmedAt: r.confirmed_at || undefined,
+    rejectedReason: r.rejected_reason || undefined,
+  }));
+}
+
+export async function deleteCareerMemoryDb(userId: string, itemId: string): Promise<boolean> {
+  if (!userId || !itemId) return false;
+  if (!supabase || !isDbUuid(userId)) {
+    if (isProductionEnvironment() && isDbUuid(userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return false;
+  }
+
+  const { error } = await supabase
+    .from("career_memory")
+    .delete()
+    .eq("id", itemId)
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to delete career memory: ${error.message}`);
+    }
+    console.warn("[DB] deleteCareerMemoryDb warning:", error.message);
+    return false;
+  }
+  return true;
+}
+
+// ─── Skill Evidence Authoritative DB Helpers ─────────────────────────────────
+
+export interface SkillEvidenceDbRecord {
+  id: string;
+  userId: string;
+  skillId: string;
+  skillName: string;
+  source: string;
+  status: string;
+  confidence: number;
+  title: string;
+  description: string;
+  artifactUrl?: string;
+  createdAt: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+  provenance?: string;
+  verificationMetadata?: Record<string, unknown>;
+}
+
+export async function upsertSkillEvidenceDb(item: SkillEvidenceDbRecord): Promise<boolean> {
+  if (!item.userId || !item.id) return false;
+  if (!supabase || !isDbUuid(item.userId)) {
+    if (isProductionEnvironment() && isDbUuid(item.userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return false;
+  }
+
+  const { error } = await supabase.from("skill_evidence").upsert({
+    id: item.id,
+    user_id: item.userId,
+    skill_id: item.skillId,
+    skill_name: item.skillName,
+    source: item.source,
+    status: item.status,
+    confidence: item.confidence,
+    title: item.title,
+    description: item.description,
+    artifact_url: item.artifactUrl ?? null,
+    created_at: item.createdAt,
+    verified_at: item.verifiedAt ?? null,
+    rejection_reason: item.rejectionReason ?? null,
+    provenance: item.provenance ?? "INFERRED",
+    verification_metadata: item.verificationMetadata ?? {},
+  });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to persist skill evidence: ${error.message}`);
+    }
+    console.warn("[DB] upsertSkillEvidenceDb warning:", error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchSkillEvidenceDb(userId: string): Promise<SkillEvidenceDbRecord[] | null> {
+  if (!userId) return null;
+  if (!supabase || !isDbUuid(userId)) {
+    if (isProductionEnvironment() && isDbUuid(userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("skill_evidence")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to fetch skill evidence: ${error.message}`);
+    }
+    console.warn("[DB] fetchSkillEvidenceDb warning:", error.message);
+    return null;
+  }
+
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    skillId: r.skill_id,
+    skillName: r.skill_name,
+    source: r.source,
+    status: r.status,
+    confidence: Number(r.confidence),
+    title: r.title,
+    description: r.description,
+    artifactUrl: r.artifact_url || undefined,
+    createdAt: r.created_at,
+    verifiedAt: r.verified_at || undefined,
+    rejectionReason: r.rejection_reason || undefined,
+    provenance: r.provenance || "INFERRED",
+    verificationMetadata: r.verification_metadata || {},
+  }));
+}
+
+export async function deleteSkillEvidenceDb(userId: string, evidenceId: string): Promise<boolean> {
+  if (!userId || !evidenceId) return false;
+  if (!supabase || !isDbUuid(userId)) {
+    if (isProductionEnvironment() && isDbUuid(userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return false;
+  }
+
+  const { error } = await supabase
+    .from("skill_evidence")
+    .delete()
+    .eq("id", evidenceId)
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to delete skill evidence: ${error.message}`);
+    }
+    console.warn("[DB] deleteSkillEvidenceDb warning:", error.message);
+    return false;
+  }
+  return true;
+}
+
+// ─── Automation Executions Authoritative DB Helpers ──────────────────────────
+
+export interface AutomationExecutionDbRecord {
+  id: string;
+  userId: string;
+  automationId: string;
+  actionClass: string;
+  state: string;
+  trigger: Record<string, unknown>;
+  plannedActions: string[];
+  executedActions: string[];
+  confirmationToken?: string;
+  confirmationExpiry?: string;
+  startedAt: string;
+  completedAt?: string;
+  error?: string;
+  result?: Record<string, unknown>;
+  provenance: string;
+}
+
+export async function upsertAutomationExecutionDb(exec: AutomationExecutionDbRecord): Promise<boolean> {
+  if (!exec.userId || !exec.id) return false;
+  if (!supabase || !isDbUuid(exec.userId)) {
+    if (isProductionEnvironment() && isDbUuid(exec.userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return false;
+  }
+
+  const { error } = await supabase.from("automation_executions").upsert({
+    id: exec.id,
+    user_id: exec.userId,
+    automation_id: exec.automationId,
+    action_class: exec.actionClass,
+    state: exec.state,
+    trigger: exec.trigger,
+    planned_actions: exec.plannedActions,
+    executed_actions: exec.executedActions,
+    confirmation_token: exec.confirmationToken ?? null,
+    confirmation_expiry: exec.confirmationExpiry ?? null,
+    started_at: exec.startedAt,
+    completed_at: exec.completedAt ?? null,
+    error: exec.error ?? null,
+    result: exec.result ?? null,
+    provenance: exec.provenance,
+  });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to persist automation execution: ${error.message}`);
+    }
+    console.warn("[DB] upsertAutomationExecutionDb warning:", error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchAutomationExecutionDb(userId: string): Promise<AutomationExecutionDbRecord[] | null> {
+  if (!userId) return null;
+  if (!supabase || !isDbUuid(userId)) {
+    if (isProductionEnvironment() && isDbUuid(userId)) {
+      throw new Error("Authoritative Database Error: Supabase client is not available in production.");
+    }
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("automation_executions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("started_at", { ascending: false });
+
+  if (error) {
+    if (isProductionEnvironment()) {
+      throw new Error(`Authoritative Database Error: Failed to fetch automation executions: ${error.message}`);
+    }
+    console.warn("[DB] fetchAutomationExecutionDb warning:", error.message);
+    return null;
+  }
+
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    automationId: r.automation_id,
+    actionClass: r.action_class,
+    state: r.state,
+    trigger: r.trigger || {},
+    plannedActions: Array.isArray(r.planned_actions) ? r.planned_actions : [],
+    executedActions: Array.isArray(r.executed_actions) ? r.executed_actions : [],
+    confirmationToken: r.confirmation_token || undefined,
+    confirmationExpiry: r.confirmation_expiry || undefined,
+    startedAt: r.started_at,
+    completedAt: r.completed_at || undefined,
+    error: r.error || undefined,
+    result: r.result || undefined,
+    provenance: r.provenance || "SYSTEM_AUTOMATION",
+  }));
+}

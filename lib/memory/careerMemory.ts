@@ -44,6 +44,12 @@ export interface CareerMemoryItem {
   rejectedReason?: string;
 }
 
+import {
+  upsertCareerMemoryDb,
+  fetchCareerMemoryDb,
+  deleteCareerMemoryDb,
+} from "../db";
+
 // In-memory memory store: userId -> Map<id, CareerMemoryItem>
 const userMemoryStores = new Map<string, Map<string, CareerMemoryItem>>();
 
@@ -88,6 +94,7 @@ export function recordMemoryItem(
       existing.confirmedAt = now;
     }
     userMap.set(existing.id, existing);
+    upsertCareerMemoryDb(existing).catch(() => {});
     return existing;
   }
 
@@ -100,7 +107,19 @@ export function recordMemoryItem(
   };
 
   userMap.set(newItem.id, newItem);
+  upsertCareerMemoryDb(newItem).catch(() => {});
   return newItem;
+}
+
+/**
+ * Authoritatively records a career memory item with database persistence.
+ */
+export async function recordMemoryItemAsync(
+  params: Omit<CareerMemoryItem, "id" | "createdAt" | "updatedAt">
+): Promise<CareerMemoryItem> {
+  const item = recordMemoryItem(params);
+  await upsertCareerMemoryDb(item);
+  return item;
 }
 
 /**
@@ -118,6 +137,16 @@ export function confirmMemoryItem(userId: string, itemId: string): CareerMemoryI
   item.confirmedAt = new Date().toISOString();
   item.updatedAt = new Date().toISOString();
   userMap?.set(item.id, item);
+  upsertCareerMemoryDb(item).catch(() => {});
+  return item;
+}
+
+/**
+ * Authoritatively confirms an inferred item with database persistence.
+ */
+export async function confirmMemoryItemAsync(userId: string, itemId: string): Promise<CareerMemoryItem> {
+  const item = confirmMemoryItem(userId, itemId);
+  await upsertCareerMemoryDb(item);
   return item;
 }
 
@@ -135,7 +164,35 @@ export function rejectMemoryItem(userId: string, itemId: string, reason?: string
   item.rejectedReason = reason || "Rejected by user.";
   item.updatedAt = new Date().toISOString();
   userMap?.set(item.id, item);
+  upsertCareerMemoryDb(item).catch(() => {});
   return item;
+}
+
+/**
+ * Authoritatively rejects an item with database persistence.
+ */
+export async function rejectMemoryItemAsync(userId: string, itemId: string, reason?: string): Promise<CareerMemoryItem> {
+  const item = rejectMemoryItem(userId, itemId, reason);
+  await upsertCareerMemoryDb(item);
+  return item;
+}
+
+/**
+ * Deletes an item from career memory.
+ */
+export function deleteMemoryItem(userId: string, itemId: string): boolean {
+  const userMap = userMemoryStores.get(userId);
+  const existed = Boolean(userMap && userMap.delete(itemId));
+  deleteCareerMemoryDb(userId, itemId).catch(() => {});
+  return existed;
+}
+
+/**
+ * Authoritatively deletes an item with database persistence.
+ */
+export async function deleteMemoryItemAsync(userId: string, itemId: string): Promise<boolean> {
+  deleteMemoryItem(userId, itemId);
+  return await deleteCareerMemoryDb(userId, itemId);
 }
 
 /**
@@ -157,6 +214,37 @@ export function getUserCareerMemory(
     items = items.filter((i) => i.category === filter.category);
   }
   return items;
+}
+
+/**
+ * Authoritatively loads career memory from the database.
+ */
+export async function getUserCareerMemoryAsync(
+  userId: string,
+  filter?: { provenance?: MemoryProvenance; category?: MemoryCategory }
+): Promise<CareerMemoryItem[]> {
+  if (!userId) return [];
+  try {
+    const dbRows = await fetchCareerMemoryDb(userId);
+    if (dbRows && Array.isArray(dbRows)) {
+      let userMap = userMemoryStores.get(userId);
+      if (!userMap) {
+        userMap = new Map();
+        userMemoryStores.set(userId, userMap);
+      }
+      for (const row of dbRows) {
+        userMap.set(row.id, {
+          ...row,
+          category: row.category as MemoryCategory,
+          provenance: row.provenance as MemoryProvenance,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[CareerMemory] DB load warning:", (err as any)?.message);
+  }
+
+  return getUserCareerMemory(userId, filter);
 }
 
 /**
