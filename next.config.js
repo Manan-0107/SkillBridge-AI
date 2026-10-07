@@ -28,14 +28,19 @@ const nextConfig = {
     return config;
   },
   async headers() {
+    const isDev = process.env.NODE_ENV === "development";
     return [
       {
         source: "/(.*)",
         headers: [
-          {
-            key: "Content-Security-Policy",
-            value: contentSecurityPolicy,
-          },
+          ...(isDev
+            ? []
+            : [
+                {
+                  key: "Content-Security-Policy",
+                  value: contentSecurityPolicy,
+                },
+              ]),
           {
             key: "X-Content-Type-Options",
             value: "nosniff",

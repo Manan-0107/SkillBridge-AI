@@ -144,13 +144,31 @@ function useReveal() {
       return;
     }
     const el = ref.current;
-    if (!el) return;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold: 0.12 }
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.05 }
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    // Safety fallback: reveal after 1500ms so content is never permanently hidden
+    const timer = setTimeout(() => {
+      setVisible(true);
+      obs.disconnect();
+    }, 1500);
+
+    return () => {
+      obs.disconnect();
+      clearTimeout(timer);
+    };
   }, []);
   return { ref, visible };
 }
@@ -208,6 +226,14 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
     onEnter();
   };
 
+  const handleScrollTo = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   return (
     <div className="w-full text-ink selection:bg-surface selection:text-ink min-h-screen">
 
@@ -219,7 +245,11 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <a
-              href="#"
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               aria-label="ubix home"
               className="font-display text-xl font-bold tracking-tight text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent] rounded-sm"
             >
@@ -233,18 +263,21 @@ export function LandingPage({ onEnter, onGuestLogin }: LandingPageProps) {
           >
             <a
               href="#career-graph"
+              onClick={handleScrollTo("career-graph")}
               className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
             >
               Product
             </a>
             <a
               href="#system-arch"
+              onClick={handleScrollTo("system-arch")}
               className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
             >
               How it works
             </a>
             <a
               href="#accessibility"
+              onClick={handleScrollTo("accessibility")}
               className="hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent] rounded-sm"
             >
               Accessibility
