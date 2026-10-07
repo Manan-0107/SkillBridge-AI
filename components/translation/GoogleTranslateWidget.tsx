@@ -29,7 +29,7 @@ export function GoogleTranslateWidget({ id = "google_translate_element" }: { id?
       const script = document.createElement("script");
       script.id = "google-translate-script";
       script.type = "text/javascript";
-      script.src = `//translate.google.com/translate_a/element.js?cb=${initFnName}`;
+      script.src = `https://translate.google.com/translate_a/element.js?cb=${initFnName}`;
       script.async = true;
       document.body.appendChild(script);
     } else if (win.google?.translate?.TranslateElement) {
